@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "generated": [
+    {
+      "name": "no-target.png",
+      "source": "Pillow solid RGB 110,160,210; 320x240",
+      "expected_targets": []
+    },
+    {
+      "name": "no-target.jpeg",
+      "source": "Pillow solid RGB 110,160,210; 320x240",
+      "expected_targets": []
+    },
+    {
+      "name": "silent.mp4",
+      "source": "FFmpeg testsrc2 320x240 12fps 2s; libx264 B-frames=2",
+      "expected_targets": []
+    },
+    {
+      "name": "aac.mp4",
+      "source": "FFmpeg testsrc2 plus 440Hz 48kHz sine, H.264/AAC, 2s",
+      "expected_targets": []
+    },
+    {
+      "name": "vfr.mp4",
+      "source": "FFmpeg setpts: first 12 frames at 12fps, next 12 at 6fps; H.264",
+      "expected_targets": []
+    },
+    {
+      "name": "live-clock RTSP",
+      "source": "320x240 RGB at nominal 4fps, 8-bit 0xA5 header + 32-bit millisecond clock in 40 grayscale 8px blocks, AAC 440Hz 48kHz; tests/e2e/test_measurements.py",
+      "expected_targets": []
+    }
+  ],
+  "real_samples": [
+    {
+      "path": "samples/official-demo.jpg",
+      "source": "https://huggingface.co/projectaria/EgoBlur/resolve/9c0b319ad09d0346e8294d7bf569593d3ab865c0/demo_assets/test_image.jpg",
+      "sha256": "cddecbf67e51fb539373b72b1b64260faea449fd09fb7303d8ce297001308c17",
+      "license": "Apache-2.0 (official EgoBlur demo repository)",
+      "reviewed": false
+    },
+    {
+      "path": "samples/opencv-licenseplate.jpg",
+      "source": "https://raw.githubusercontent.com/opencv/opencv/4.x/samples/data/licenseplate_motion.jpg",
+      "sha256": "ea6fa9cea75df91bec656d1d3b903111a9c0708c6a3b88f405a5156de38ff9d6",
+      "license": "OpenCV Apache-2.0 samples",
+      "reviewed": false
+    }
+  ],
+  "reviewed_frames": [],
+  "notes": "Synthetic fixtures validate media mechanics only. Official face/plate samples and hashes are present; human review and representative coexistence/occlusion video frames remain pending."
+}

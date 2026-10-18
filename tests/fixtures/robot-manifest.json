@@ -1,0 +1,196 @@
+{
+  "source": "User-provided patrol robot demo directory; original media is not committed or uploaded",
+  "human_reviewed": false,
+  "files": [
+    {
+      "index": 0,
+      "sha256": "0ab3b44e62f5fa5740ebc36b1a85216a48f05b9890ac8bbd772c205c2d298427",
+      "kind": "image",
+      "dimensions": [
+        3840,
+        1080
+      ]
+    },
+    {
+      "index": 1,
+      "sha256": "db44dd993fe35ae9bbd68c4af26867b0597d994a2f21629c28d4da22020d67ca",
+      "kind": "video",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "1aacfe36e800071c05412124ebf48f66ff83a57de0efd1d93b03d8cdbf714010",
+      "kind": "image",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "e5423aaf41ac551e31409354eda71bc9a27c71e6a953bf2c6fc1d000fa460bb4",
+      "kind": "image",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "763451cb6c759e2aec55e04fda4dfd1afeef162a698a0043027ad719a80f5666",
+      "kind": "image",
+      "dimensions": [
+        3840,
+        1080
+      ]
+    },
+    {
+      "index": 5,
+      "sha256": "d576a2dee2b305eea699725d170dd309fdb9806c961afe984057dd5b7bf77c27",
+      "kind": "image",
+      "dimensions": [
+        3840,
+        1080
+      ]
+    },
+    {
+      "index": 6,
+      "sha256": "3cbcbc2652d2b45f71782c55f56c16175d67038ccdb55f7b259c185f164f4012",
+      "kind": "image",
+      "dimensions": [
+        3840,
+        1080
+      ]
+    },
+    {
+      "index": 7,
+      "sha256": "7a9bbef635021f94ee8e44267a889a54a0ac5c00d9db6f7f3077fe93b9546160",
+      "kind": "image",
+      "dimensions": [
+        3840,
+        1080
+      ]
+    },
+    {
+      "index": 8,
+      "sha256": "f7fc6121d0c798f7eda91c4f1aff1f0850706da19cb04057c0dad36be2c4437b",
+      "kind": "video",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 9,
+      "sha256": "342ce14d799620471caf3c289223f3ef0c18b399e9e733ca7204b14c5e0e514e",
+      "kind": "video",
+      "dimensions": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "index": 10,
+      "sha256": "400a57a67fa74abda069dd264bd1e385f0c0519bde7c89b96b8c9787836559e0",
+      "kind": "video",
+      "dimensions": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "index": 11,
+      "sha256": "cabf8422c27600b89ac2e36fb90f33990dc820ecb7ec3c4b146af1c63b7809b2",
+      "kind": "video",
+      "dimensions": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "index": 12,
+      "sha256": "226dbd04774b0d2e776becf6a6155b9199d9025707aad720d219b017daf4e1f8",
+      "kind": "image",
+      "dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "index": 13,
+      "sha256": "62b7d150283fa19941bc8ea95b912d86a1933b05bfcf4b3c60b13169f362d8e6",
+      "kind": "image",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 14,
+      "sha256": "7c934bbc7610c085560a91babcf7dab8ec52650f23c0d7e48204eac956698d5f",
+      "kind": "image",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 15,
+      "sha256": "470199ef98f5e953a6d95ee297d8c079cbfedaf695090b8c328caa3f1867dd15",
+      "kind": "image",
+      "dimensions": [
+        2560,
+        1440
+      ]
+    },
+    {
+      "index": 16,
+      "sha256": "adbf33e1390b736725135361e8d5e296703c113de3cddadbc89f2f7659e75d34",
+      "kind": "image",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 17,
+      "sha256": "c4d37ae3fe615a66ec9d7c08cf015b6b9395393f7a745c88a8cd70dda2162821",
+      "kind": "image",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 18,
+      "sha256": "d3326728f1e40f2c749d4e669288d8b17f1dc27e13801649021937cf12ef5c56",
+      "kind": "image",
+      "dimensions": [
+        3840,
+        1080
+      ]
+    },
+    {
+      "index": 19,
+      "sha256": "f4d93758a75163e3841fb02dc7d3220b7745834b7c86ac22363079c52fc37b1d",
+      "kind": "image",
+      "dimensions": [
+        1728,
+        536
+      ]
+    },
+    {
+      "index": 20,
+      "sha256": "be03961485865295abd7d723ffed17813a5e66df9ec7a2c4405173e5a14b5dad",
+      "kind": "image",
+      "dimensions": [
+        256,
+        280
+      ]
+    }
+  ],
+  "video_sampling": "First three consecutive decoded frames per video; PTS recorded in ignored evaluation.json"
+}
