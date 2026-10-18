@@ -1,0 +1,25 @@
+{
+  "repository": "https://huggingface.co/projectaria/EgoBlur",
+  "models": [
+    {
+      "path": "face.jit",
+      "original_name": "ego_blur_face.jit",
+      "archive": "ego_blur_face.zip",
+      "source": "https://huggingface.co/projectaria/EgoBlur/resolve/9c0b319ad09d0346e8294d7bf569593d3ab865c0/ego_blur_face.zip?download=true",
+      "revision": "9c0b319ad09d0346e8294d7bf569593d3ab865c0",
+      "archive_sha256": "2240fd030194fb8b0021856c51d5e28abc864503beb81f22ee7646c866205889",
+      "sha256": "6eb2f6eb51fd1193d29b048aa7d1750a74fc5673d6e803231e25501cbf51567c",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "license_plate.jit",
+      "original_name": "ego_blur_lp.jit",
+      "archive": "ego_blur_lp.zip",
+      "source": "https://huggingface.co/projectaria/EgoBlur/resolve/9c0b319ad09d0346e8294d7bf569593d3ab865c0/ego_blur_lp.zip?download=true",
+      "revision": "9c0b319ad09d0346e8294d7bf569593d3ab865c0",
+      "archive_sha256": "d4811e08e11bcc7f35207a4412a27e6db0fe9fed6a42c78a565f8fabb45d1963",
+      "sha256": "d0be72e015e30f0123a9194419bbb2fdcb6916faf81096e3fa2b50bcd1a85ade",
+      "license": "Apache-2.0"
+    }
+  ]
+}

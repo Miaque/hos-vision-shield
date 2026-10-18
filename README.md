@@ -1,0 +1,127 @@
+# Vision Shield
+
+Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP 流中的人脸和车牌实心遮挡，不做识别或音频脱敏。
+按照用户选择，**直接在 Windows 本机运行**，不要求 Docker、WSL2 或 Linux 容器。
+项目以 `main` 分支作为主干。
+
+当前进度见 [任务清单](specs/001-media-redaction/tasks.md) 与 [验证记录](specs/001-media-redaction/validation/gates.md)。
+已接通上传/URL文件任务、结果下载、取消、RTSP输出及断流/worker重启恢复。API与任务控制使用异步I/O；模型推理、编解码在受控子进程中执行。
+
+## 安装 Python 依赖
+
+```powershell
+Set-Location H:\workspace\python\vision-shield
+uv sync --frozen
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+解释器使用Python3.12，依赖由uv.lock锁定。项目默认使用CPU版PyTorch，不需要安装CUDA。
+
+## 本地 Redis / MediaMTX
+
+如果.env已指向运行中的Redis和MediaMTX，直接启动应用即可，不必再运行基础服务脚本。当前用户环境的持久化检查与服务端配置步骤见[环境核对](specs/001-media-redaction/validation/environment.md)。
+
+本机已有 Redis7.4.3；MediaMTX1.21.2官方可执行程序位于被Git忽略的 `.tools/mediamtx/`。
+在项目根目录运行，保持这个终端打开：
+
+```powershell
+.\scripts\start-infrastructure.ps1 `
+  -RedisExecutable 'H:\software\Redis-7.4.3\redis-server.exe' `
+  -MediaMtxExecutable 'H:\workspace\python\vision-shield\.tools\mediamtx\mediamtx.exe'
+```
+
+退出时Ctrl+C只关闭该脚本创建的两个进程，不操作其他已存在的服务。
+Redis数据保存在 `data/redis/`，日志与媒体服务运行文件位于 `data/`。
+仅做启动和持久化配置自检，检查后自动回收进程：
+
+```powershell
+.\scripts\start-infrastructure.ps1 `
+  -RedisExecutable 'H:\software\Redis-7.4.3\redis-server.exe' `
+  -MediaMtxExecutable 'H:\workspace\python\vision-shield\.tools\mediamtx\mediamtx.exe' -Check
+```
+
+Redis端口16379、RTSP端口8554、媒体控制端口9997，当前仅监听127.0.0.1。
+Redis启用AOF always与noeviction；MediaMTX禁用录像和发布者覆盖。
+媒体发布回调只接受当前任务owner/generation，接管前撤销旧RTSP会话；播放和业务接口没有用户鉴权。
+
+## 启动应用
+
+基础服务保持运行后，在第二个PowerShell终端启动：
+
+```powershell
+.\scripts\start-application.ps1
+```
+
+打开 http://127.0.0.1:8000/docs 。脚本启动API、协调器和两个独立任务池，各1个worker；每个worker同时处理1个任务。使用 `-StreamWorkers 2` 增加流处理槽位，文件池不受影响。保留终端，Ctrl+C停止本次创建的应用进程。附加 `-Check` 会在健康检查通过后关闭这些进程；基础服务须先启动。
+
+## 调用接口
+
+上传在文件完整接收后返回202及Location，之后由Taskiq处理：
+
+```powershell
+curl.exe -F 'kind=image' -F 'file=@samples/official-demo.jpg' http://127.0.0.1:8000/v1/file-tasks/uploads
+# 视频同一端点，kind=video；仅MP4/H.264，可含AAC或无音轨
+```
+
+远程输入需先在 `.env` 配置授权来源，如 `SOURCE_ALLOWLIST=["192.168.1.50"]`，再重启应用进程；授权内网主机名也必须授权其解析的IP/CIDR。空数组拒绝所有远程输入，上传仍可用。
+
+```powershell
+$file = Invoke-RestMethod http://127.0.0.1:8000/v1/file-tasks -Method Post -ContentType application/json -Body '{"kind":"image","url":"http://192.168.1.50/image.jpg"}'
+Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($file.id)"
+# state=succeeded 后下载；结果未完成时返回409
+Invoke-WebRequest "http://127.0.0.1:8000/v1/tasks/$($file.id)/result" -OutFile result.jpg
+Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($file.id)" -Method Patch -ContentType application/json -Body '{"desired_state":"cancelled"}'
+
+$stream = Invoke-RestMethod http://127.0.0.1:8000/v1/stream-tasks -Method Post -ContentType application/json -Body '{"url":"rtsp://192.168.1.50/live"}'
+Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)"
+# ready=true 后使用响应中的playback_url播放（例如ffplay -rtsp_transport tcp <地址>）
+Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -ContentType application/json -Body '{"desired_state":"stopped"}'
+```
+
+PATCH返回202表示停止意图已保存；查询到cancelled/stopped才表示资源清理完成。已成功文件不能再取消（409）。流自动重连并保留停止意图，文件worker崩溃则标记worker_lost，不自动续跑。
+
+默认只监听本机。其他系统接入时，部署方需同时修改启动脚本的API监听、MediaMTX的RTSP监听与 `.env` 的 `RTSP_PUBLIC_BASE_URL` 为可达内网地址，并限制防火墙可达范围。MediaMTX控制API和Redis继续仅监听本机。
+
+## 模块与运行边界
+
+`api/`负责HTTP契约，`jobs/`负责Taskiq、持久状态和租约，`media/`负责输入、进程生命周期及音视频流水线，`detection/`输出遮挡坐标，`redaction.py`执行实心遮挡及有界的相邻帧补偿。
+
+默认每池最多100个未结束任务、每队列100条消息。实时流只缓存2个待处理画面，过载取最新帧；文件逐帧处理。AAC缓存超过16秒或4MiB会重建流会话，不无限堆积；这是为较慢CPU上的1280分辨率检测保留的容量上限，会增加可容纳的延迟，并不是延迟保证。
+
+## 巡逻机器人素材
+
+面向运动模糊、超宽视角和远处小目标，默认 `DETECTION_MAX_SIDE=1280`（320–1920），按比例缩小且不放大低分辨率原图；坐标映射回原图。`DETECTION_BOX_PADDING=0.15` 表示每侧外扩框宽/高的15%，最后裁剪至图像边界。两个模型阈值仍为0.1，不对整幅画面做锐化或生成式修复。
+
+视频和流保存至多两组真实检测框，在200毫秒源时间内补遮短暂漏检；尺寸变化、时钟倒退、较长跳帧或缩略图明显变化会清空历史，每次流重连重新建立状态。补偿不累计刷新过期时间；没有检测历史的目标不能凭空补出。这不是运动跟踪，快速转向和目标快速移动仍可能漏遮；小于阈值的画面变化也可能保留旧位置造成多遮。
+
+提高分辨率会增加CPU耗时和误检；当前样本中存在把车体部件等误判为人脸的情况。需要按实际机器人素材复核，不承诺模糊素材零漏检。CPU吞吐不足时可降低DETECTION_MAX_SIDE，但会损失小目标细节，不能视为等价效果。与640尺寸的对照入口：
+
+```powershell
+uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo
+```
+
+结果在 `data/validation/robot/evaluated/`，包括每张图片、每段视频的前三个连续帧的对照图、脱敏图、耗时和源文件哈希。它不是完整视频或准确率验收，原始素材不覆盖、不向外部服务上传。固定观察与限制见[机器人验证记录](specs/001-media-redaction/validation/robot-media.md)。
+
+调整.env后重启API、协调器和worker；现有任务接口保持不变。
+
+原始文件、完成结果和失败半成品均保留于 `data/<任务ID>/`，不会自动删除；只有成功结果能下载。视频流不录像。日志在 `data/application/`，按业务task ID定位，不输出源URL和密码。
+
+## 检测模型
+
+两个Gen1模型由代理从 [Project Aria官方Hugging Face发布版本](https://huggingface.co/projectaria/EgoBlur/tree/9c0b319ad09d0346e8294d7bf569593d3ab865c0)下载。
+固定版本、原始文件名与SHA-256记录在 `models/manifest.json`，提取为 `models/face.jit` 和 `models/license_plate.jit`。
+文件缺失时测试明确失败，不静默降级为单模型。
+
+## 运行验证
+
+```powershell
+$env:TEST_REDIS_SERVER='H:\software\Redis-7.4.3\redis-server.exe'
+$env:TEST_MEDIAMTX_BIN=(Resolve-Path .tools/mediamtx/mediamtx.exe).Path
+uv run pytest -q
+```
+
+测试启动独立临时端口和数据目录，不清空现有Redis。FFmpeg与ffprobe需在PATH中，本机已经具备。
+真实媒体样本和权重不提交Git；自动生成的图片和视频仅用于媒体机制验证。
+实际摄像头接入时在 `.env` 中将 `SOURCE_ALLOWLIST` 设置为授权主机/IP/CIDR的JSON数组；默认空数组拒绝远程来源。
+
+当前没有用户鉴权或自动文件删除，原音频不脱敏；检测效果、完整故障恢复与容量以各阶段实测为准。
