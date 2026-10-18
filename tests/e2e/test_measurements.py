@@ -86,7 +86,8 @@ async def test_reproducible_native_measurements(native_app, generated_media):
     sampler = asyncio.create_task(sample_resources())
     report = dict(date=time.strftime("%Y-%m-%d"), platform=platform.platform(), python=platform.python_version(),
                   logical_cpus=os.cpu_count(), concurrency=1,
-                  detector_longest_side=Settings().detection_max_side, torch_threads=2, complete=False)
+                  detector_backend=Settings().detection_backend,
+                  detector_longest_side=Settings().detection_max_side, inference_threads=2, complete=False)
     source, producer, stop_source = None, None, threading.Event()
     try:
         for kind, source_path, name in [("image", ROOT / "samples/official-demo.jpg", "official-demo-redacted.jpg"),

@@ -3,7 +3,7 @@
 import ipaddress
 import re
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -20,8 +20,11 @@ class Settings(BaseSettings):
 
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:16379/0")
     media_root: Path = Path("data")
-    face_model_path: Path = Path("models/face.jit")
-    plate_model_path: Path = Path("models/license_plate.jit")
+    detection_backend: Literal["quality", "cpu", "egoblur"] = "quality"
+    face_model_path: Path = Path("models/yunet_face.onnx")
+    plate_model_path: Path = Path("models/hyperlpr_plate.onnx")
+    egoblur_face_model_path: Path = Path("models/face.jit")
+    egoblur_plate_model_path: Path = Path("models/license_plate.jit")
     detection_max_side: Annotated[int, Field(ge=320, le=1920)] = 1280
     detection_box_padding: Annotated[float, Field(ge=0, le=0.5, allow_inf_nan=False)] = 0.15
     mediamtx_control_url: str = "http://127.0.0.1:9997"

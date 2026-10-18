@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from vision_shield.redaction import redact
 if TYPE_CHECKING:
-    from vision_shield.detection.egoblur import Detector
+    from vision_shield.detection import Detector
 
 
 def process_image(source: str | Path, destination: str | Path, detector: "Detector", max_pixels: int) -> int:

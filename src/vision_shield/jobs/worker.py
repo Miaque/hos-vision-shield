@@ -15,8 +15,11 @@ from vision_shield.jobs.tasks import file_broker, stream_broker
 
 async def main(pool):
     settings = Settings()
-    if not all([await asyncio.to_thread(path.is_file) for path in (settings.face_model_path, settings.plate_model_path)]):
-        raise RuntimeError("Both official model files are required")
+    paths = [settings.face_model_path, settings.plate_model_path]
+    if settings.detection_backend == "quality":
+        paths.extend((settings.egoblur_face_model_path, settings.egoblur_plate_model_path))
+    if not all([await asyncio.to_thread(path.is_file) for path in paths]):
+        raise RuntimeError("Selected detector model files are required")
     broker = file_broker if pool == "files" else stream_broker
     broker.is_worker_process = True
     worker_id = str(uuid4())

@@ -19,7 +19,10 @@ async def native_app(redis_url, tmp_path):
     env = dict(os.environ, REDIS_URL=redis_url, MEDIA_ROOT=str(tmp_path / "data"),
                SOURCE_ALLOWLIST='["127.0.0.1"]', RECONCILE_SECONDS="0.2", LEASE_SECONDS="2", HEARTBEAT_SECONDS="0.5",
                RTSP_PUBLIC_BASE_URL=f"rtsp://127.0.0.1:{rtsp_port}", MEDIAMTX_CONTROL_URL=f"http://127.0.0.1:{media_api_port}",
-               FACE_MODEL_PATH=str(ROOT / "models/face.jit"), PLATE_MODEL_PATH=str(ROOT / "models/license_plate.jit"))
+               DETECTION_BACKEND="quality", FACE_MODEL_PATH=str(ROOT / "models/yunet_face.onnx"),
+               PLATE_MODEL_PATH=str(ROOT / "models/hyperlpr_plate.onnx"),
+               EGOBLUR_FACE_MODEL_PATH=str(ROOT / "models/face.jit"),
+               EGOBLUR_PLATE_MODEL_PATH=str(ROOT / "models/license_plate.jit"))
     media_binary = os.getenv("TEST_MEDIAMTX_BIN") or str(ROOT / ".tools/mediamtx/mediamtx.exe")
     media_config = yaml.safe_load((ROOT / "deploy/mediamtx.yml").read_text("utf-8"))
     media_config.update(rtspAddress=f"127.0.0.1:{rtsp_port}", apiAddress=f"127.0.0.1:{media_api_port}",

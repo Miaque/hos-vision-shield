@@ -1,0 +1,172 @@
+{
+  "local_source": "samples/robot-quality",
+  "review": "Agent-selected visible target/interior regions and known false-mask patches, not full human annotation. Media remains local and ignored.",
+  "cases": [
+    {
+      "id": "video-10-frame-42",
+      "file": "video-10-frame-42.png",
+      "sha256": "074dd82d021658d21f01396a80e2721b4ac13e842fb36e0db73a2245dba555d6",
+      "masked_regions": [
+        [
+          135,
+          575,
+          170,
+          600
+        ]
+      ],
+      "preserved_regions": [
+        [
+          595,
+          700,
+          650,
+          780
+        ]
+      ]
+    },
+    {
+      "id": "video-11-frame-17",
+      "file": "video-11-frame-17.png",
+      "sha256": "823b1f20895da4a4a05706a584eaf0e859307cb626cfec66c4699531034668c9",
+      "masked_regions": [
+        [
+          326,
+          447,
+          335,
+          462
+        ]
+      ],
+      "preserved_regions": [
+        [
+          1430,
+          100,
+          1450,
+          130
+        ]
+      ]
+    },
+    {
+      "id": "video-9-frame-0",
+      "file": "video-9-frame-0.png",
+      "sha256": "c87ed1562f98f7740df8572f6bc2c7a1e5af50a11a3e7891bc1629e674905e48",
+      "masked_regions": [],
+      "preserved_regions": [
+        [
+          740,
+          880,
+          850,
+          920
+        ],
+        [
+          500,
+          490,
+          550,
+          520
+        ],
+        [
+          250,
+          370,
+          350,
+          395
+        ]
+      ]
+    },
+    {
+      "id": "image-2",
+      "file": "image-2.jpg",
+      "sha256": "1aacfe36e800071c05412124ebf48f66ff83a57de0efd1d93b03d8cdbf714010",
+      "masked_regions": [
+        [
+          933,
+          271,
+          951,
+          278
+        ]
+      ],
+      "preserved_regions": []
+    },
+    {
+      "id": "image-7",
+      "file": "image-7.jpg",
+      "sha256": "7a9bbef635021f94ee8e44267a889a54a0ac5c00d9db6f7f3077fe93b9546160",
+      "masked_regions": [
+        [
+          3295,
+          253,
+          3330,
+          300
+        ]
+      ],
+      "preserved_regions": [
+        [
+          2110,
+          495,
+          2230,
+          585
+        ]
+      ]
+    },
+    {
+      "id": "image-13",
+      "file": "image-13.jpg",
+      "sha256": "62b7d150283fa19941bc8ea95b912d86a1933b05bfcf4b3c60b13169f362d8e6",
+      "masked_regions": [
+        [
+          808,
+          285,
+          840,
+          295
+        ]
+      ],
+      "preserved_regions": [
+        [
+          775,
+          205,
+          895,
+          260
+        ]
+      ]
+    },
+    {
+      "id": "rtsp-green",
+      "file": "rtsp-green.png",
+      "sha256": "8240d7711808bbc4de7591896d6cee19c0f84da8fcfb8ed691311aeae461b186",
+      "masked_regions": [
+        [
+          598,
+          710,
+          630,
+          722
+        ]
+      ],
+      "preserved_regions": []
+    },
+    {
+      "id": "image-17",
+      "file": "image-17.jpg",
+      "sha256": "c4d37ae3fe615a66ec9d7c08cf015b6b9395393f7a745c88a8cd70dda2162821",
+      "masked_regions": [],
+      "preserved_regions": [
+        [
+          795,
+          225,
+          880,
+          285
+        ]
+      ]
+    },
+    {
+      "id": "image-19",
+      "file": "image-19.jpg",
+      "sha256": "f4d93758a75163e3841fb02dc7d3220b7745834b7c86ac22363079c52fc37b1d",
+      "masked_regions": [],
+      "preserved_regions": [
+        [
+          750,
+          310,
+          875,
+          335
+        ]
+      ]
+    }
+  ]
+}

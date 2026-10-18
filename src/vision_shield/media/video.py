@@ -12,7 +12,7 @@ import numpy as np
 
 from vision_shield.redaction import redact, FrameRedactor
 if TYPE_CHECKING:
-    from vision_shield.detection.egoblur import Detector
+    from vision_shield.detection import Detector
 
 
 def check_dimensions(width: int, height: int, config: dict) -> None:

@@ -18,6 +18,7 @@ def test_robot_detection_keeps_more_detail_and_expands_boxes():
         return torch.tensor([[100., 50., 200., 100.]]), None, torch.tensor([0.9]), None
 
     detector = Detector.__new__(Detector)
+    detector.face_threshold = 0.1
     detector.models = [predict]
     detector.max_side, detector.box_padding = 1280, 0.15
     boxes = detector.detect(np.zeros((1080, 3840, 3), dtype=np.uint8))

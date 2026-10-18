@@ -17,7 +17,8 @@ def test_both_official_models_load_and_return_valid_boxes():
     import torch
     import torchvision  # Registers the operators used by the TorchScript weights.
 
-    settings = Settings()
+    settings = Settings(detection_backend="egoblur", face_model_path="models/face.jit",
+                        plate_model_path="models/license_plate.jit")
     manifest_path = Path("models/manifest.json")
     assert manifest_path.is_file(), "Verified official model manifest not found"
     hashes = {item["path"]: item["sha256"] for item in json.loads(manifest_path.read_text("utf-8"))["models"]}

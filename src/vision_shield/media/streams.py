@@ -12,7 +12,7 @@ import av
 from vision_shield.media.video import add_video, check_streams, check_dimensions, masked_frame
 from vision_shield.redaction import FrameRedactor
 if TYPE_CHECKING:
-    from vision_shield.detection.egoblur import Detector
+    from vision_shield.detection import Detector
 
 
 class StreamBuffer:

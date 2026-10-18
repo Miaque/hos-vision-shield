@@ -30,15 +30,14 @@ def main():
         os._exit(3)
 
     try:
-        from vision_shield.detection.egoblur import Detector
+        from vision_shield.detection import load_detector
         from vision_shield.media.images import process_image
         from vision_shield.media.video import process_video
         from vision_shield.media.streams import process_stream
         from PIL import Image
 
         cfg = payload["config"]
-        detector = Detector(cfg["face_model_path"], cfg["plate_model_path"],
-                            cfg["detection_max_side"], cfg["detection_box_padding"])
+        detector = load_detector(cfg)
         Image.init()
         # Windows numerical DLL initialization can deadlock against a blocking
         # CRT stdin reader. Load dependencies before starting the control thread.
