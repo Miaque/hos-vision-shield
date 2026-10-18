@@ -20,6 +20,7 @@ wheels/
 data/
 samples/
 models/*.jit
+models/*.onnx
 models/*.zip
 models/*.part
 *.log
