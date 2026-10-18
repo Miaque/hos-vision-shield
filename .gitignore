@@ -1,0 +1,25 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.history/
+.vscode/
+
+# Local runtime and validation artifacts
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.tools/
+data/
+samples/
+models/*.jit
+models/*.zip
+models/*.part
+*.log

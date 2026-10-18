@@ -1,0 +1,48 @@
+[project]
+name = "vision-shield"
+version = "0.1.0"
+description = "Asynchronous face and license plate redaction for images, videos and streams"
+readme = "README.md"
+authors = [
+    { name = "miaque", email = "miaque@163.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "av>=16,<20",
+    "fastapi>=0.115,<1",
+    "httpx>=0.28,<1",
+    "numpy>=2,<3",
+    "pillow>=11,<13",
+    "pydantic-settings>=2.8,<3",
+    "python-multipart>=0.0.20,<1",
+    "redis>=6,<8",
+    "taskiq==0.12.4",
+    "taskiq-redis==1.2.2",
+    "torch>=2.8,<3",
+    "torchvision>=0.23,<1",
+    "uvicorn>=0.34,<1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "pyyaml>=6,<7"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["integration: requires real external services or model weights"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[project.scripts]
+vision-shield = "vision_shield:main"
+
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13.0"]
+build-backend = "uv_build"
