@@ -4,7 +4,7 @@
 
 ## 环境
 
-Python3.12、uv、Redis7.4.3、MediaMTX1.21.2和FFmpeg/ffprobe。两个模型固定官方来源和revision，见models/README.md。
+Python3.12、uv、Redis7.4.3、MediaMTX1.21.2和FFmpeg/ffprobe。默认quality使用四个检测模型，固定来源、revision和CPU运行方式见models/README.md；单独cpu后端使用两个ONNX。CUDA按用户要求暂缓。
 配置项、端口及本机二进制位置见仓库README和.env.example。
 
 ```powershell

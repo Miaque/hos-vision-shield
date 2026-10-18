@@ -11,7 +11,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
 from vision_shield.config import Settings
-from vision_shield.detection.egoblur import Detector
+from vision_shield.detection import load_detector
+from vision_shield.detection.egoblur import Detector as EgoBlurDetector
 from vision_shield.redaction import FrameRedactor, redact
 
 
@@ -20,22 +21,28 @@ def evaluate(source: Path, output: Path) -> None:
         raise ValueError("Use an existing source directory and a separate output directory")
     output.mkdir(parents=True, exist_ok=True)
     config = Settings()
-    detector = Detector(config.face_model_path, config.plate_model_path,
-                        config.detection_max_side, config.detection_box_padding)
+    detector = load_detector(config.model_dump())
+    baseline = EgoBlurDetector("models/face.jit", "models/license_plate.jit",
+                              config.detection_max_side, config.detection_box_padding)
     report = dict(source_files=[], images=[], video_frames=[],
-                  parameters=dict(max_side=detector.max_side, box_padding=detector.box_padding,
-                                  score_threshold=0.1, nms_iou=0.3, hold_seconds=0.2),
+                  parameters=dict(backend=config.detection_backend, baseline="egoblur",
+                                  max_side=detector.max_side, box_padding=detector.box_padding,
+                                  hold_seconds=0.2),
                   review="No human labels; detection counts are not accuracy")
+    if config.detection_backend in {"cpu", "quality"}:
+        from vision_shield.detection.cpu import FACE_THRESHOLD, PLATE_THRESHOLD
+        report["parameters"].update(face_threshold=0.6 if config.detection_backend == "quality" else FACE_THRESHOLD,
+                                    plate_threshold=PLATE_THRESHOLD)
+        if config.detection_backend == "quality":
+            report["parameters"].update(primary_face_threshold=0.3, primary_plate_threshold=0.1)
+            report["parameters"]["confirmation"] = dict(primary_trusted_score=0.7, iou=0.2,
+                                                       primary_face_support=0.1, detail_face_support=0.3,
+                                                       context_factor=3, minimum_context=96, input_max_side=320)
 
     def compare(pixels, name, temporal=None, moment=None):
-        old_side, old_padding = detector.max_side, detector.box_padding
-        try:
-            detector.max_side, detector.box_padding = 640, 0
-            start = time.perf_counter()
-            before = detector.detect(pixels)
-            baseline_seconds = time.perf_counter() - start
-        finally:
-            detector.max_side, detector.box_padding = old_side, old_padding
+        start = time.perf_counter()
+        before = baseline.detect(pixels)
+        baseline_seconds = time.perf_counter() - start
         start = time.perf_counter()
         after = detector.detect(pixels)
         seconds = time.perf_counter() - start
@@ -49,7 +56,7 @@ def evaluate(source: Path, output: Path) -> None:
             final = temporal.apply(pixels, moment)
         Image.fromarray(final).save(output / f"{name}-redacted.jpg", quality=95)
         panels = []
-        for label, boxes in [("before-640", before), ("after", after)]:
+        for label, boxes in [("egoblur", before), (config.detection_backend, after)]:
             preview = Image.fromarray(pixels)
             draw = ImageDraw.Draw(preview)
             for box in boxes:
@@ -58,7 +65,7 @@ def evaluate(source: Path, output: Path) -> None:
             panels.append(preview)
         canvas = Image.new("RGB", (1920, max(p.height for p in panels) + 24), "#222222")
         draw = ImageDraw.Draw(canvas)
-        for index, (label, panel) in enumerate(zip(["before-640", "after"], panels, strict=True)):
+        for index, (label, panel) in enumerate(zip(["egoblur", config.detection_backend], panels, strict=True)):
             canvas.paste(panel, (index * 960, 24))
             draw.text((index * 960 + 8, 5), label, fill="white")
         canvas.save(output / f"{name}-compare.jpg", quality=95)

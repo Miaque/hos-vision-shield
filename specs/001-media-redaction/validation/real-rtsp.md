@@ -1,5 +1,7 @@
 # 用户真实RTSP实测
 
+本文为EgoBlur 1280的历史基线；后续CPU后端优化与再次实接结果见[cpu-optimization.md](cpu-optimization.md)。
+
 2026-10-18，本机CPU，使用用户提供的vp.yjgl.site流地址，保留原查询参数。未将完整源地址、设备标识或Redis凭据写入本文。当前.env已授权该主机，未扩大来源白名单或改动Redis服务端配置。
 
 ## 实接结果

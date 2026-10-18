@@ -1,5 +1,7 @@
 # 巡逻机器人模糊素材验证
 
+本文保留EgoBlur从640到1280的历史验证；当前CPU检测后端、不同扩框策略及新对照入口见[cpu-optimization.md](cpu-optimization.md)，下文计时和复现参数不能直接套用新后端。
+
 2026-10-18。用户明确素材来自带摄像头的巡逻机器人，并提供本机demo目录。共16张JPEG、5段约60秒MP4；尺寸包含3840×1080、1728×536超宽图像、1920×1080视频与256×280人脸裁剪。
 原始文件不覆盖、不提交Git、不发送外部服务。哈希与尺寸见tests/fixtures/robot-manifest.json；原名与帧时间戳保存在忽略目录data/validation/robot内。
 

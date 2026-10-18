@@ -13,9 +13,11 @@ Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP 流�
 Set-Location H:\workspace\python\vision-shield
 uv sync --frozen
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+.\scripts\download-cpu-models.ps1
 ```
 
 解释器使用Python3.12，依赖由uv.lock锁定。项目默认使用CPU版PyTorch，不需要安装CUDA。
+默认`DETECTION_BACKEND=quality`：EgoBlur全图双类检测加YuNet/HyperLPR分块补充，优先减少漏遮。四个模型都必须可用；ONNX用上述脚本下载，已有EgoBlur文件及校验方式见[模型说明](models/README.md)。本机使用CPU，CUDA暂缓。已有.env需同步后端及四条模型路径。
 
 ## 本地 Redis / MediaMTX
 
@@ -86,21 +88,23 @@ PATCH返回202表示停止意图已保存；查询到cancelled/stopped才表示�
 
 `api/`负责HTTP契约，`jobs/`负责Taskiq、持久状态和租约，`media/`负责输入、进程生命周期及音视频流水线，`detection/`输出遮挡坐标，`redaction.py`执行实心遮挡及有界的相邻帧补偿。
 
-默认每池最多100个未结束任务、每队列100条消息。实时流只缓存2个待处理画面，过载取最新帧；文件逐帧处理。AAC缓存超过16秒或4MiB会重建流会话，不无限堆积；这是为较慢CPU上的1280分辨率检测保留的容量上限，会增加可容纳的延迟，并不是延迟保证。
+默认每池最多100个未结束任务、每队列100条消息。实时流只缓存2个待处理画面，过载取最新帧；文件逐帧处理。AAC缓存超过16秒或4MiB会重建流会话，不无限堆积；该上限保留自EgoBlur CPU校准，并不是延迟保证。
 
 ## 巡逻机器人素材
 
-面向运动模糊、超宽视角和远处小目标，默认 `DETECTION_MAX_SIDE=1280`（320–1920），按比例缩小且不放大低分辨率原图；坐标映射回原图。`DETECTION_BOX_PADDING=0.15` 表示每侧外扩框宽/高的15%，最后裁剪至图像边界。两个模型阈值仍为0.1，不对整幅画面做锐化或生成式修复。
+面向运动模糊、超宽视角和远处小目标，默认效果优先组合在最长边 `DETECTION_MAX_SIDE=1280`（320–1920）的全图运行EgoBlur，再以YuNet/HyperLPR做全图及有界重叠分块补充。人脸候选门槛分别为0.3/0.6，车牌为0.1/0.25；EgoBlur得分至少0.7的结果保留，其余候选须得到另一模型同类重叠框支持，或通过局部复核。复核取候选周边3倍最长边、至少96像素区域，调整到最长边320后交给另一模型；同类框IoU至少0.2。用于佐证的人脸门槛为EgoBlur0.1、YuNet0.3；不会单独从低分人脸新增遮挡。该策略减少单模型误遮，也可能丢失无法确认的弱目标。小图不额外分块，车牌网络按其320输入约定做letterbox。`DETECTION_BOX_PADDING=0.15` 表示EgoBlur每侧15%、YuNet人脸每侧15%，HyperLPR车牌水平每侧30%、垂直15%。不做OCR、锐化或生成式修复。
+
+`DETECTION_BACKEND=cpu`保留上一轮轻量方案（YuNet阈值0.3），无需加载EgoBlur；它在固定样本中有远处车牌漏遮，不作为当前效果验收结论。当前组合在CPU上更慢，接口仍由媒体子进程异步执行，不承诺实时帧率。新效果对照见[效果优先验证](specs/001-media-redaction/validation/quality-optimization.md)。
 
 视频和流保存至多两组真实检测框，在200毫秒源时间内补遮短暂漏检；尺寸变化、时钟倒退、较长跳帧或缩略图明显变化会清空历史，每次流重连重新建立状态。补偿不累计刷新过期时间；没有检测历史的目标不能凭空补出。这不是运动跟踪，快速转向和目标快速移动仍可能漏遮；小于阈值的画面变化也可能保留旧位置造成多遮。
 
-提高分辨率会增加CPU耗时和误检；当前样本中存在把车体部件等误判为人脸的情况。需要按实际机器人素材复核，不承诺模糊素材零漏检。CPU吞吐不足时可降低DETECTION_MAX_SIDE，但会损失小目标细节，不能视为等价效果。与640尺寸的对照入口：
+检测仍可能漏检和误遮，需要按实际机器人素材复核，不承诺模糊素材零漏检。降低DETECTION_MAX_SIDE会影响人脸细节，车牌网络输入及分块数也会影响耗时。与原EgoBlur 1280基线的对照入口：
 
 ```powershell
-uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo
+uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo --output data/validation/cpu-evaluated
 ```
 
-结果在 `data/validation/robot/evaluated/`，包括每张图片、每段视频的前三个连续帧的对照图、脱敏图、耗时和源文件哈希。它不是完整视频或准确率验收，原始素材不覆盖、不向外部服务上传。固定观察与限制见[机器人验证记录](specs/001-media-redaction/validation/robot-media.md)。
+结果包括每张图片、每段视频的前三个连续帧的对照图、脱敏图、耗时和源文件哈希。比较工具还需要本机保留的两个EgoBlur模型。它不是完整视频或准确率验收，原始素材不覆盖、不向外部服务上传。CPU优化与限制见[验证记录](specs/001-media-redaction/validation/cpu-optimization.md)。
 
 调整.env后重启API、协调器和worker；现有任务接口保持不变。
 
@@ -108,9 +112,7 @@ uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo
 
 ## 检测模型
 
-两个Gen1模型由代理从 [Project Aria官方Hugging Face发布版本](https://huggingface.co/projectaria/EgoBlur/tree/9c0b319ad09d0346e8294d7bf569593d3ab865c0)下载。
-固定版本、原始文件名与SHA-256记录在 `models/manifest.json`，提取为 `models/face.jit` 和 `models/license_plate.jit`。
-文件缺失时测试明确失败，不静默降级为单模型。
+模型来源：OpenCV Zoo及HyperLPR作者仓库固定版本记录在 `models/cpu-manifest.json`，EgoBlur固定版本记录在 `models/manifest.json`。下载、许可和切换方法见[模型说明](models/README.md)。效果优先组合中任一模型文件缺失或推理失败都会使处理失败，不返回部分模型结果或透传原始画面。
 
 ## 运行验证
 
@@ -121,7 +123,7 @@ uv run pytest -q
 ```
 
 测试启动独立临时端口和数据目录，不清空现有Redis。FFmpeg与ffprobe需在PATH中，本机已经具备。
-真实媒体样本和权重不提交Git；自动生成的图片和视频仅用于媒体机制验证。
+真实媒体样本和权重不提交Git；自动生成的图片和视频仅用于媒体机制验证。效果回归另需本机`samples/robot-quality/`九张授权样本，其哈希和已核对的小区域记录在`tests/fixtures/quality-cases.json`；缺失时明确失败，不跳过。原始demo中的image-2、7、13、17、19按该清单命名保留，rtsp-green.png来自已保存的source-first截图；另三张PNG是demo视频9第0帧、视频10第42帧和视频11第17帧，用于轮胎、背部头颈及夜间背景误遮回归。
 实际摄像头接入时在 `.env` 中将 `SOURCE_ALLOWLIST` 设置为授权主机/IP/CIDR的JSON数组；默认空数组拒绝远程来源。
 
 当前没有用户鉴权或自动文件删除，原音频不脱敏；检测效果、完整故障恢复与容量以各阶段实测为准。

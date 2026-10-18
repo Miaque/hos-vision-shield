@@ -1,20 +1,20 @@
 # Implementation Plan: 媒体人脸与车牌脱敏
 
-**Branch**: `master`（实际 Git 分支；setup-plan 返回的 `001-media-redaction` 为特征标识） | **Date**: 2026-10-18 | **Spec**: [spec.md](spec.md)
+**Branch**: `feature/cpu-detection`（当前CPU优化；主干为`main`） | **Date**: 2026-10-18 | **Spec**: [spec.md](spec.md)
 
 **Input**: `specs/001-media-redaction/spec.md`
 
 ## Summary
 
 FastAPI 负责接入、状态和文件结果；Taskiq 文件与流两个 worker 池执行处理；Redis 同时承担队列、任务状态和运行意图持久化。
-受控媒体子进程使用 EgoBlur 人脸/车牌模型和 PyAV 完成逐帧检测、实心遮挡及音视频输出；MediaMTX 提供 RTSP 播放。
+受控媒体子进程使用人脸/车牌检测模型和 PyAV 完成逐帧检测、实心遮挡及音视频输出；MediaMTX 提供 RTSP 播放。当前按用户效果优先要求，默认quality组合EgoBlur全图与YuNet/HyperLPR分块补充；上一轮cpu轻量方案保留对照。
 首版内部使用，无调用方鉴权，无自动文件删除，不额外录像。流恢复由持久运行意图驱动，不依赖永久未确认消息。
 
 ## Technical Context
 
 **Language/Version**: Python 3.12（符合现有 >=3.12，首版锁定验证解释器，不直接承诺后续所有 Python 版本）。
 
-**Primary Dependencies**: FastAPI、Uvicorn、Pydantic Settings、Taskiq、taskiq-redis、redis.asyncio、HTTPX、PyAV、Pillow、NumPy、PyTorch/torchvision；外部 Redis、MediaMTX 与支持 H.264 的 FFmpeg 库。具体兼容版本在首个技术验证切片锁定到 uv.lock；不使用 latest 部署标签。
+**Primary Dependencies**: FastAPI、Uvicorn、Pydantic Settings、Taskiq、taskiq-redis、redis.asyncio、HTTPX、PyAV、Pillow、NumPy、OpenCV DNN；PyTorch/torchvision用于quality中的EgoBlur及单独基线；外部 Redis、MediaMTX 与支持 H.264 的 FFmpeg 库。具体兼容版本锁定到 uv.lock；不使用 latest 部署标签。
 
 **Storage**: Redis 单实例持久卷，AOF appendfsync=always、noeviction；任务元数据无 TTL。共享媒体目录保存原文件与结果，当前本机进程使用同一目录，扩到多机时再提供共享文件系统；模型为只读本地文件，不在请求中下载。
 
@@ -89,7 +89,11 @@ tests/{unit,integration,e2e}/
 ### 媒体处理与时间线
 
 JPEG/PNG 使用 Pillow 解码、应用方向、裁剪检测框后填黑；不复制输入 EXIF/缩略图以免旁路保留原始敏感图像。
-两类 EgoBlur Gen1 模型在子进程初始化时加载，首版 CPU 基线；模型文件、阈值和版本记录到验证报告，不增加公共模型选择接口。
+两类检测模型在子进程初始化时加载，不增加公共模型选择接口。原EgoBlur Gen1为首版CPU基线；2026-10-18按用户CPU优化要求，默认改为YuNet人脸与HyperLPR3的320车牌检测ONNX，通过OpenCV DNN显式选择CPU。仅使用检测网络，不运行OCR或身份识别；后端由本机配置选择，无自动模型回退。来源、许可、固定版本和哈希见models/cpu-manifest.json。
+
+后续同日按效果优先补充，默认quality使用EgoBlur1280全图，再追加YuNet/HyperLPR补充候选。人脸种子阈值分别0.3/0.6，车牌0.1/0.25；EgoBlur得分至少0.7保留，其他候选需要另一模型同类框IoU至少0.2佐证，或在候选周边局部复核。局部取3倍最长边且至少96像素，调整到最长边320；佐证人脸门槛为EgoBlur0.1、YuNet0.3，不单独产生低分遮挡。保留被确认的重叠遮挡，不跨模型NMS丢弃边缘；任一模型异常整个处理失败。单独egoblur/cpu后端保留对照，四个模型路径、异步进程边界和REST接口不变。不扩展CUDA或下载新模型，效果/代价见validation/quality-optimization.md。
+
+CPU实现使用全图与约640源像素重叠分块，每轴至多8个位置，大图扩大分块以保持区域覆盖，每次顺序处理一个视图。人脸阈值0.3、车牌0.25；人脸每侧扩框15%，车牌水平每侧30%/垂直15%，保留重叠遮挡。该策略增加误遮，不能补偿从未检出的目标；实际效果和性能另见validation/cpu-optimization.md。其余任务、音视频时间线、缓存和异步边界保持原实现。
 
 机器人补充：默认检测最长边1280、Lanczos缩小、不上采样，每侧外扩15%，原图像素不作锐化/重建。按样本比较而非盲目降低0.1阈值。视频/流每会话一个FrameRedactor，仅缓存两组实际框与一张36×64 RGB缩略图，补偿200毫秒源时间内的短暂漏检；明显缩略图差异、尺寸或时间异常清空，永不以保留框刷新历史。快速运动不保证可补偿，当前CPU流跳帧较长时通常不会沿用旧框。
 
