@@ -23,6 +23,8 @@ def load_detector(config: dict) -> Detector:
         return QualityDetector(config)
     if config["detection_backend"] == "cpu":
         from vision_shield.detection.cpu import Detector as Implementation
+    elif config["detection_backend"] == "yolo":
+        from vision_shield.detection.yolo import Detector as Implementation
     elif config["detection_backend"] == "egoblur":
         from vision_shield.detection.egoblur import Detector as Implementation
         return Implementation(config["face_model_path"], config["plate_model_path"],

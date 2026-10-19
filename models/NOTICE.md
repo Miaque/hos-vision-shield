@@ -12,3 +12,9 @@ license-plate recognition/classification networks, character dictionaries, or OC
 
 Exact source revisions, original download URLs, sizes and hashes are recorded in
 `cpu-manifest.json`. Model binaries remain local and are excluded from Git.
+
+## YOLO 对比候选
+
+人脸权重来自 https://github.com/akanametov/yolo-face/releases/tag/1.0.0 ，上游仓库标记 GPL-3.0；车牌权重来自 https://huggingface.co/morsetechlab/yolov11-license-plate-detection ，模型卡标记 AGPL-3.0。固定来源与 SHA-256 见 yolo-manifest.json。保留上游许可声明，不把本地对比视为生产部署许可结论。车牌模型卡披露训练/测试污染，公开指标不能作为本项目效果证据。
+
+权重实际 metadata 补充：yolov8n-face.onnx 内部声明 AGPL-3.0，与来源仓库 GPL-3.0 标记不同；两者均保留在 yolo-manifest.json，不将仓库标记作为权重许可的唯一依据。

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:16379/0")
     media_root: Path = Path("data")
-    detection_backend: Literal["quality", "cpu", "egoblur"] = "quality"
+    detection_backend: Literal["quality", "cpu", "egoblur", "yolo"] = "quality"
     inference_device: Literal["cpu", "cuda"] = "cpu"
     face_model_path: Path = Path("models/yunet_face.onnx")
     plate_model_path: Path = Path("models/hyperlpr_plate.onnx")
@@ -95,8 +95,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_lease(self) -> Self:
-        if self.detection_backend == "cpu" and self.inference_device == "cuda":
-            raise ValueError("轻量 cpu 检测策略不支持 CUDA，请选择 quality 或 egoblur")
+        if self.detection_backend in {"cpu", "yolo"} and self.inference_device == "cuda":
+            raise ValueError("cpu/yolo 检测策略不支持 CUDA，请选择 quality 或 egoblur")
         if self.heartbeat_seconds >= self.lease_seconds:
             raise ValueError("HEARTBEAT_SECONDS must be less than LEASE_SECONDS")
         return self
