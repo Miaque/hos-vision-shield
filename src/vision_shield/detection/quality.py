@@ -28,10 +28,20 @@ class Detector:
             for detection in candidates:
                 if detection.kind == "face" and detection.score < (0.3 if is_primary else 0.6):
                     continue
+                global_score = local_score = 0
+                if detection.kind == "face":
+                    global_score = 0.3
+                    x1, y1, x2, y2 = detection.box
+                    # 大候选的两路中等分数易被轮毂相互佐证；小侧脸保留原有局部灵敏度。
+                    if min(x2 - x1, y2 - y1) >= 128:
+                        global_score = local_score = 0.9 if is_primary else 0.7
+                        if not is_primary and detection.score >= 0.9:
+                            global_score, local_score = 0.3, 0.1
                 if not (is_primary and detection.score >= 0.7
-                        or any(other.kind == detection.kind and self._overlap(detection.box, other.box) >= 0.2
+                        or any(other.kind == detection.kind and other.score >= global_score
+                               and self._overlap(detection.box, other.box) >= 0.2
                                for other in others)
-                        or self._confirmed(rgb, detection, verifier)):
+                        or self._confirmed(rgb, detection, verifier, local_score)):
                     continue
                 x1, y1, x2, y2 = detection.box
                 pad_x = (x2 - x1) * self.box_padding * (2 if not is_primary and detection.kind == "plate" else 1)
@@ -46,7 +56,7 @@ class Detector:
         union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - intersection
         return intersection / union
 
-    def _confirmed(self, rgb, detection, verifier):
+    def _confirmed(self, rgb, detection, verifier, minimum_score=0):
         x1, y1, x2, y2 = detection.box
         size = max(96, 3 * max(x2 - x1, y2 - y1))
         left, top = max(0, math.floor((x1 + x2 - size) / 2)), max(0, math.floor((y1 + y2 - size) / 2))
@@ -59,5 +69,6 @@ class Detector:
         crop = cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
         xs, ys = (right - left) / crop.shape[1], (bottom - top) / crop.shape[0]
         expected = ((x1 - left) / xs, (y1 - top) / ys, (x2 - left) / xs, (y2 - top) / ys)
-        return any(other.kind == detection.kind and self._overlap(expected, other.box) >= 0.2
+        return any(other.kind == detection.kind and other.score >= minimum_score
+                   and self._overlap(expected, other.box) >= 0.2
                    for other in verifier.candidates(crop))

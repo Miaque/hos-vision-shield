@@ -83,6 +83,54 @@ def test_unconfirmed_wheel_face_and_background_plate_are_rejected():
     assert (rgb == 180).all()
 
 
+@pytest.mark.parametrize("score,local_match,expected", [(0.23, False, False), (0.23, True, True), (0.31, False, True)])
+def test_weak_global_face_support_requires_local_confirmation(score, local_match, expected):
+    from vision_shield.detection.quality import Detector
+
+    rgb = np.full((10, 40, 3), 180, np.uint8)
+    local_calls = []
+
+    class Primary:
+        def candidates(self, pixels):
+            if pixels is rgb:
+                return [Detection("face", (1, 2, 9, 5), score)]
+            local_calls.append(pixels.shape)
+            return [Detection("face", (8, 16, 72, 40), 0.2)] if local_match else []
+
+    class Detail:
+        def candidates(self, pixels):
+            return [Detection("face", (1, 2, 9, 5), 0.63)] if pixels is rgb else []
+
+    detector = Detector.__new__(Detector)
+    detector.box_padding, detector.primary, detector.detail = 0, Primary(), Detail()
+    assert bool(detector.detect(rgb)) is expected
+    assert len(local_calls) == (1 if score < 0.3 else 0)
+
+
+@pytest.mark.parametrize("primary_score,detail_score,short_side,local_primary_score,expected", [
+    (0.47, 0.76, 128, 0.38, False), (0.665, 0.801, 128, 0.38, False),
+    (0.665, 0.801, 127, 0.38, True), (0.23, 0.95, 128, 0.2, True),
+])
+def test_large_uncertain_faces_require_stronger_support(primary_score, detail_score, short_side, local_primary_score, expected):
+    from vision_shield.detection.quality import Detector
+
+    rgb = np.full((200, 300, 3), 180, np.uint8)
+
+    class Model:
+        def __init__(self, score, local_score):
+            self.score, self.local_score = score, local_score
+
+        def candidates(self, pixels):
+            box = (50, 30, 50 + short_side, 190) if pixels is rgb else (
+                50 * 320 / 300, 30 * 213 / 200, (50 + short_side) * 320 / 300, 190 * 213 / 200)
+            return [Detection("face", box, self.score if pixels is rgb else self.local_score)]
+
+    detector = Detector.__new__(Detector)
+    detector.box_padding = 0
+    detector.primary, detector.detail = Model(primary_score, local_primary_score), Model(detail_score, 0.75)
+    assert bool(detector.detect(rgb)) is expected
+
+
 @pytest.mark.parametrize("confirmation", ["plate", "face", "elsewhere", "failure"])
 def test_local_confirmation_masks_only_matching_target_and_propagates_failure(confirmation):
     from vision_shield.detection.quality import Detector

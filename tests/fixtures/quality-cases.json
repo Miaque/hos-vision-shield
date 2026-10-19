@@ -94,6 +94,18 @@
           253,
           3330,
           300
+        ],
+        [
+          2006,
+          424,
+          2019,
+          444
+        ],
+        [
+          2645,
+          370,
+          2664,
+          397
         ]
       ],
       "preserved_regions": [
@@ -165,6 +177,111 @@
           310,
           875,
           335
+        ]
+      ]
+    },
+    {
+      "id": "video-04-frame-24",
+      "file": "video-04-frame-24.png",
+      "sha256": "72495325df5be0e557239cc88621644e2c16627ef43eadbf0b0dfe63c445ccef",
+      "masked_regions": [
+        [
+          340,
+          588,
+          391,
+          615
+        ]
+      ],
+      "preserved_regions": [
+        [
+          760,
+          690,
+          850,
+          800
+        ]
+      ]
+    },
+    {
+      "id": "video-04-frame-09",
+      "file": "video-04-frame-09.png",
+      "sha256": "5d5cbb5b36791ed12a1d4c31f99ee237d9d142ce5d36d38e8e1e5cf4ff3aafd4",
+      "masked_regions": [
+        [
+          473,
+          594,
+          493,
+          604
+        ]
+      ],
+      "preserved_regions": [
+        [
+          890,
+          730,
+          945,
+          795
+        ]
+      ]
+    },
+    {
+      "id": "video-04-frame-10",
+      "file": "video-04-frame-10.png",
+      "sha256": "bf850bebf8d426d2068cd7fed5a3098d209402459e5a6988bf6be400fd4a73c9",
+      "masked_regions": [
+        [
+          484,
+          596,
+          504,
+          606
+        ]
+      ],
+      "preserved_regions": [
+        [
+          910,
+          730,
+          960,
+          800
+        ]
+      ]
+    },
+    {
+      "id": "video-04-frame-16",
+      "file": "video-04-frame-16.png",
+      "sha256": "e38f293e778eec00f66e032c22182bcbcab65b22319ffcca284ea4e249dd5579",
+      "masked_regions": [
+        [
+          448,
+          584,
+          468,
+          594
+        ]
+      ],
+      "preserved_regions": [
+        [
+          860,
+          710,
+          920,
+          780
+        ]
+      ]
+    },
+    {
+      "id": "video-04-frame-19",
+      "file": "video-04-frame-19.png",
+      "sha256": "b7fa64c043f5d9003ecad16a769ce6f4793051bd1b8ca664f402587081d379a4",
+      "masked_regions": [
+        [
+          413,
+          593,
+          433,
+          603
+        ]
+      ],
+      "preserved_regions": [
+        [
+          825,
+          715,
+          890,
+          780
         ]
       ]
     }
