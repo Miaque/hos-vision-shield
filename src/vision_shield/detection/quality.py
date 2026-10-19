@@ -1,6 +1,7 @@
 """Cross-confirm uncertain detections; inference errors never become partial success."""
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -12,15 +13,24 @@ from vision_shield.detection.egoblur import Detector as PrimaryDetector
 class Detector:
     def __init__(self, config: dict):
         self.max_side, self.box_padding = config["detection_max_side"], config["detection_box_padding"]
+        self.inference_device = config.get("inference_device", "cpu")
         self.primary = PrimaryDetector(config["egoblur_face_model_path"], config["egoblur_plate_model_path"],
-                                       self.max_side, self.box_padding, face_threshold=0.1)
+                                       self.max_side, self.box_padding, face_threshold=0.1,
+                                       device=self.inference_device)
         # Lower scores may corroborate a candidate, but never start a mask by themselves.
         self.detail = DetailDetector(config["face_model_path"], config["plate_model_path"],
                                      self.max_side, self.box_padding, face_threshold=0.3)
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         """Retain strong primary detections and confirmed complementary masks."""
-        primary, detail = self.primary.candidates(rgb), self.detail.candidates(rgb)
+        if self.inference_device == "cuda":
+            # 两路全图检测互不依赖；等待两路结束后再复核，异常不返回部分结果。
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pending = pool.submit(self.primary.candidates, rgb)
+                detail = self.detail.candidates(rgb)
+                primary = pending.result()
+        else:
+            primary, detail = self.primary.candidates(rgb), self.detail.candidates(rgb)
         height, width = rgb.shape[:2]
         boxes = []
         for candidates, others, verifier, is_primary in [(primary, detail, self.detail, True),

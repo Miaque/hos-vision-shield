@@ -19,6 +19,7 @@ def test_robot_detection_keeps_more_detail_and_expands_boxes():
 
     detector = Detector.__new__(Detector)
     detector.face_threshold = 0.1
+    detector.device = torch.device("cpu")
     detector.models = [predict]
     detector.max_side, detector.box_padding = 1280, 0.15
     boxes = detector.detect(np.zeros((1080, 3840, 3), dtype=np.uint8))

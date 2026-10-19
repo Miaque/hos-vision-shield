@@ -18,6 +18,7 @@ def test_detector_maps_resized_coordinates_back_to_original_pixels():
 
     detector = Detector.__new__(Detector)
     detector.face_threshold = 0.1
+    detector.device = torch.device("cpu")
     detector.max_side, detector.box_padding = 640, 0
     seen = []
 

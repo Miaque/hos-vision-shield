@@ -25,6 +25,9 @@ def load_detector(config: dict) -> Detector:
         from vision_shield.detection.cpu import Detector as Implementation
     elif config["detection_backend"] == "egoblur":
         from vision_shield.detection.egoblur import Detector as Implementation
+        return Implementation(config["face_model_path"], config["plate_model_path"],
+                              config["detection_max_side"], config["detection_box_padding"],
+                              device=config.get("inference_device", "cpu"))
     else:
         raise ValueError("Unsupported detection backend")
     return Implementation(config["face_model_path"], config["plate_model_path"],

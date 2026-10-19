@@ -9,12 +9,19 @@ from vision_shield.detection import Detection
 
 
 class Detector:
-    def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=0.1):
+    def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=0.1, device="cpu"):
+        if device not in {"cpu", "cuda"}:
+            raise ValueError("推理设备仅支持 cpu 或 cuda")
+        if device == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError("CUDA 不可用，请检查显卡驱动及 PyTorch CUDA 构建")
+        self.device = torch.device(device)
         # 本机交错实测4线程显著快于2线程，避免继续加线程挤占其他媒体进程。
         torch.set_num_threads(4)
         self.max_side, self.box_padding = max_side, box_padding
         self.face_threshold = face_threshold
-        self.models = [torch.jit.load(str(path), map_location="cpu").eval() for path in (face_path, plate_path)]
+        # Gen1 的尺寸常量必须留在 CPU；按官方流程仅迁移参数和缓冲区。
+        self.models = [torch.jit.load(str(path), map_location="cpu").to(self.device).eval()
+                       for path in (face_path, plate_path)]
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         """Return padded xyxy boxes in source RGB coordinates without altering the pixels."""
@@ -32,7 +39,8 @@ class Detector:
             detection_pixels = np.asarray(Image.fromarray(rgb).resize(
                 (max(1, round(width * scale)), max(1, round(height * scale))), Image.Resampling.LANCZOS))
         # The released Gen1 model expects BGR uint8 CHW, without normalization.
-        image = torch.from_numpy(detection_pixels[:, :, ::-1].transpose(2, 0, 1).copy())
+        # 模型和输入必须在同一设备；后处理继续返回普通坐标。
+        image = torch.from_numpy(detection_pixels[:, :, ::-1].transpose(2, 0, 1).copy()).to(self.device)
         x_scale, y_scale = width / detection_pixels.shape[1], height / detection_pixels.shape[0]
         boxes = []
         # Gen1 JIT profiling adds seconds to cold frames without improving this CPU's steady rate.

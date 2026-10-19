@@ -16,8 +16,25 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 .\scripts\download-cpu-models.ps1
 ```
 
-解释器使用Python3.12，依赖由uv.lock锁定。项目默认使用CPU版PyTorch，不需要安装CUDA。
-默认`DETECTION_BACKEND=quality`：EgoBlur全图双类检测加YuNet/HyperLPR分块补充，优先减少漏遮。四个模型都必须可用；ONNX用上述脚本下载，已有EgoBlur文件及校验方式见[模型说明](models/README.md)。本机使用CPU，CUDA暂缓。已有.env需同步后端及四条模型路径。
+解释器使用Python3.12，依赖由uv.lock锁定。Windows x64 安装 PyTorch 2.14.1 / torchvision 0.29.1 的 CUDA 12.6 构建，支持本机 GTX 1080；其他平台继续使用 CPU 构建。CUDA 构建也可执行 CPU 推理，不需要单独安装 CUDA Toolkit，但 GPU 运行需要兼容的 NVIDIA 驱动。
+默认`DETECTION_BACKEND=quality`：EgoBlur全图双类检测加YuNet/HyperLPR分块补充，优先减少漏遮。四个模型都必须可用。模型可以从已准备机器离线复制整个 `models/`（含两份 manifest 和许可证），启动及推理不下载权重；上面的下载脚本仅供联网准备模型时使用。已有.env需同步后端及四条模型路径。
+
+### 本机 GTX 1080
+
+在 `.env` 设置 `INFERENCE_DEVICE=cuda`，然后运行原有 `scripts/start-application.ps1`。EgoBlur 的两个模型和输入使用 GPU，YuNet/HyperLPR、编解码和遮挡继续使用 CPU，检测阈值与策略不变。要使用 CPU，只需改为 `INFERENCE_DEVICE=cpu` 后重启应用。未设置该字段仍默认 CPU；轻量 `DETECTION_BACKEND=cpu` 不接受 cuda 设备。
+
+首次安装或驱动变更后，先执行真实模型验证：
+
+```powershell
+$env:RUN_GPU_TESTS='1'
+uv run --frozen pytest tests/integration/test_gpu_model_probe.py -q
+Remove-Item Env:RUN_GPU_TESTS
+```
+
+验证使用本地四个模型和 `samples/robot-quality` 中已标注样例，检查模型校验和、真实 GPU 推理和遮挡区域。GPU 不可用或推理失败会报错，不回退 CPU。更新依赖后须重启已有进程；本机 GPU 验证不代表服务器 ARM64 或 Docker 部署已通过。
+
+本机已完成真实模型、图片/视频子进程及同图 CPU/GPU 对比，边界与结果见 [GTX 1080 验证记录](specs/002-compose-cpu-gpu/local-gpu.md)。
+GPU 模式下，两路独立的全图检测同时执行，随后仍按原顺序进行局部复核；固定全集输出保持一致，最新耗时见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)。
 
 ## 本地 Redis / MediaMTX
 

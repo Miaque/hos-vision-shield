@@ -23,9 +23,9 @@ def evaluate(source: Path, output: Path) -> None:
     config = Settings()
     detector = load_detector(config.model_dump())
     baseline = EgoBlurDetector("models/face.jit", "models/license_plate.jit",
-                              config.detection_max_side, config.detection_box_padding)
+                              config.detection_max_side, config.detection_box_padding, device=config.inference_device)
     report = dict(source_files=[], images=[], video_frames=[],
-                  parameters=dict(backend=config.detection_backend, baseline="egoblur",
+                  parameters=dict(backend=config.detection_backend, baseline="egoblur", device=config.inference_device,
                                   max_side=detector.max_side, box_padding=detector.box_padding,
                                   hold_seconds=0.2),
                   review="No human labels; detection counts are not accuracy")

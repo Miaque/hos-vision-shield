@@ -18,8 +18,49 @@ def test_quality_is_default_and_requires_both_primary_and_detail_models(monkeypa
     detector = load_detector(settings.model_dump())
     assert detector.primary is primary and detector.detail is detail
     assert received[0][1][:2] == (settings.egoblur_face_model_path, settings.egoblur_plate_model_path)
-    assert received[0][2] == {"face_threshold": 0.1}
+    assert received[0][2] == {"face_threshold": 0.1, "device": "cpu"}
     assert received[1][2] == {"face_threshold": 0.3}
+
+
+@pytest.mark.parametrize("failed", [None, "primary", "detail"])
+def test_cuda_overlaps_independent_models_and_waits_for_failure(monkeypatch, failed):
+    from threading import Event
+
+    from vision_shield.detection import quality
+
+    primary_started, detail_started, primary_finished = Event(), Event(), Event()
+
+    class Primary:
+        def candidates(self, rgb, *, kind=None):
+            primary_started.set()
+            try:
+                assert detail_started.wait(2), "两路全图检测应重叠执行"
+                if failed == "primary":
+                    raise RuntimeError("主检测失败")
+                return [Detection("face", (1, 1, 3, 3), 0.9)]
+            finally:
+                primary_finished.set()
+
+    class Detail:
+        def candidates(self, rgb, *, kind=None):
+            assert primary_started.wait(2)
+            detail_started.set()
+            if failed == "detail":
+                raise RuntimeError("补充检测失败")
+            return []
+
+    monkeypatch.setattr(quality, "PrimaryDetector", lambda *a, **kw: Primary())
+    monkeypatch.setattr(quality, "DetailDetector", lambda *a, **kw: Detail())
+    detector = quality.Detector(Settings(_env_file=None, inference_device="cuda", detection_box_padding=0).model_dump())
+    pixels = np.full((8, 8, 3), 180, np.uint8)
+    pixels.setflags(write=False)
+    if failed:
+        with pytest.raises(RuntimeError, match="检测失败"):
+            detector.detect(pixels)
+    else:
+        assert detector.detect(pixels) == [(1, 1, 3, 3)]
+    assert primary_finished.is_set(), "检测结束前必须回收后台工作"
+    assert (pixels == 180).all()
 
 
 def test_quality_keeps_strong_primary_and_confirmed_wider_edges():
@@ -33,6 +74,7 @@ def test_quality_keeps_strong_primary_and_confirmed_wider_edges():
             return self.boxes
 
     detector = Detector.__new__(Detector)
+    detector.inference_device = "cpu"
     detector.box_padding = 0
     detector.primary = Fixed([Detection("face", (2, 2, 8, 6), 0.8), Detection("plate", (30, 3, 39, 8), 0.8)])
     detector.detail = Fixed([Detection("face", (0, 1, 10, 7), 0.7)])
@@ -59,6 +101,7 @@ def test_any_quality_model_failure_prevents_partial_success(failed):
             return [Detection("face", (1, 1, 3, 3), 0.9)]
 
     detector = Detector.__new__(Detector)
+    detector.inference_device = "cpu"
     detector.primary, detector.detail = Model(failed == "primary"), Model(failed == "detail")
     with pytest.raises(RuntimeError, match="model failed"):
         detector.detect(np.zeros((8, 8, 3), np.uint8))
@@ -78,6 +121,7 @@ def test_unconfirmed_wheel_face_and_background_plate_are_rejected():
             return [Detection("face", (150, 120, 210, 190), 0.76)] if pixels is rgb else []
 
     detector = Detector.__new__(Detector)
+    detector.inference_device = "cpu"
     detector.box_padding, detector.primary, detector.detail = 0.15, Primary(), Detail()
     assert detector.detect(rgb) == []
     assert (rgb == 180).all()
@@ -102,6 +146,7 @@ def test_weak_global_face_support_requires_local_confirmation(score, local_match
             return [Detection("face", (1, 2, 9, 5), 0.63)] if pixels is rgb else []
 
     detector = Detector.__new__(Detector)
+    detector.inference_device = "cpu"
     detector.box_padding, detector.primary, detector.detail = 0, Primary(), Detail()
     assert bool(detector.detect(rgb)) is expected
     assert len(local_calls) == (1 if score < 0.3 else 0)
@@ -126,6 +171,7 @@ def test_large_uncertain_faces_require_stronger_support(primary_score, detail_sc
             return [Detection("face", box, self.score if pixels is rgb else self.local_score)]
 
     detector = Detector.__new__(Detector)
+    detector.inference_device = "cpu"
     detector.box_padding = 0
     detector.primary, detector.detail = Model(primary_score, local_primary_score), Model(detail_score, 0.75)
     assert bool(detector.detect(rgb)) is expected
@@ -153,6 +199,7 @@ def test_local_confirmation_masks_only_matching_target_and_propagates_failure(co
             return [Detection("face" if confirmation == "face" else "plate", box, 0.7)]
 
     detector = Detector.__new__(Detector)
+    detector.inference_device = "cpu"
     detector.box_padding, detector.primary, detector.detail = 0, Primary(), Detail()
     if confirmation == "failure":
         with pytest.raises(RuntimeError, match="verification failed"):
@@ -174,6 +221,7 @@ def test_primary_face_filter_does_not_discard_low_confidence_plates():
 
     detector = Detector.__new__(Detector)
     detector.models, detector.face_threshold = [face, plate], 0.3
+    detector.device = torch.device("cpu")
     detector.max_side, detector.box_padding = 1280, 0
     assert detector.detect(np.zeros((64, 64, 3), np.uint8)) == [(40., 5., 50., 20.), (5., 40., 30., 50.)]
 
@@ -191,6 +239,7 @@ def test_primary_can_run_only_the_requested_confirmation_model(kind):
 
     detector = Detector.__new__(Detector)
     detector.models = [selected, unrelated] if kind == "face" else [unrelated, selected]
+    detector.device = torch.device("cpu")
     detector.face_threshold, detector.max_side, detector.box_padding = 0.1, 1280, 0.15
     result = detector.candidates(np.zeros((10, 40, 3), np.uint8), kind=kind)
     assert len(result) == 1 and result[0].kind == kind
@@ -232,6 +281,7 @@ def test_confirmation_at_bottom_right_keeps_source_offsets():
             return [Detection("plate", (45 * 320 / 51, 45 * 320 / 51, 320, 320), 0.8)]
 
     detector = Detector.__new__(Detector)
+    detector.inference_device = "cpu"
     detector.box_padding, detector.primary, detector.detail = 0, Primary(), Detail()
     assert detector.detect(rgb) == [(95, 49, 101, 55)]
 
@@ -248,6 +298,7 @@ def test_invalid_primary_metadata_cannot_be_used_as_confirmation(bad):
 
     detector = Detector.__new__(Detector)
     detector.models, detector.face_threshold = [model], 0.1
+    detector.device = torch.device("cpu")
     detector.max_side, detector.box_padding = 1280, 0.15
     with pytest.raises(ValueError, match="Invalid detector output"):
         detector.candidates(np.zeros((10, 10, 3), np.uint8))
