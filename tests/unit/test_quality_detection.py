@@ -29,7 +29,7 @@ def test_quality_keeps_strong_primary_and_confirmed_wider_edges():
         def __init__(self, boxes):
             self.boxes = boxes
 
-        def candidates(self, rgb):
+        def candidates(self, rgb, *, kind=None):
             return self.boxes
 
     detector = Detector.__new__(Detector)
@@ -53,7 +53,7 @@ def test_any_quality_model_failure_prevents_partial_success(failed):
         def __init__(self, fails):
             self.fails = fails
 
-        def candidates(self, rgb):
+        def candidates(self, rgb, *, kind=None):
             if self.fails:
                 raise RuntimeError("model failed")
             return [Detection("face", (1, 1, 3, 3), 0.9)]
@@ -70,11 +70,11 @@ def test_unconfirmed_wheel_face_and_background_plate_are_rejected():
     rgb = np.full((200, 300, 3), 180, np.uint8)
 
     class Primary:
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             return [Detection("plate", (20, 40, 80, 70), 0.5)] if pixels is rgb else []
 
     class Detail:
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             return [Detection("face", (150, 120, 210, 190), 0.76)] if pixels is rgb else []
 
     detector = Detector.__new__(Detector)
@@ -91,14 +91,14 @@ def test_weak_global_face_support_requires_local_confirmation(score, local_match
     local_calls = []
 
     class Primary:
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             if pixels is rgb:
                 return [Detection("face", (1, 2, 9, 5), score)]
             local_calls.append(pixels.shape)
             return [Detection("face", (8, 16, 72, 40), 0.2)] if local_match else []
 
     class Detail:
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             return [Detection("face", (1, 2, 9, 5), 0.63)] if pixels is rgb else []
 
     detector = Detector.__new__(Detector)
@@ -120,7 +120,7 @@ def test_large_uncertain_faces_require_stronger_support(primary_score, detail_sc
         def __init__(self, score, local_score):
             self.score, self.local_score = score, local_score
 
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             box = (50, 30, 50 + short_side, 190) if pixels is rgb else (
                 50 * 320 / 300, 30 * 213 / 200, (50 + short_side) * 320 / 300, 190 * 213 / 200)
             return [Detection("face", box, self.score if pixels is rgb else self.local_score)]
@@ -139,11 +139,11 @@ def test_local_confirmation_masks_only_matching_target_and_propagates_failure(co
     rgb.setflags(write=False)
 
     class Primary:
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             return [Detection("plate", (1, 2, 9, 5), 0.37)] if pixels is rgb else []
 
     class Detail:
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             if pixels is rgb:
                 return []
             assert pixels.shape == (80, 320, 3)
@@ -178,6 +178,40 @@ def test_primary_face_filter_does_not_discard_low_confidence_plates():
     assert detector.detect(np.zeros((64, 64, 3), np.uint8)) == [(40., 5., 50., 20.), (5., 40., 30., 50.)]
 
 
+@pytest.mark.parametrize("kind", ["face", "plate"])
+def test_primary_can_run_only_the_requested_confirmation_model(kind):
+    import torch
+    from vision_shield.detection.egoblur import Detector
+
+    def selected(rgb):
+        return torch.tensor([[1., 2., 9., 5.]]), None, torch.tensor([0.8]), None
+
+    def unrelated(rgb):
+        raise AssertionError("局部复核不应运行无关类别模型")
+
+    detector = Detector.__new__(Detector)
+    detector.models = [selected, unrelated] if kind == "face" else [unrelated, selected]
+    detector.face_threshold, detector.max_side, detector.box_padding = 0.1, 1280, 0.15
+    result = detector.candidates(np.zeros((10, 40, 3), np.uint8), kind=kind)
+    assert len(result) == 1 and result[0].kind == kind
+    assert result[0].box == (1., 2., 9., 5.)
+
+
+@pytest.mark.parametrize("kind", ["face", "plate"])
+def test_local_confirmation_requests_only_the_candidate_class(kind):
+    from vision_shield.detection.quality import Detector
+
+    class Verifier:
+        def candidates(self, pixels, *, kind=None):
+            assert kind == expected_kind, "必须向底层模型传递复核类别"
+            return [Detection(kind, (8, 16, 72, 40), 0.8)]
+
+    expected_kind = kind
+    detector = Detector.__new__(Detector)
+    assert detector._confirmed(np.zeros((10, 40, 3), np.uint8),
+                               Detection(kind, (1, 2, 9, 5), 0.5), Verifier())
+
+
 def test_confirmation_at_bottom_right_keeps_source_offsets():
     from vision_shield.detection.quality import Detector
 
@@ -186,11 +220,11 @@ def test_confirmation_at_bottom_right_keeps_source_offsets():
     rgb[:, :, 1] = np.arange(101)[None, :]
 
     class Primary:
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             return [Detection("plate", (95, 49, 101, 55), 0.37)] if pixels is rgb else []
 
     class Detail:
-        def candidates(self, pixels):
+        def candidates(self, pixels, *, kind=None):
             if pixels is rgb:
                 return []
             assert pixels.shape == (320, 320, 3)

@@ -71,4 +71,4 @@ class Detector:
         expected = ((x1 - left) / xs, (y1 - top) / ys, (x2 - left) / xs, (y2 - top) / ys)
         return any(other.kind == detection.kind and other.score >= minimum_score
                    and self._overlap(expected, other.box) >= 0.2
-                   for other in verifier.candidates(crop))
+                   for other in verifier.candidates(crop, kind=detection.kind))

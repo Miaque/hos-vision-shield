@@ -9,7 +9,7 @@ def detector_with(predict, *, max_side=1280, padding=0):
 
     detector = Detector.__new__(Detector)
     detector.max_side, detector.box_padding = max_side, padding
-    detector._detect_view = MethodType(lambda self, view: predict(view), detector)
+    detector._detect_view = MethodType(lambda self, view, **kwargs: predict(view), detector)
     return detector
 
 
@@ -166,6 +166,28 @@ def test_raw_detectors_map_letterbox_with_actual_axis_scales_and_no_ocr():
     assert detector.plate.blob.shape == (1, 3, 320, 320)
     assert detector.plate.blob[0, :, 160, 160] == pytest.approx(np.array([61, 31, 17]) / 255)
     assert not detector.plate.blob[0, :, 0, 0].any()
+
+
+@pytest.mark.parametrize("kind", ["face", "plate"])
+def test_local_cpu_confirmation_avoids_the_unrelated_model(kind):
+    faces = np.zeros((1, 15), dtype=np.float32)
+    faces[0, :4], faces[0, -1] = [10, 20, 30, 40], 0.9
+    plates = np.zeros((1, 6300, 15), dtype=np.float32)
+    plates[0, 0, :5], plates[0, 0, 13] = [160, 160, 64, 20, 0.9], 0.9
+    detector = detector_with_raw_outputs(faces, plates)
+    pixels = np.zeros((333, 497, 3), dtype=np.uint8)
+    expected = [d for d in detector._detect_view(pixels) if d.kind == kind]
+
+    class Unrelated:
+        def __getattr__(self, name):
+            raise AssertionError("局部复核不应运行无关类别模型")
+
+    if kind == "face":
+        detector.plate = Unrelated()
+    else:
+        detector.face = Unrelated()
+    detector.max_side, detector.box_padding = 1280, 0.15
+    assert detector.candidates(pixels, kind=kind) == expected
 
 
 @pytest.mark.parametrize("failure", ["face_shape", "face_nan", "plate_shape", "plate_nan", "plate_dimensions"])

@@ -4,6 +4,8 @@
 
 本机.env已配置`DETECTION_BACKEND=quality`、`FACE_MODEL_PATH=models/yunet_face.onnx`、`PLATE_MODEL_PATH=models/hyperlpr_plate.onnx`、`EGOBLUR_FACE_MODEL_PATH=models/face.jit`、`EGOBLUR_PLATE_MODEL_PATH=models/license_plate.jit`。quality的遮挡候选门槛为EgoBlur人脸0.3/车牌0.1、YuNet人脸0.6及HyperLPR车牌0.25；EgoBlur得分至少0.7直接保留，其他候选需另一模型同类框IoU至少0.2佐证，否则对周边局部复核。全图人脸佐证至少0.3，否则转局部复核。短边至少128源像素的大人脸候选需至少一路高分结果：弱EgoBlur须有YuNet至少0.9佐证，低于0.9的YuNet须有EgoBlur至少0.7佐证；全图与局部采用相同分数要求。YuNet自身至少0.9时允许EgoBlur全图0.3或局部0.1佐证。较小人脸保留原有低阈值局部复核，以保护远处侧脸；不会单独从低分人脸新增遮挡。复核失败也可能过滤真实弱目标；任一模型运行异常则整个处理失败，不降级。CPU上明显慢于单独ONNX；CUDA尚未实现，后续确定服务器再处理。验证见[效果优先验证](../specs/001-media-redaction/validation/quality-optimization.md)。
 
+局部复核仅执行待确认类别的检测网络，初检仍运行全部四个模型；Torch每个媒体子进程4线程、OpenCV2线程。权重、输入尺度、阈值和后处理保持原方案，计时及像素一致性记录见[同效果CPU推理优化](../specs/001-media-redaction/validation/inference-performance.md)。
+
 固定版本、下载地址、字节数与SHA-256见[cpu-manifest.json](cpu-manifest.json)，许可与来源说明见[NOTICE.md](NOTICE.md)。在项目根目录运行 `./scripts/download-cpu-models.ps1`；已存在且哈希正确时不重复下载，下载失败不会覆盖原文件。
 
 单独轻量方案使用 `DETECTION_BACKEND=cpu`与上述两条ONNX路径，不加载EgoBlur。ONNX全图检测最长边由DETECTION_MAX_SIDE控制；另外在源图上做约640像素的重叠分块，每轴至多8块，大图扩大分块而不跳过区域，最多65个视图含全图。quality复用这些视图，另加EgoBlur一次全图。重叠遮挡保留，避免去重时丢失较宽的遮挡范围。

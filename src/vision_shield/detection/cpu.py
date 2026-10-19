@@ -35,7 +35,7 @@ class Detector:
         # Keep overlapping masks: suppressing a wider, lower-score box can expose a plate edge.
         return boxes
 
-    def candidates(self, rgb: np.ndarray) -> list[Detection]:
+    def candidates(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Keep type and score until the quality backend has confirmed uncertain masks."""
         if rgb.ndim != 3 or rgb.shape[2] != 3 or rgb.dtype != np.uint8 or not rgb.size:
             raise ValueError("Expected nonempty RGB uint8 pixels")
@@ -49,7 +49,7 @@ class Detector:
                 view = cv2.resize(view, (max(1, round(view_width * scale)), max(1, round(view_height * scale))),
                                   interpolation=cv2.INTER_AREA)
             x_scale, y_scale = view_width / view.shape[1], view_height / view.shape[0]
-            for detection in self._detect_view(view):
+            for detection in self._detect_view(view, kind=kind):
                 x1, y1, x2, y2 = detection.box
                 if (detection.kind not in {"face", "plate"}
                         or not all(math.isfinite(v) for v in (*detection.box, detection.score))
@@ -80,19 +80,23 @@ class Detector:
             for left, right in spans(width):
                 yield left, top, right, bottom
 
-    def _detect_view(self, bgr: np.ndarray) -> list[Detection]:
+    def _detect_view(self, bgr: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         height, width = bgr.shape[:2]
-        # YuNet requires a minimum spatial extent; padding never invents image details.
-        face_input = cv2.copyMakeBorder(bgr, 0, max(0, 32 - height), 0, max(0, 32 - width),
-                                       cv2.BORDER_CONSTANT)
-        self.face.setInputSize((face_input.shape[1], face_input.shape[0]))
-        faces = self.face.detect(face_input)[1]
         detections = []
-        if faces is not None:
-            if faces.ndim != 2 or faces.shape[1] != 15 or not np.isfinite(faces).all():
-                raise ValueError("Invalid face detector output")
-            detections.extend(Detection("face", (float(x), float(y), float(x + w), float(y + h)), float(row[-1]))
-                              for row in faces for x, y, w, h in [row[:4]])
+        # 局部复核不运行无关类别；全图默认仍执行两类检测。
+        if kind != "plate":
+            # YuNet requires a minimum spatial extent; padding never invents image details.
+            face_input = cv2.copyMakeBorder(bgr, 0, max(0, 32 - height), 0, max(0, 32 - width),
+                                           cv2.BORDER_CONSTANT)
+            self.face.setInputSize((face_input.shape[1], face_input.shape[0]))
+            faces = self.face.detect(face_input)[1]
+            if faces is not None:
+                if faces.ndim != 2 or faces.shape[1] != 15 or not np.isfinite(faces).all():
+                    raise ValueError("Invalid face detector output")
+                detections.extend(Detection("face", (float(x), float(y), float(x + w), float(y + h)), float(row[-1]))
+                                  for row in faces for x, y, w, h in [row[:4]])
+        if kind == "face":
+            return detections
 
         # HyperLPR's detection-only 320 model expects letterboxed RGB / 255, not OCR tensors.
         scale = min(320 / width, 320 / height)

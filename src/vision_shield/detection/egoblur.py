@@ -10,7 +10,8 @@ from vision_shield.detection import Detection
 
 class Detector:
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=0.1):
-        torch.set_num_threads(2)
+        # 本机交错实测4线程显著快于2线程，避免继续加线程挤占其他媒体进程。
+        torch.set_num_threads(4)
         self.max_side, self.box_padding = max_side, box_padding
         self.face_threshold = face_threshold
         self.models = [torch.jit.load(str(path), map_location="cpu").eval() for path in (face_path, plate_path)]
@@ -22,7 +23,7 @@ class Detector:
                  x2 + (x2 - x1) * self.box_padding, y2 + (y2 - y1) * self.box_padding)
                 for detection in self.candidates(rgb) for x1, y1, x2, y2 in [detection.box]]
 
-    def candidates(self, rgb: np.ndarray) -> list[Detection]:
+    def candidates(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Return unpadded source boxes with type and score for cross-model confirmation."""
         height, width = rgb.shape[:2]
         scale = min(1.0, self.max_side / max(height, width))
@@ -36,7 +37,10 @@ class Detector:
         boxes = []
         # Gen1 JIT profiling adds seconds to cold frames without improving this CPU's steady rate.
         with torch.inference_mode(), torch.jit.optimized_execution(False):
-            for model, kind, threshold in zip(self.models, ("face", "plate"), (self.face_threshold, 0.1)):
+            for model, model_kind, threshold in zip(self.models, ("face", "plate"), (self.face_threshold, 0.1)):
+                # 局部复核只消费一种类别，跳过另一份独立模型而不改变目标模型输入。
+                if kind is not None and kind != model_kind:
+                    continue
                 coordinates, _, scores, _ = model(image)
                 if (coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),)
                         or not torch.isfinite(coordinates).all() or not torch.isfinite(scores).all()
@@ -46,7 +50,7 @@ class Detector:
                 keep = torchvision.ops.nms(coordinates, scores, 0.3)
                 # Map each axis using the actual rounded input size, then mask full-resolution pixels.
                 selected = keep[scores[keep] > threshold]
-                boxes.extend(Detection(kind, (x1 * x_scale, y1 * y_scale, x2 * x_scale, y2 * y_scale), score)
+                boxes.extend(Detection(model_kind, (x1 * x_scale, y1 * y_scale, x2 * x_scale, y2 * y_scale), score)
                              for (x1, y1, x2, y2), score in zip(coordinates[selected].cpu().tolist(),
                                                                scores[selected].cpu().tolist(), strict=True))
         return boxes

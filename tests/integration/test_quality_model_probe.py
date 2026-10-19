@@ -46,3 +46,19 @@ def test_quality_rechecks_weak_support_without_losing_faces_or_masking_wheel(cas
         assert not masked[top:bottom, left:right].any(), (case_id, "真实目标必须遮挡")
     for left, top, right, bottom in case["preserved_regions"]:
         assert np.array_equal(masked[top:bottom, left:right], rgb[top:bottom, left:right]), (case_id, "误遮区域必须保留原像素")
+
+
+def test_single_class_confirmation_matches_the_same_real_models_running_both_classes():
+    """按类复核须与原双类推理中的同类框、得分完全一致。"""
+    manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
+    case = next(case for case in manifest["cases"] if case["id"] == "image-7")
+    source = Path(manifest["local_source"]) / case["file"]
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == case["sha256"]
+    with Image.open(source) as image:
+        pixels = np.array(image.convert("RGB").crop((2090, 0, 2320, 180)).resize((320, 250)))
+    detector = load_detector(Settings(_env_file=None, detection_backend="quality").model_dump())
+    for model in (detector.primary, detector.detail):
+        both = model.candidates(pixels)
+        assert any(d.kind == "face" for d in both), "复核样本必须包含真实人脸候选"
+        for kind in ("face", "plate"):
+            assert model.candidates(pixels, kind=kind) == [d for d in both if d.kind == kind]
