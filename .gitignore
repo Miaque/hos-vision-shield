@@ -24,3 +24,4 @@ models/*.onnx
 models/*.zip
 models/*.part
 *.log
+tests/test_assets/
