@@ -462,7 +462,7 @@ def report(directory):
           '<style>body{font:16px system-ui;background:#f4f6f8;color:#182433;margin:24px}section{background:white;padding:16px;margin:16px 0;border-radius:8px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}img,video{width:100%;background:#ddd}h1{font-size:26px}pre{white-space:pre-wrap} @media(max-width:800px){.grid{grid-template-columns:1fr}}</style>',
           '<h1>main quality CPU / YOLO CPU'+(' · 待人工复核' if summary['pending_samples'] else '')+'</h1>',
           f'<p>完整产物 {summary["completed"]}/{summary["expected"]}；人工确认样本 {summary["formal_samples"]}；待复核 {summary["pending_samples"]}。未复核结果不代表准确率。</p>',
-          '<p>视频均为完整处理；下方固定采样每5秒及末帧。效果优先，耗时为单次辅助记录。</p>']
+          '<p>成功视频均通过全长完整性检查，失败或未完成项单列；下方固定采样每5秒及末帧。效果优先，耗时为单次辅助记录。</p>']
     for media in records:
         text.append('<section><h2>'+html.escape(media['name'])+'</h2>')
         if media.get('original_id'):
