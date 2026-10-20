@@ -1,7 +1,7 @@
 # Vision Shield
 
 Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP 流中的人脸和车牌实心遮挡，不做识别或音频脱敏。
-按照用户选择，**直接在 Windows 本机运行**，不要求 Docker、WSL2 或 Linux 容器。
+支持直接在 Windows 本机运行；服务器另提供 CPU／指定单卡 GPU 的 Docker Compose 部署。
 项目以 `main` 分支作为主干。
 
 当前进度见 [任务清单](specs/001-media-redaction/tasks.md) 与 [验证记录](specs/001-media-redaction/validation/gates.md)。
@@ -31,10 +31,29 @@ uv run --frozen pytest tests/integration/test_gpu_model_probe.py -q
 Remove-Item Env:RUN_GPU_TESTS
 ```
 
-验证使用本地四个模型和 `samples/robot-quality` 中已标注样例，检查模型校验和、真实 GPU 推理和遮挡区域。GPU 不可用或推理失败会报错，不回退 CPU。更新依赖后须重启已有进程；本机 GPU 验证不代表服务器 ARM64 或 Docker 部署已通过。
+验证使用本地四个模型和 `samples/robot-quality` 中已标注样例，检查模型校验和、真实 GPU 推理和遮挡区域。GPU 不可用或推理失败会报错，不回退 CPU。更新依赖后须重启已有进程；本机 GPU 验证不代表服务器 x86_64 Compose 部署已通过。
 
 本机已完成真实模型、图片/视频子进程及同图 CPU/GPU 对比，边界与结果见 [GTX 1080 验证记录](specs/002-compose-cpu-gpu/local-gpu.md)。
 GPU 模式下，两路独立的全图检测同时执行，随后仍按原顺序进行局部复核；固定全集输出保持一致，最新耗时见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)。
+
+## 服务器 Docker Compose
+
+目标为 Ubuntu 24.04 x86_64，沿用服务器现有 Docker 和 `docker-compose v2.29.2`；不在 Windows 本机安装 Docker。默认 CPU，GPU 模式指定一张卡供文件与流 worker 共用。GPU 失败不换卡或回退 CPU，检测策略及四份权重保持相同。
+
+按 [服务器部署验收指南](specs/002-compose-cpu-gpu/quickstart.md)准备离线模型目录、媒体目录权限和 `.env.compose`，然后在服务器仓库根目录选择一种方式：
+
+```bash
+# CPU
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml up -d --build
+# GPU：先在 .env.compose 填写 GPU_DEVICE_ID，推荐完整 GPU UUID
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml up -d --build
+```
+
+`compose.yaml` 包含 Redis、MediaMTX、API、reconciler 和两个 worker；仅 API/RTSP 端口按配置发布。默认绑定回环地址，外部访问须修改 `BIND_ADDRESS` 与 `RTSP_PUBLIC_BASE_URL`，远程输入还须配置来源允许列表。Redis/媒体持久化，切换前按原文件组合执行 `down`，保留数据，不使用 `down -v`。
+
+镜像构建可以联网安装依赖，模型必须事先离线提供并只读挂载；不随镜像下载或打包。worker 先在有 120 秒总超时的子进程中核验清单/哈希、实际推理及 NMS，成功后才接单并发布心跳；故障后的旧心跳最多有默认 20 秒租约窗口。`RTSP_PUBLISH_BASE_URL` 仅控制容器内部推流，对外仍返回公开播放地址。
+
+GPU 镜像按 [研究记录中的生成命令](specs/002-compose-cpu-gpu/research.md)使用 `deploy/requirements-cu126.txt`，共同依赖沿用根锁版本；根声明变更时重新生成，禁止手工改 pin。CPU 使用根 uv.lock，Windows 安装方式保持不变。镜像和目标服务器尚未验收，证据与未运行项见 [实施记录](specs/002-compose-cpu-gpu/validation/gates.md)。
 
 ## 本地 Redis / MediaMTX
 
