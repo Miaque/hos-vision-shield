@@ -21,7 +21,7 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 ### 本机 GTX 1080
 
-在 `.env` 设置 `INFERENCE_DEVICE=cuda`，然后运行原有 `scripts/start-application.ps1`。EgoBlur 的两个模型和输入使用 GPU，YuNet/HyperLPR、编解码和遮挡继续使用 CPU，检测阈值与策略不变。要使用 CPU，只需改为 `INFERENCE_DEVICE=cpu` 后重启应用。未设置该字段仍默认 CPU；轻量 `DETECTION_BACKEND=cpu` 不接受 cuda 设备。
+先执行 `uv sync --frozen --extra cuda`，在 `.env` 设置 `INFERENCE_DEVICE=cuda`，然后运行原有 `scripts/start-application.ps1`。EgoBlur 使用 PyTorch CUDA，YuNet/HyperLPR 使用 ONNX Runtime CUDA，四个模型均在 GPU 推理；图像预处理、后处理、编解码和遮挡仍使用 CPU。CUDA 不可用时启动失败，不静默降级。要使用 CPU，只需改为 `INFERENCE_DEVICE=cpu` 后重启应用。未设置该字段仍默认 CPU；轻量 `DETECTION_BACKEND=cpu` 不接受 cuda 设备。
 
 首次安装或驱动变更后，先执行真实模型验证：
 
@@ -34,7 +34,7 @@ Remove-Item Env:RUN_GPU_TESTS
 验证使用本地四个模型和 `samples/robot-quality` 中已标注样例，检查模型校验和、真实 GPU 推理和遮挡区域。GPU 不可用或推理失败会报错，不回退 CPU。更新依赖后须重启已有进程；本机 GPU 验证不代表服务器 x86_64 Compose 部署已通过。
 
 本机已完成真实模型、图片/视频子进程及同图 CPU/GPU 对比，边界与结果见 [GTX 1080 验证记录](specs/002-compose-cpu-gpu/local-gpu.md)。
-GPU 模式下，两路独立的全图检测同时执行，随后仍按原顺序进行局部复核；固定全集输出保持一致，最新耗时见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)。
+GPU 模式下，两路独立的全图检测同时执行，随后按原顺序进行局部复核。此前 CPU 补充检测的调度基线见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)，本轮四模型 CUDA 迁移与部署见 [CUDA 补充检测](specs/002-compose-cpu-gpu/cuda-detail.md)。
 
 ## 服务器 Docker Compose
 
@@ -120,6 +120,8 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -
 
 PATCH返回202表示停止意图已保存；查询到cancelled/stopped才表示资源清理完成。已成功文件不能再取消（409）。流自动重连并保留停止意图，文件worker崩溃则标记worker_lost，不自动续跑。
 
+`GET /v1/diagnostics/resources` 查看有效 worker 的 CPU、内存和绑定显卡资源快照。CPU 为 worker 的 Linux cgroup v2 口径，包含媒体子进程；GPU 为所选显卡整卡口径，缺失和陈旧值会明确标记。字段单位、部署步骤及后续优化验收见[资源观测说明](specs/002-compose-cpu-gpu/diagnostics.md)。
+
 默认只监听本机。其他系统接入时，部署方需同时修改启动脚本的API监听、MediaMTX的RTSP监听与 `.env` 的 `RTSP_PUBLIC_BASE_URL` 为可达内网地址，并限制防火墙可达范围。MediaMTX控制API和Redis继续仅监听本机。
 
 ## 模块与运行边界
@@ -134,7 +136,9 @@ PATCH返回202表示停止意图已保存；查询到cancelled/stopped才表示�
 
 `DETECTION_BACKEND=cpu`保留上一轮轻量方案（YuNet阈值0.3），无需加载EgoBlur；它在固定样本中有远处车牌漏遮，不作为当前效果验收结论。当前组合在CPU上更慢，接口仍由媒体子进程异步执行，不承诺实时帧率。新效果对照见[效果优先验证](specs/001-media-redaction/validation/quality-optimization.md)。 局部复核只运行待确认类别，Torch每个媒体子进程采用4线程，OpenCV仍为2线程；不改变检测范围、阈值或视频逐帧处理。分项计时与效果一致性验证见[同效果CPU推理优化](specs/001-media-redaction/validation/inference-performance.md)。
 
-视频和流保存至多两组真实检测框，在200毫秒源时间内补遮短暂漏检；尺寸变化、时钟倒退、较长跳帧或缩略图明显变化会清空历史，每次流重连重新建立状态。补偿不累计刷新过期时间；没有检测历史的目标不能凭空补出。这不是运动跟踪，快速转向和目标快速移动仍可能漏遮；小于阈值的画面变化也可能保留旧位置造成多遮。
+视频和流对已确认目标进行短时运动匹配，最多保留128个历史目标；匹配成功可补偿500毫秒内的漏检，匹配失败会尝试当前帧局部复核，仍未确认则只保留200毫秒旧框。只有真实检测能刷新有效期。尺寸变化、时钟倒退、较长跳帧或缩略图明显变化会清空历史，每次流重连重新建立状态。没有检测历史的目标不能凭空补出，快速转向或大幅变形仍可能漏遮。
+
+文件视频使用 H.264 slow / CRF 23；源视频码率可用时，以其115%设置两秒VBV缓冲，尽量控制体积。这不是文件大小硬上限，也不保证无画质损失；直播编码设置保持不变。修复范围和验证边界见[已知视频问题修复记录](specs/002-compose-cpu-gpu/known-video-issues.md)。
 
 检测仍可能漏检和误遮，需要按实际机器人素材复核，不承诺模糊素材零漏检。降低DETECTION_MAX_SIDE会影响人脸细节，车牌网络输入及分块数也会影响耗时。与原EgoBlur 1280基线的对照入口：
 

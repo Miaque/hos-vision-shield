@@ -58,6 +58,12 @@ def add_video(writer, frame, source, live=False):
         video.options = {"preset": "ultrafast", "tune": "zerolatency", "bf": "0"}
         # Sparse processed frames must remain immediately decodable by new readers.
         video.codec_context.gop_size = 1
+    else:
+        video.options = {"preset": "slow", "crf": "23"}
+        if source.bit_rate and source.bit_rate > 0:
+            # 保留质量目标，以源平均码率的 115% 设两秒 VBV；不是文件大小硬上限。
+            maximum = round(source.bit_rate * 1.15)
+            video.options.update(maxrate=str(maximum), bufsize=str(maximum * 2))
     return video
 
 

@@ -94,7 +94,7 @@ def test_history_is_bounded_and_clock_rewind_cannot_reuse_masks():
     pixels = np.full((20, 20, 3), 100, np.uint8)
     for time in [0, 0.01, 0.02, 0.03]:
         redactor.apply(pixels, time)
-    assert len(redactor.history) == 2
+    assert len(redactor.history) == 1, "连续确认的同一目标不应重复堆积历史框"
     detector.boxes = []
     assert redactor.apply(pixels, 0.01)[3, 3].min() == 100
 
@@ -115,3 +115,78 @@ def test_same_brightness_color_change_does_not_keep_old_masks():
     redactor.apply(red, 0)
     detector.boxes = []
     assert np.array_equal(redactor.apply(green, 0.1)[3, 3], green[3, 3])
+
+
+@pytest.mark.parametrize("local_confirmation", [False, True])
+def test_moving_confirmed_mask_follows_pixels_and_only_real_detections_extend_expiry(local_confirmation):
+    from vision_shield.redaction import FrameRedactor
+
+    texture = np.random.default_rng(7).integers(40, 200, (20, 20, 3), dtype=np.uint8)
+    texture[1, 1] = [255, 0, 0]
+    calls = []
+    class MissingGlobal:
+        first = True
+
+        def detect(self, pixels):
+            calls.append(pixels.shape)
+            if pixels.shape == (100, 200, 3):
+                if self.first:
+                    self.first = False
+                    return [(20, 30, 40, 50)]
+                return []
+            if not local_confirmation:
+                return []
+            # 已知夹具目标映射到放大的局部视图，不依赖插值后仍有精确 RGB 标记。
+            crop_left, crop_right = max(0, left - 38), min(200, left + 58)
+            xs, ys = pixels.shape[1] / (crop_right - crop_left), pixels.shape[0] / 88
+            return [((left - crop_left) * xs, 30 * ys, (left + 20 - crop_left) * xs, 50 * ys)]
+
+    redactor = FrameRedactor(MissingGlobal())
+    for index in range(12):
+        left = 20 + index * 7
+        pixels = np.full((100, 200, 3), 170, np.uint8)
+        pixels[30:50, left:left + 20] = texture
+        original = pixels.copy()
+        actual = redactor.apply(pixels, index / 20)
+        if index <= 9 or local_confirmation:
+            assert not actual[31:49, left + 1:left + 19].any(), "短暂漏检时遮挡必须跟随目标，不能留在旧位置"
+        if index == 11 and not local_confirmation:
+            assert np.array_equal(actual, original), "仅跟踪成功不能无限续期"
+        assert np.array_equal(pixels, original)
+    assert sum(shape == (100, 200, 3) for shape in calls) == 12, "全图检测仍须逐帧执行"
+    assert any(shape != (100, 200, 3) for shape in calls), "延长遮挡须进行实际局部检测"
+
+
+def test_track_state_is_bounded_without_discarding_current_masks():
+    from vision_shield.redaction import FrameRedactor
+
+    boxes = [(2 * (i % 20), 2 * (i // 20), 2 * (i % 20) + 1, 2 * (i // 20) + 1) for i in range(150)]
+    class ManyTargets:
+        def detect(self, pixels):
+            return boxes
+
+    redactor = FrameRedactor(ManyTargets())
+    actual = redactor.apply(np.full((40, 40, 3), 180, np.uint8), 0)
+    assert len(redactor.history) == 128
+    assert all(not actual[y1:y2, x1:x2].any() for x1, y1, x2, y2 in boxes)
+
+
+def test_failed_motion_match_rechecks_current_position(monkeypatch):
+    from vision_shield.redaction import FrameRedactor
+
+    class Once:
+        calls = 0
+
+        def detect(self, pixels):
+            self.calls += 1
+            return [(20, 20, 40, 40)] if self.calls == 1 else []
+
+    redactor = FrameRedactor(Once())
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    monkeypatch.setattr(redactor, "_follow", lambda gray, box: None)
+    monkeypatch.setattr(redactor, "_recheck", lambda pixels, box: (30, 20, 50, 40))
+    actual = redactor.apply(pixels, 0.05)
+    assert not actual[20:40, 30:50].any()
+    assert actual[25, 22].min() == 180
+    assert redactor.history[0][0] == 0.05
