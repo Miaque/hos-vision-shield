@@ -34,7 +34,15 @@ def test_quality_cuda_runs_local_models_and_preserves_reviewed_regions():
     assert hashlib.sha256(source.read_bytes()).hexdigest() == case["sha256"]
     with Image.open(source) as image:
         pixels = np.array(image.convert("RGB"))
-    masked = redact(pixels, detector.detect(pixels))
+    assert detector.detail.parallel is True
+    detector.detail.parallel = False
+    expected = detector.detect(pixels)
+    detector.detail.parallel = True
+    actual = detector.detect(pixels)
+    np.testing.assert_allclose(actual, expected, rtol=0, atol=0.001,
+                               err_msg="并行补充检测仅允许亚像素浮点波动，遮挡像素须完全相同")
+    masked = redact(pixels, actual)
+    assert np.array_equal(masked, redact(pixels, expected))
     for left, top, right, bottom in case["masked_regions"]:
         assert not masked[top:bottom, left:right].any(), "已标记目标必须遮挡"
     for left, top, right, bottom in case["preserved_regions"]:

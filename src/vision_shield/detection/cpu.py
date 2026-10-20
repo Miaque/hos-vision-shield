@@ -1,6 +1,7 @@
 """CPU-only face/Chinese-plate detection; no identity, text or OCR output."""
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -12,9 +13,11 @@ PLATE_THRESHOLD = 0.25
 
 
 class Detector:
-    def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=FACE_THRESHOLD):
+    def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=FACE_THRESHOLD,
+                 parallel=False):
         cv2.setNumThreads(2)
         self.max_side, self.box_padding = max_side, box_padding
+        self.parallel = parallel
         self.face = cv2.FaceDetectorYN.create(str(face_path), "", (320, 320), face_threshold, 0.3, 5000,
                                             cv2.dnn.DNN_BACKEND_OPENCV, cv2.dnn.DNN_TARGET_CPU)
         self.plate = cv2.dnn.readNetFromONNX(str(plate_path))
@@ -81,6 +84,12 @@ class Detector:
                 yield left, top, right, bottom
 
     def _detect_view(self, bgr: np.ndarray, *, kind: str | None = None) -> list[Detection]:
+        if self.parallel and kind is None:
+            # 两个独立模型各占一路；退出时等待后台结束，仍按人脸、车牌顺序返回。
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                faces = pool.submit(self._detect_view, bgr, kind="face")
+                plates = self._detect_view(bgr, kind="plate")
+                return faces.result() + plates
         height, width = bgr.shape[:2]
         detections = []
         # 局部复核不运行无关类别；全图默认仍执行两类检测。

@@ -145,6 +145,7 @@ def detector_with_raw_outputs(faces, plates):
 
     detector = Detector.__new__(Detector)
     detector.face, detector.plate = Face(), Plate()
+    detector.parallel = False
     return detector
 
 
@@ -190,8 +191,9 @@ def test_local_cpu_confirmation_avoids_the_unrelated_model(kind):
     assert detector.candidates(pixels, kind=kind) == expected
 
 
+@pytest.mark.parametrize("parallel", [False, True])
 @pytest.mark.parametrize("failure", ["face_shape", "face_nan", "plate_shape", "plate_nan", "plate_dimensions"])
-def test_invalid_raw_model_outputs_fail_before_producing_masks(failure):
+def test_invalid_raw_model_outputs_fail_before_producing_masks(failure, parallel):
     faces = np.zeros((1, 15), dtype=np.float32)
     plates = np.zeros((1, 6300, 15), dtype=np.float32)
     if failure == "face_shape":
@@ -206,5 +208,49 @@ def test_invalid_raw_model_outputs_fail_before_producing_masks(failure):
         plates[0, 0, :5] = [160, 160, -20, 20, 0.9]
         plates[0, 0, 13] = 0.9
     detector = detector_with_raw_outputs(faces, plates)
+    detector.parallel = parallel
     with pytest.raises(ValueError):
         detector._detect_view(np.zeros((333, 997, 3), dtype=np.uint8))
+
+
+@pytest.mark.parametrize("failed", [None, "face", "plate"])
+def test_parallel_view_preserves_order_and_joins_both_models_on_failure(failed):
+    from threading import Event
+
+    faces = np.zeros((1, 15), dtype=np.float32)
+    faces[0, :4], faces[0, -1] = [10, 20, 30, 40], 0.9
+    plates = np.zeros((1, 6300, 15), dtype=np.float32)
+    plates[0, 0, :5], plates[0, 0, 13] = [160, 160, 64, 20, 0.9], 0.9
+    detector = detector_with_raw_outputs(faces, plates)
+    pixels = np.full((64, 64, 3), 180, dtype=np.uint8)
+    pixels.setflags(write=False)
+    expected = detector._detect_view(pixels, kind="face") + detector._detect_view(pixels, kind="plate")
+    face_started, plate_started, face_finished = Event(), Event(), Event()
+
+    class Face(type(detector.face)):
+        def detect(self, view):
+            face_started.set()
+            try:
+                assert plate_started.wait(2), "独立的人脸和车牌模型应重叠执行"
+                if failed == "face":
+                    raise RuntimeError("face failed")
+                return super().detect(view)
+            finally:
+                face_finished.set()
+
+    class Plate(type(detector.plate)):
+        def forward(self):
+            assert face_started.wait(2)
+            plate_started.set()
+            if failed == "plate":
+                raise RuntimeError("plate failed")
+            return super().forward()
+
+    detector.face, detector.plate, detector.parallel = Face(), Plate(), True
+    if failed:
+        with pytest.raises(RuntimeError, match=f"{failed} failed"):
+            detector._detect_view(pixels)
+    else:
+        assert detector._detect_view(pixels) == expected
+    assert face_finished.is_set(), "失败或正常结束前都须等待后台模型结束"
+    assert (pixels == 180).all()

@@ -19,7 +19,7 @@ def test_quality_is_default_and_requires_both_primary_and_detail_models(monkeypa
     assert detector.primary is primary and detector.detail is detail
     assert received[0][1][:2] == (settings.egoblur_face_model_path, settings.egoblur_plate_model_path)
     assert received[0][2] == {"face_threshold": 0.1, "device": "cpu"}
-    assert received[1][2] == {"face_threshold": 0.3}
+    assert received[1][2] == {"face_threshold": 0.3, "parallel": False}
 
 
 @pytest.mark.parametrize("failed", [None, "primary", "detail"])
@@ -50,7 +50,12 @@ def test_cuda_overlaps_independent_models_and_waits_for_failure(monkeypatch, fai
             return []
 
     monkeypatch.setattr(quality, "PrimaryDetector", lambda *a, **kw: Primary())
-    monkeypatch.setattr(quality, "DetailDetector", lambda *a, **kw: Detail())
+
+    def detail_detector(*args, **kwargs):
+        assert kwargs["parallel"] is True
+        return Detail()
+
+    monkeypatch.setattr(quality, "DetailDetector", detail_detector)
     detector = quality.Detector(Settings(_env_file=None, inference_device="cuda", detection_box_padding=0).model_dump())
     pixels = np.full((8, 8, 3), 180, np.uint8)
     pixels.setflags(write=False)

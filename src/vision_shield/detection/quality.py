@@ -19,7 +19,8 @@ class Detector:
                                        device=self.inference_device)
         # Lower scores may corroborate a candidate, but never start a mask by themselves.
         self.detail = DetailDetector(config["face_model_path"], config["plate_model_path"],
-                                     self.max_side, self.box_padding, face_threshold=0.3)
+                                     self.max_side, self.box_padding, face_threshold=0.3,
+                                     parallel=self.inference_device == "cuda")
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         """Retain strong primary detections and confirmed complementary masks."""
