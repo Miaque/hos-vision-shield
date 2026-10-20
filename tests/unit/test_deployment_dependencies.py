@@ -22,7 +22,7 @@ def test_gpu_lock_keeps_common_versions_and_root_requirements():
     environment = {**default_environment(), "sys_platform": "linux", "platform_machine": "x86_64",
                    "python_version": "3.12", "python_full_version": "3.12.14"}
     project = tomllib.loads((root / "pyproject.toml").read_text("utf-8"))
-    for raw in project["project"]["dependencies"]:
+    for raw in project["project"]["dependencies"] + project["project"]["optional-dependencies"]["cuda"]:
         requirement = Requirement(raw)
         if requirement.marker is None or requirement.marker.evaluate(environment):
             assert gpu[requirement.name] in requirement.specifier, raw

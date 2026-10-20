@@ -284,6 +284,47 @@
           780
         ]
       ]
+    },
+    {
+      "id": "face-video2-10s",
+      "file": "face-video2-10s.png",
+      "sha256": "b0d49fb360e13fdc6a404f24021300059e3c3cd122fc02d68ddd3ff16d98d182",
+      "masked_regions": [
+        [
+          393,
+          182,
+          400,
+          204
+        ],
+        [
+          927,
+          248,
+          934,
+          255
+        ]
+      ],
+      "preserved_regions": [
+        [
+          380,
+          480,
+          490,
+          520
+        ]
+      ]
+    },
+    {
+      "id": "face-video1-2s",
+      "file": "face-video1-2s.png",
+      "sha256": "2df6b3d24e34d796733c6d4d9784d47ba735c02af158e72c102b492381f733f2",
+      "masked_regions": [
+        [
+          926,
+          250,
+          930,
+          256
+        ]
+      ],
+      "preserved_regions": []
     }
   ]
 }

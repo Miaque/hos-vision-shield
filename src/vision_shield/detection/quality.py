@@ -18,7 +18,11 @@ class Detector:
                                        self.max_side, self.box_padding, face_threshold=0.1,
                                        device=self.inference_device)
         # Lower scores may corroborate a candidate, but never start a mask by themselves.
-        self.detail = DetailDetector(config["face_model_path"], config["plate_model_path"],
+        detail_type = DetailDetector
+        if self.inference_device == "cuda":
+            from vision_shield.detection.cuda_detail import Detector as CUDADetailDetector
+            detail_type = CUDADetailDetector
+        self.detail = detail_type(config["face_model_path"], config["plate_model_path"],
                                      self.max_side, self.box_padding, face_threshold=0.3,
                                      parallel=self.inference_device == "cuda")
 
@@ -37,9 +41,24 @@ class Detector:
         for candidates, others, verifier, is_primary in [(primary, detail, self.detail, True),
                                                         (detail, primary, self.primary, False)]:
             for detection in candidates:
+                recovered = False
                 if detection.kind == "face" and detection.score < (0.3 if is_primary else 0.6):
-                    continue
+                    x1, y1, x2, y2 = detection.box
+                    if is_primary:
+                        recovered = (x2 - x1 < 0.75 * (y2 - y1) and min(x2 - x1, y2 - y1) < 128
+                                     and not any(other.kind == "face" and other.score >= 0.3
+                                                 and self._overlap(detection.box, other.box) >= 0.2 for other in others)
+                                     and self._recover_face(rgb, detection))
+                    else:
+                        # 弱小脸只有在放大视图获得可信主模型确认后才能起框。
+                        recovered = (min(x2 - x1, y2 - y1) < 128
+                                     and self._confirmed(rgb, detection, self.primary, 0.7, corroborate_mirror=True))
+                    if not recovered:
+                        continue
                 global_score = local_score = 0
+                if detection.kind == "plate" and detection.score < 0.7:
+                    # 两个低分全图车牌框可能同错，至少一路强分或局部复核才能接受。
+                    global_score = 0.7
                 if detection.kind == "face":
                     global_score = 0.3
                     x1, y1, x2, y2 = detection.box
@@ -48,7 +67,7 @@ class Detector:
                         global_score = local_score = 0.9 if is_primary else 0.7
                         if not is_primary and detection.score >= 0.9:
                             global_score, local_score = 0.3, 0.1
-                if not (is_primary and detection.score >= 0.7
+                if not (recovered or is_primary and detection.score >= 0.7
                         or any(other.kind == detection.kind and other.score >= global_score
                                and self._overlap(detection.box, other.box) >= 0.2
                                for other in others)
@@ -61,13 +80,51 @@ class Detector:
                               min(width, x2 + pad_x), min(height, y2 + pad_y)))
         return boxes
 
+    def _recover_face(self, rgb, detection):
+        """Weak small profiles need matching detections from both enlarged local models."""
+        x1, y1, x2, y2 = detection.box
+        size = max(96, 4 * max(x2 - x1, y2 - y1))
+        left, top = max(0, math.floor((x1 + x2 - size) / 2)), max(0, math.floor((y1 + y2 - size) / 2))
+        right, bottom = min(rgb.shape[1], math.ceil((x1 + x2 + size) / 2)), min(rgb.shape[0], math.ceil((y1 + y2 + size) / 2))
+        crop = rgb[top:bottom, left:right]
+        if not crop.size:
+            return False
+
+        def view(side):
+            scale = side / max(crop.shape[:2])
+            return cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
+
+        def source_box(box, pixels, flipped=False):
+            a, b, c, d = box
+            if flipped:
+                a, c = pixels.shape[1] - c, pixels.shape[1] - a
+            xs, ys = (right - left) / pixels.shape[1], (bottom - top) / pixels.shape[0]
+            return left + a * xs, top + b * ys, left + c * xs, top + d * ys
+
+        primary_view = view(640)
+        primary = [source_box(other.box, primary_view) for other in self.primary.candidates(primary_view, kind="face")
+                   if other.kind == "face" and other.score >= 0.3
+                   and self._overlap(detection.box, source_box(other.box, primary_view)) >= 0.2]
+        if not primary:
+            return False
+        detail_view = view(320)
+        # 单侧遮挡具有方向偏差，镜像只作为局部复核，不单独新增目标。
+        for flipped in (False, True):
+            pixels = np.ascontiguousarray(detail_view[:, ::-1]) if flipped else detail_view
+            for other in self.detail.candidates(pixels, kind="face"):
+                box = source_box(other.box, pixels, flipped)
+                if (other.kind == "face" and other.score >= 0.3 and self._overlap(detection.box, box) >= 0.2
+                        and any(self._overlap(box, candidate) >= 0.2 for candidate in primary)):
+                    return True
+        return False
+
     @staticmethod
     def _overlap(a, b):
         intersection = max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
         union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - intersection
         return intersection / union
 
-    def _confirmed(self, rgb, detection, verifier, minimum_score=0):
+    def _confirmed(self, rgb, detection, verifier, minimum_score=0, *, corroborate_mirror=False):
         x1, y1, x2, y2 = detection.box
         size = max(96, 3 * max(x2 - x1, y2 - y1))
         left, top = max(0, math.floor((x1 + x2 - size) / 2)), max(0, math.floor((y1 + y2 - size) / 2))
@@ -80,6 +137,18 @@ class Detector:
         crop = cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
         xs, ys = (right - left) / crop.shape[1], (bottom - top) / crop.shape[0]
         expected = ((x1 - left) / xs, (y1 - top) / ys, (x2 - left) / xs, (y2 - top) / ys)
-        return any(other.kind == detection.kind and other.score >= minimum_score
-                   and self._overlap(expected, other.box) >= 0.2
-                   for other in verifier.candidates(crop, kind=detection.kind))
+        matches = [other for other in verifier.candidates(crop, kind=detection.kind)
+                   if other.kind == detection.kind and self._overlap(expected, other.box) >= 0.2]
+        if any(other.score >= minimum_score for other in matches):
+            return True
+        normal = [other for other in matches if other.score >= 0.3]
+        if not corroborate_mirror or not normal:
+            return False
+        # 无高分时，两种方向的局部结果须同时确认同一位置，单个中等分数不能起框。
+        for other in verifier.candidates(np.ascontiguousarray(crop[:, ::-1]), kind=detection.kind):
+            a, b, c, d = other.box
+            box = (crop.shape[1] - c, b, crop.shape[1] - a, d)
+            if (other.kind == detection.kind and other.score >= 0.3 and self._overlap(expected, box) >= 0.2
+                    and any(self._overlap(candidate.box, box) >= 0.2 for candidate in normal)):
+                return True
+        return False

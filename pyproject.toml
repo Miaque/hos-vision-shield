@@ -24,6 +24,9 @@ dependencies = [
     "uvicorn>=0.34,<1",
 ]
 
+[project.optional-dependencies]
+cuda = ["onnx>=1.17,<2", "onnxruntime-gpu==1.20.2"]
+
 [dependency-groups]
 dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "pyyaml>=6,<7"]
 

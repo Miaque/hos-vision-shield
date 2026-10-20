@@ -1,4 +1,4 @@
-"""CPU-only face/Chinese-plate detection; no identity, text or OCR output."""
+"""Shared face/plate views and decoding with the default OpenCV CPU inference."""
 
 import math
 from concurrent.futures import ThreadPoolExecutor
@@ -97,8 +97,7 @@ class Detector:
             # YuNet requires a minimum spatial extent; padding never invents image details.
             face_input = cv2.copyMakeBorder(bgr, 0, max(0, 32 - height), 0, max(0, 32 - width),
                                            cv2.BORDER_CONSTANT)
-            self.face.setInputSize((face_input.shape[1], face_input.shape[0]))
-            faces = self.face.detect(face_input)[1]
+            faces = self._faces(face_input)
             if faces is not None:
                 if faces.ndim != 2 or faces.shape[1] != 15 or not np.isfinite(faces).all():
                     raise ValueError("Invalid face detector output")
@@ -113,8 +112,7 @@ class Detector:
         left, top = (320 - resized_width) // 2, (320 - resized_height) // 2
         canvas = np.zeros((320, 320, 3), dtype=np.uint8)
         canvas[top:top + resized_height, left:left + resized_width] = cv2.resize(bgr, (resized_width, resized_height))
-        self.plate.setInput(cv2.dnn.blobFromImage(canvas, 1 / 255, (320, 320), swapRB=True))
-        predictions = self.plate.forward()
+        predictions = self._plate_forward(cv2.dnn.blobFromImage(canvas, 1 / 255, (320, 320), swapRB=True))
         if predictions.shape != (1, 6300, 15) or not np.isfinite(predictions).all():
             raise ValueError("Invalid plate detector output")
         rows = predictions[0]
@@ -132,3 +130,11 @@ class Detector:
                                                   (float(y + h) - top) * height / resized_height),
                                         float(scores[selected[index]])))
         return detections
+
+    def _faces(self, pixels):
+        self.face.setInputSize((pixels.shape[1], pixels.shape[0]))
+        return self.face.detect(pixels)[1]
+
+    def _plate_forward(self, blob):
+        self.plate.setInput(blob)
+        return self.plate.forward()

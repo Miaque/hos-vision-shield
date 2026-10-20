@@ -55,7 +55,8 @@ def test_cuda_overlaps_independent_models_and_waits_for_failure(monkeypatch, fai
         assert kwargs["parallel"] is True
         return Detail()
 
-    monkeypatch.setattr(quality, "DetailDetector", detail_detector)
+    from vision_shield.detection import cuda_detail
+    monkeypatch.setattr(cuda_detail, "Detector", detail_detector)
     detector = quality.Detector(Settings(_env_file=None, inference_device="cuda", detection_box_padding=0).model_dump())
     pixels = np.full((8, 8, 3), 180, np.uint8)
     pixels.setflags(write=False)
@@ -130,6 +131,108 @@ def test_unconfirmed_wheel_face_and_background_plate_are_rejected():
     detector.box_padding, detector.primary, detector.detail = 0.15, Primary(), Detail()
     assert detector.detect(rgb) == []
     assert (rgb == 180).all()
+
+
+def test_two_weak_global_plate_candidates_cannot_confirm_each_other():
+    from vision_shield.detection.quality import Detector
+
+    rgb = np.full((200, 300, 3), 180, np.uint8)
+    class Model:
+        def __init__(self, score):
+            self.score = score
+
+        def candidates(self, pixels, *, kind=None):
+            return [Detection("plate", (20, 40, 80, 70), self.score)] if pixels is rgb else []
+
+    detector = Detector.__new__(Detector)
+    detector.inference_device, detector.box_padding = "cpu", 0
+    detector.primary, detector.detail = Model(0.13), Model(0.34)
+    assert detector.detect(rgb) == [], "两个低分全图框仍须通过局部复核"
+
+
+@pytest.mark.parametrize("local_score,expected", [(0.65, False), (0.8, True)])
+def test_weak_small_detail_face_needs_trusted_local_primary(local_score, expected):
+    from vision_shield.detection.quality import Detector
+
+    rgb = np.full((10, 40, 3), 180, np.uint8)
+    class Primary:
+        def candidates(self, pixels, *, kind=None):
+            return [] if pixels is rgb else [Detection("face", (8, 16, 72, 40), local_score)]
+    class Detail:
+        def candidates(self, pixels, *, kind=None):
+            return [Detection("face", (1, 2, 9, 5), 0.4)] if pixels is rgb else []
+
+    detector = Detector.__new__(Detector)
+    detector.primary, detector.detail = Primary(), Detail()
+    detector.inference_device, detector.box_padding = "cpu", 0
+    assert bool(detector.detect(rgb)) is expected
+
+
+@pytest.mark.parametrize("mirror_matches", [False, True])
+def test_moderate_small_face_requires_matching_normal_and_mirrored_local_views(mirror_matches):
+    from vision_shield.detection.quality import Detector
+
+    rgb = np.zeros((10, 40, 3), np.uint8)
+    rgb[:, :, 0] = np.arange(40)[None, :] * 3
+    class Primary:
+        def candidates(self, pixels, *, kind=None):
+            if pixels is rgb:
+                return []
+            mirrored = pixels[0, 0, 0] > 100
+            box = (248, 16, 312, 40) if mirrored and mirror_matches else (8, 16, 72, 40)
+            return [Detection("face", box, 0.4)]
+    class Detail:
+        def candidates(self, pixels, *, kind=None):
+            return [Detection("face", (1, 2, 9, 5), 0.4)] if pixels is rgb else []
+
+    detector = Detector.__new__(Detector)
+    detector.primary, detector.detail = Primary(), Detail()
+    detector.inference_device, detector.box_padding = "cpu", 0
+    assert bool(detector.detect(rgb)) is mirror_matches
+
+
+@pytest.mark.parametrize("mode", ["matching", "wrong_class", "elsewhere", "primary_failure", "detail_failure"])
+def test_weak_profile_recovery_maps_mirrored_border_view_and_propagates_errors(mode):
+    from vision_shield.detection.quality import Detector
+
+    rgb = np.zeros((200, 300, 3), np.uint8)
+    rgb[:, :, 0] = np.arange(300, dtype=np.uint8)[None, :]
+    rgb.setflags(write=False)
+    candidate = Detection("face", (5, 30, 25, 60), 0.12)
+    seen = []
+
+    class Model:
+        def __init__(self, name):
+            self.name = name
+
+        def candidates(self, pixels, *, kind=None):
+            assert kind == "face"
+            if mode == self.name + "_failure":
+                raise RuntimeError("recovery failed")
+            flipped = self.name == "detail" and pixels[0, 0, 0] > 30
+            seen.append((self.name, flipped))
+            if self.name == "detail" and not flipped:
+                return []
+            # 候选周边四倍长边在左边界截断为源坐标 (0,0)..(75,105)。
+            x1, y1, x2, y2 = candidate.box
+            box = (x1 * pixels.shape[1] / 75, y1 * pixels.shape[0] / 105,
+                   x2 * pixels.shape[1] / 75, y2 * pixels.shape[0] / 105)
+            if flipped:
+                box = (pixels.shape[1] - box[2], box[1], pixels.shape[1] - box[0], box[3])
+            if mode == "elsewhere" and self.name == "detail":
+                box = (0, 0, 5, 5)
+            return [Detection("plate" if mode == "wrong_class" else "face", box, 0.8)]
+
+    detector = Detector.__new__(Detector)
+    detector.primary, detector.detail = Model("primary"), Model("detail")
+    if mode.endswith("failure"):
+        with pytest.raises(RuntimeError, match="recovery failed"):
+            detector._recover_face(rgb, candidate)
+    else:
+        assert detector._recover_face(rgb, candidate) is (mode == "matching")
+        if mode == "matching":
+            assert seen == [("primary", False), ("detail", False), ("detail", True)]
+    assert not rgb.flags.writeable
 
 
 @pytest.mark.parametrize("score,local_match,expected", [(0.23, False, False), (0.23, True, True), (0.31, False, True)])

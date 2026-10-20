@@ -86,6 +86,10 @@ def run_inference(config: dict) -> dict:
     report = dict(backend=config["detection_backend"], device=device, model_devices=model_devices,
                   nms_device=kept.device.type, torch=torch.__version__, torchvision=torchvision.__version__,
                   cuda_build=torch.version.cuda)
+    if config["detection_backend"] == "quality":
+        report["detail_providers"] = getattr(detector.detail, "providers", ["OpenCV CPU", "OpenCV CPU"])
+        if device == "cuda" and report["detail_providers"] != ["CUDAExecutionProvider"] * 2:
+            raise PreflightError("模型预检失败：补充模型未在 CUDA 执行")
     if device == "cuda":
         report.update(gpu_name=torch.cuda.get_device_name(), capability=torch.cuda.get_device_capability(),
                       architectures=torch.cuda.get_arch_list(), visible_devices=torch.cuda.device_count(),

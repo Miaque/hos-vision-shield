@@ -18,18 +18,20 @@ from vision_shield.redaction import redact
 
 @pytest.mark.integration
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
-def test_quality_cuda_runs_local_models_and_preserves_reviewed_regions():
+@pytest.mark.parametrize("case_id", ["image-7", "face-video2-10s"])
+def test_quality_cuda_runs_local_models_and_preserves_reviewed_regions(case_id):
     assert torch.cuda.is_available(), "显式 GPU 验证要求 CUDA 可用"
     config = Settings(_env_file=None, inference_device="cuda")
     report = run_preflight(config.model_dump(mode="json"))
     assert len(report["models"]) == 4
     assert report["model_devices"] == ["cuda"] and report["nms_device"] == "cuda"
+    assert report["detail_providers"] == ["CUDAExecutionProvider"] * 2
     assert report["cuda_build"] and report["gpu_name"] and report["architectures"]
     detector = load_detector(config.model_dump())
     assert detector.primary.device.type == "cuda"
     assert all(next(model.parameters()).is_cuda for model in detector.primary.models)
     manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
-    case = next(case for case in manifest["cases"] if case["id"] == "image-7")
+    case = next(case for case in manifest["cases"] if case["id"] == case_id)
     source = Path(manifest["local_source"]) / case["file"]
     assert hashlib.sha256(source.read_bytes()).hexdigest() == case["sha256"]
     with Image.open(source) as image:
@@ -47,3 +49,30 @@ def test_quality_cuda_runs_local_models_and_preserves_reviewed_regions():
         assert not masked[top:bottom, left:right].any(), "已标记目标必须遮挡"
     for left, top, right, bottom in case["preserved_regions"]:
         assert np.array_equal(masked[top:bottom, left:right], pixels[top:bottom, left:right]), "误遮区域应保留"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
+def test_detail_model_nodes_execute_on_cuda(monkeypatch, tmp_path):
+    import onnxruntime as ort
+    from vision_shield.detection.cuda_detail import Detector
+
+    create = ort.InferenceSession
+    sessions = []
+
+    def profiled(*args, **kwargs):
+        options = kwargs["sess_options"]
+        options.enable_profiling = True
+        options.profile_file_prefix = str(tmp_path / f"detail-{len(sessions)}")
+        session = create(*args, **kwargs)
+        sessions.append(session)
+        return session
+
+    monkeypatch.setattr(ort, "InferenceSession", profiled)
+    detector = Detector("models/yunet_face.onnx", "models/hyperlpr_plate.onnx")
+    detector.candidates(np.zeros((320, 320, 3), np.uint8))
+    assert len(sessions) == 2
+    for session in sessions:
+        events = json.loads(Path(session.end_profiling()).read_text("utf-8"))
+        providers = {event["args"]["provider"] for event in events if "provider" in event.get("args", {})}
+        assert providers == {"CUDAExecutionProvider"}, "不能仅检查已安装 provider，必须核对实际算子"

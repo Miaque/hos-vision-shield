@@ -13,6 +13,35 @@ from vision_shield.detection import load_detector
 from vision_shield.redaction import redact
 
 
+@pytest.mark.parametrize("region,masked", [([393, 182, 400, 204], True), ([380, 480, 490, 520], False)])
+def test_side_face_is_masked_and_handbag_is_preserved(region, masked):
+    manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
+    case = next(case for case in manifest["cases"] if case["id"] == "face-video2-10s")
+    source = Path(manifest["local_source"]) / case["file"]
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == case["sha256"]
+    with Image.open(source) as image:
+        rgb = np.array(image.convert("RGB"))
+    detector = load_detector(Settings(_env_file=None).model_dump())
+    actual = redact(rgb, detector.detect(rgb))
+    x1, y1, x2, y2 = region
+    if masked:
+        assert not actual[y1:y2, x1:x2].any(), "已确认的近处侧脸必须遮挡"
+    else:
+        assert np.array_equal(actual[y1:y2, x1:x2], rgb[y1:y2, x1:x2]), "手提袋不应被当作车牌遮挡"
+
+
+def test_early_small_face_is_confirmed_before_tracking_can_help():
+    manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
+    case = next(case for case in manifest["cases"] if case["id"] == "face-video1-2s")
+    source = Path(manifest["local_source"]) / case["file"]
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == case["sha256"]
+    rgb = np.array(Image.open(source).convert("RGB"))
+    detector = load_detector(Settings(_env_file=None).model_dump())
+    actual = redact(rgb, detector.detect(rgb))
+    for x1, y1, x2, y2 in case["masked_regions"]:
+        assert not actual[y1:y2, x1:x2].any(), "已有弱小脸候选须先放大复核，不能等待后续高分帧"
+
+
 def test_quality_restores_distant_plate_and_removes_known_large_false_masks():
     manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
     detector = load_detector(Settings(_env_file=None, detection_backend="quality").model_dump())

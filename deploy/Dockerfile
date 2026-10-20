@@ -26,6 +26,9 @@ ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     FACE_MODEL_PATH=/models/yunet_face.onnx PLATE_MODEL_PATH=/models/hyperlpr_plate.onnx \
     EGOBLUR_FACE_MODEL_PATH=/models/face.jit EGOBLUR_PLATE_MODEL_PATH=/models/license_plate.jit
 COPY --from=dependencies /opt/venv /opt/venv
+# pip 的 NVIDIA 库不在系统默认搜索路径；注册全部组件供 ONNX Runtime 动态加载。
+RUN /opt/venv/bin/python -c "from pathlib import Path; paths=sorted(Path('/opt/venv/lib/python3.12/site-packages/nvidia').glob('*/lib')); Path('/etc/ld.so.conf.d/vision-shield-cuda.conf').write_text(''.join(str(p)+'\n' for p in paths))" \
+    && ldconfig
 # 应用单独安装到新层，源码变化不重打包 PyTorch；不重算 CPU/GPU 依赖。
 RUN --mount=from=dependencies,source=/usr/local/bin/uv,target=/usr/local/bin/uv \
     --mount=from=builder,source=/dist,target=/dist \
