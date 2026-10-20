@@ -1,0 +1,78 @@
+"""部署停止只回收在途媒体，不伪造用户终止意图或成功。"""
+
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from vision_shield.config import Settings
+from vision_shield.jobs import tasks
+
+
+@pytest.mark.parametrize("fails", [False, True])
+async def test_deployment_shutdown_leaves_unfinished_file_for_lease_recovery(tmp_path, monkeypatch, fails):
+    stop = asyncio.Event()
+    broker = SimpleNamespace(connection_pool=None, state=SimpleNamespace(stop_event=stop), ack_message=AsyncMock())
+    record = dict(id="job", kind="image", generation=1, source_kind="upload", source_ref="local", desired_state="run")
+    store = SimpleNamespace(claim=AsyncMock(return_value=record), get=AsyncMock(return_value=record),
+                            heartbeat=AsyncMock(return_value=True), finish=AsyncMock(), update_owned=AsyncMock())
+    monkeypatch.setattr(tasks, "Settings", lambda: Settings(_env_file=None, media_root=tmp_path, heartbeat_seconds=0.01))
+    monkeypatch.setattr(tasks, "TaskStore", lambda *a: store)
+    monkeypatch.setattr(tasks, "Redis", lambda **kw: None)
+
+    async def run(command, payload, cancel, on_event, timeout):
+        stop.set()
+        await asyncio.wait_for(cancel.wait(), 0.5)
+        if fails:
+            raise RuntimeError("受控停止时的媒体异常")
+        return dict(cancelled=True, returncode=3)
+
+    monkeypatch.setattr(tasks, "run_process", run)
+    await tasks.execute("job", broker, SimpleNamespace(message=SimpleNamespace(task_id="message")))
+    store.finish.assert_not_called()
+    assert record["desired_state"] == "run"
+
+
+async def test_stopping_worker_does_not_claim_another_task(monkeypatch):
+    stop = asyncio.Event()
+    stop.set()
+    broker = SimpleNamespace(state=SimpleNamespace(stop_event=stop))
+    monkeypatch.setattr(tasks, "Redis", lambda **kw: pytest.fail("停止后不得领取新任务"))
+    await tasks.execute("job", broker, None)
+
+
+async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path, monkeypatch):
+    stop = asyncio.Event()
+    broker = SimpleNamespace(connection_pool=None, state=SimpleNamespace(stop_event=stop), ack_message=AsyncMock())
+    record = dict(id="job", kind="image", generation=1, source_kind="url", source_ref="http://approved/input", desired_state="run")
+    store = SimpleNamespace(claim=AsyncMock(return_value=record), get=AsyncMock(return_value=record),
+                            heartbeat=AsyncMock(return_value=True), finish=AsyncMock(), update_owned=AsyncMock())
+    monkeypatch.setattr(tasks, "Settings", lambda: Settings(_env_file=None, media_root=tmp_path, heartbeat_seconds=0.01))
+    monkeypatch.setattr(tasks, "TaskStore", lambda *a: store)
+    monkeypatch.setattr(tasks, "Redis", lambda **kw: None)
+    monkeypatch.setattr(tasks, "download", AsyncMock())
+    async def run(command, payload, cancel, on_event, timeout):
+        await asyncio.sleep(0.04)
+        assert not cancel.is_set()
+        return dict(returncode=0, result_ref=str(tmp_path / "job/attempt-1/result.png"))
+    monkeypatch.setattr(tasks, "run_process", run)
+    await tasks.execute("job", broker, SimpleNamespace(message=SimpleNamespace(task_id="message")))
+    assert store.finish.call_args.args[3] == "succeeded"
+    assert store.heartbeat.await_count >= 2
+
+
+async def test_reconciler_cancellation_closes_brokers_and_client(monkeypatch):
+    from vision_shield.jobs import broker, reconcile
+    files = SimpleNamespace(startup=AsyncMock(), shutdown=AsyncMock())
+    streams = SimpleNamespace(startup=AsyncMock(), shutdown=AsyncMock())
+    client = SimpleNamespace(eval=AsyncMock(side_effect=asyncio.CancelledError), aclose=AsyncMock())
+    monkeypatch.setattr(broker, "file_broker", files)
+    monkeypatch.setattr(broker, "stream_broker", streams)
+    monkeypatch.setattr(reconcile, "Settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(reconcile, "Redis", SimpleNamespace(from_url=lambda *a, **kw: client))
+    with pytest.raises(asyncio.CancelledError):
+        await reconcile.main()
+    files.shutdown.assert_awaited_once()
+    streams.shutdown.assert_awaited_once()
+    client.aclose.assert_awaited_once()

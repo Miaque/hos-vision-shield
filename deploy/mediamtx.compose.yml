@@ -1,0 +1,23 @@
+# 控制端口只在容器网络使用；每一代 worker 仍需通过 API 发布鉴权。
+logLevel: warn
+api: yes
+apiAddress: :9997
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+moq: no
+authMethod: http
+authHTTPAddress: http://api:8000/internal/media/publish-check
+authHTTPExclude:
+  - action: read
+  - action: api
+pathDefaults:
+  source: publisher
+  overridePublisher: no
+  record: no
+paths:
+  all_others:

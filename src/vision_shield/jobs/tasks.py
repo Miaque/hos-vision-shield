@@ -17,7 +17,17 @@ from vision_shield.media.source import SourceError, download, validate_source
 from vision_shield.media.publisher import Publisher
 
 
+def log_model_timing(event: dict, task_id: str, generation: int) -> None:
+    """模型冷加载单独记日志，不混入既有媒体处理 stats。"""
+    if "model_load_seconds" in event:
+        logging.getLogger(__name__).info("task=%s generation=%s 模型加载耗时=%.3fs",
+                                         task_id, generation, event["model_load_seconds"])
+
+
 async def execute(task_id, broker, context):
+    deployment_stop = getattr(broker.state, "stop_event", None)
+    if deployment_stop is not None and deployment_stop.is_set():
+        return
     settings = Settings()
     client = Redis(connection_pool=broker.connection_pool)
     store = TaskStore(client, settings.file_task_limit, settings.stream_task_limit, settings.lease_seconds)
@@ -41,6 +51,9 @@ async def execute(task_id, broker, context):
                         return
                     if current["desired_state"] != "run":
                         # Hold ownership until the child has actually stopped.
+                        cancel.set()
+                    if deployment_stop is not None and deployment_stop.is_set():
+                        # 部署停止期间仍续租，直到媒体子进程完成回收。
                         cancel.set()
                     if not await store.heartbeat(task_id, owner, generation):
                         cancel.set()
@@ -75,6 +88,7 @@ async def execute(task_id, broker, context):
                 await asyncio.gather(stopping, return_exceptions=True)
 
         async def event_received(event):
+            log_model_timing(event, task_id, generation)
             if event.get("failure_type"):
                 logger.warning("task=%s media failure type=%s", task_id, event["failure_type"])
             if "stats" in event:
@@ -87,6 +101,9 @@ async def execute(task_id, broker, context):
             result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                        payload, cancel, event_received, settings.process_stop_timeout)
         current = await store.get(task_id)
+        if deployment_stop is not None and deployment_stop.is_set() and current and current["desired_state"] == "run":
+            # 未完成文件交给失租约恢复，不将部署停机写成处理失败。
+            return
         if current["desired_state"] != "run":
             await store.finish(task_id, owner, generation, current["desired_state"])
         elif result.get("returncode") == 0 and result.get("result_ref"):
@@ -97,6 +114,8 @@ async def execute(task_id, broker, context):
                                {"code": "processing_failed", "message": "Media processing failed"})
     except Exception as error:
         logger.warning("task=%s execution failure type=%s", task_id, type(error).__name__)
+        if deployment_stop is not None and deployment_stop.is_set():
+            return
         current = await store.get(task_id)
         if record["kind"] == "stream" and current and current["desired_state"] == "stopped":
             # An unreachable control API cannot be treated as confirmed teardown.
@@ -121,6 +140,7 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                 await store.update_owned(task_id, owner, generation, state="connecting", ready=False)
 
                 async def event_received(event):
+                    log_model_timing(event, task_id, generation)
                     if event.get("failure_type"):
                         logging.getLogger(__name__).warning("task=%s media failure type=%s at=%s", task_id, event["failure_type"], event.get("failure_at"))
                     values = {}

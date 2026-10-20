@@ -72,7 +72,8 @@ class Publisher:
             raise RuntimeError("Media ownership was lost")
         if not await self._change(task["id"], "open", owner_id=owner_id, generation=generation):
             raise RuntimeError("Media ownership was lost")
-        url = httpx.URL(f"{self.settings.rtsp_public_base_url}/redacted/{task['id']}")
+        base = self.settings.rtsp_publish_base_url or self.settings.rtsp_public_base_url
+        url = httpx.URL(f"{base}/redacted/{task['id']}")
         return str(url.copy_with(username=f"{task['id']}.{generation}", password=owner_id))
 
     async def authorize(self, payload: dict) -> bool:

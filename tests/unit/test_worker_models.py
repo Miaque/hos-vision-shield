@@ -22,5 +22,5 @@ async def test_quality_worker_rejects_missing_primary_before_receiver_start(tmp_
         raise AssertionError("Receiver must not start with missing quality models")
 
     monkeypatch.setattr(worker, "Receiver", receiver)
-    with pytest.raises(RuntimeError, match="model files"):
+    with pytest.raises(RuntimeError, match="模型预检"):
         await worker.main("files")

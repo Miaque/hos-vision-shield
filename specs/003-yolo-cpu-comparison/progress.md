@@ -46,6 +46,13 @@ scripts/repair-comparison-video.py 是未完成的修复草稿，首次 remux �
 - 尚未完成：下载失败保护自检、完整测试覆盖、文档启动示例、时间戳修复、合成媒体比较测试、浏览器核验、两组全量运行和人工标注复核。
 - 比较脚本待核对：总 run 状态不能因单组成功就表示两组完成；输出音轨检查目前仅存在性，还须验证时长/时序；计时目前包含采样PNG写盘，报告已披露，正式比较前应统一明确；report 还需验证原视频 HTML/播放和标注字段完整校验。
 - detector 保存了 max_side 但网络固定640；需明确该配置在 YOLO 全图策略中的实际意义，不把配置值1280误报为网络输入1280。
+
+## 主干合并（2026-10-20）
+
+- 在主工作区 `E:/workspace/python/hos-vision-shield` 的 `feature/yolo-comparison` 合并 main（27716e1）。保留 YOLO 检测器、比较工具和既有任务状态；模型来源说明保留双方内容。
+- 主干 worker 新增强制启动预检，因此补齐 yolo-manifest.json 的两模型身份校验和 ORT CPUExecutionProvider 检查；YOLO 仍仅支持 CPU，默认 quality 不变。
+- 按本分支现有 pyproject.toml/uv.lock 重新生成 GPU 部署锁，补入 onnxruntime 及其依赖，共 70 项；根声明与根锁未改。
+- 本次回归为 153 passed、1 skipped，详见 validation.md。当前主工作区没有两份 YOLO 权重，未重跑真实 YOLO 模型或媒体对比，也未构建 Docker 镜像；上述全量对比及人工复核待办不变。
 - 继续顺序：修复副本及测试 → 补齐上述小缺口与README/.env示例 → 原图标注准备 → 冻结最终源码/脚本指纹 → 两组顺序全量运行 → 浏览器查看 → 人工复核/暂定报告。
 - 首次完整运行前不要再修改冻结检测源码；如必须修改，创建新 run，避免混用旧记录。不要拿原本的42产物门槛掩盖原视频失败；补充副本应明确单列。
 

@@ -23,5 +23,7 @@ models/*.jit
 models/*.onnx
 models/*.zip
 models/*.part
+/vision-shield-models.tar.gz
+/vision-shield-source.tar.gz
 *.log
 tests/test_assets/

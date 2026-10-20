@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     detection_box_padding: Annotated[float, Field(ge=0, le=0.5, allow_inf_nan=False)] = 0.15
     mediamtx_control_url: str = "http://127.0.0.1:9997"
     rtsp_public_base_url: str = "rtsp://127.0.0.1:8554"
+    rtsp_publish_base_url: str | None = None
     source_allowlist: list[str] = Field(default_factory=list)
 
     file_task_limit: PositiveCount = 100
@@ -64,11 +65,13 @@ class Settings(BaseSettings):
             raise ValueError("REDIS_URL must use redis:// or rediss://")
         return value
 
-    @field_validator("mediamtx_control_url", "rtsp_public_base_url")
+    @field_validator("mediamtx_control_url", "rtsp_public_base_url", "rtsp_publish_base_url")
     @classmethod
-    def validate_service_url(cls, value: str, info) -> str:
+    def validate_service_url(cls, value: str | None, info) -> str | None:
+        if value is None:
+            return None
         url = urlsplit(value)
-        schemes = {"rtsp"} if info.field_name == "rtsp_public_base_url" else {"http", "https"}
+        schemes = {"http", "https"} if info.field_name == "mediamtx_control_url" else {"rtsp"}
         if (
             url.scheme not in schemes
             or not url.hostname
