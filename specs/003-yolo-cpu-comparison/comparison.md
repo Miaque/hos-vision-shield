@@ -2,6 +2,8 @@
 
 用户反馈的 `0ab3b44e…jpg` 和 `d3326728…jpg` 背景误打码已复现并修复。新一轮只跑相同16张图片，32/32输出完整；默认quality和启动示例不变，未运行全量视频。完整人工质量复核仍待完成。
 
+后续按用户新要求完成5段各约4秒的YOLO视频预览，耗时及明显误遮另见[视频预览报告](video-preview.md)；视频结果不并入下方图片计时或质量结论。
+
 ## 最新结果：yolo-images-002
 
 - [两张问题图：原图 / 修复前YOLO / 修复后YOLO](../../data/validation/yolo-images-002/false-mask-comparison.html)，含背景、树木误遮及小人脸回归局部。

@@ -109,3 +109,13 @@ uv run python scripts/compare-yolo.py report --run-dir data/validation/yolo-cpu-
 - 真实三图回归证明4个反馈背景点去遮、5个真实目标点保留遮挡；初版640单视野误删弱小脸，已由失败回归拦截并经480补充视野修复。最终210 passed、1 skipped（41.80秒），日志 `data/validation/yolo-false-mask-debug/final-regression-tests.txt`。
 - 16样本/31建议仍pending，来源为001生成结果前的副本，未冒充完整人工真值。06粗略face-2区域减少280个颈部建议像素，仍partial，详见image-verification.json和comparison.md；不得据此宣称零漏遮或总体准确率提升。首轮11既有边缘脸漏遮风险未解决。
 - 当前worktree仍为 `C:/Users/zhanjh/.codex/worktrees/yolo-cpu-evaluation/hos-vision-shield`。本轮只更新YOLO修复、测试、图片对比与相关文档；不改主工作区、不推送、不恢复旧视频run。
+
+## 最新授权：每段4秒视频预览（2026-10-20，已完成）
+
+- 用户要求使用YOLO看视频速度和效果，先选择每段约10秒，再明确缩短为“每段只处理4s”。10秒的 `yolo-video-preview-001` 已取消，不得恢复；旧全量视频002/003仍不运行。
+- 本轮仅运行 `data/validation/yolo-video-preview-002`：5段视频开头约4秒，共59/60/101/101/101帧，合计422帧；原分辨率、原帧时序、音频保留，每帧均检测，不跳帧，不改默认quality，不运行quality视频基线。
+- 候选代码仍为bad4da2（YOLO修复ce4efa9）。首段使用既有已授权的修正副本；截取以FFmpeg流复制，逐帧验证源前缀像素/时钟及音频压缩包相等。原始文件不动。
+- 运行入口为本地忽略目录preview.py，复用compare-yolo.py的candidate worker和生产process_video/FrameRedactor；每25帧写progress.json。查看processing.log、candidate/*.json、progress.json及run.json判断进度，不以旧句柄推断完成。
+- 预览地址 `http://127.0.0.1:18767/yolo-video-preview-002/index.html`，5/5已完成，candidate退出码0、run.status=processed，输出哈希、帧数、尺寸、时钟、音轨内容与时序均通过校验。各段处理75.464、62.955、219.580、211.031、205.233秒；累计774.263秒/422帧，0.545 FPS，初始化0.398秒另计。
+- 第二段消防栓上部、第三段招牌、第四段车轮与大块上方背景均有误遮，页面已单列局部证据；第四段车牌、第五段可见脸有局部遮挡。这是视觉问题记录，25个固定样本均pending，未修改检测策略或冒充完整人工真值，不能据此直接替换默认视频策略。
+- 浏览器10个视频元数据和1.5秒定位解码、50/50采样图片、两栏/5/5完成提示及HTTP Range均通过。第一段曾实际播放推进，其余后台节电AbortError限制持续播放核验，底层已完整解码全部输出。完整报告及证据边界见video-preview.md；本轮未改生产源码，未重复旧210项回归，未推送。
