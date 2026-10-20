@@ -83,3 +83,18 @@ uv run python scripts/compare-yolo.py report --run-dir data/validation/yolo-cpu-
 - 运行句柄失效时查 `data/validation/yolo-cpu-003/baseline/*.json` / `candidate/*.json`、各组log、execution.json及实际进程，不以旧句柄失败推断任务结束。CLI用同一run可跳过哈希一致的complete；有未预期失败先诊断，不开始另一组。
 - 本地浏览器预览服务为127.0.0.1:18767（现有Starlette StaticFiles/Uvicorn，支持Range）；普通http.server预览不支持Range，曾造成视频读取等待。已核对22个区块、16原图及6个原始/修正视频元数据，首段实际播放解码5帧。完整输出尚待浏览器检查；后台标签页节电AbortError单列为环境限制。
 - 未做人工签名/正式质量统计；未执行GPU、服务器Docker、生产或真实RTSP验收。本续作未推送。
+
+## 最新指令覆盖：仅图片（2026-10-20）
+
+用户明确要求“先处理图片，视频不要全量运行”。已停止yolo-cpu-003活动视频worker，串行驱动因中止退出，不会自动启动视频candidate；002/003的run.json均记录范围变更原因。**不要恢复这两个全量视频run。**
+
+当前仅处理 `data/validation/yolo-images-001`：16张JPEG、16个固定样本、31个原图代理目标建议（全部pending）。候选检测/比较源码冻结于6bc1cce，新增prepare --images-only，测试证明不会打开视频。两组完成门槛32份图片；视频不在本轮交付范围。baseline图片已启动，candidate须在baseline完成后串行执行；最终状态、耗时和浏览器证据待结束后补充。
+
+## 图片交付结果（2026-10-20）
+
+- 当前图片阶段已完成：`data/validation/yolo-images-001/index.html`，16图×2=32份complete；run.status=processed，baseline/candidate退出码均0。
+- 候选检测/比较源码冻结于6bc1cce；图片报告、summary.json、timings.csv、image-verification.json、原始标注副本及6个放大案例均已生成。报告/标注属于data忽略目录，不提交或上传。
+- baseline处理111.954秒、初始化4.274秒；candidate处理32.755秒、初始化0.431秒。仅为本机单次16图批次，处理耗时不含PNG写盘、完整性检查和报告。
+- 浏览器16个区块、96张图片全部加载，无video；明确显示32/32和待人工复核。暂定视觉取舍见comparison.md：有裁切人脸补遮，也有右边缘人脸漏遮风险；保持默认quality。
+- 最终回归198 passed、1 skipped（28.14秒），日志data/validation/yolo-setup/images-final-tests.txt。
+- 16样本/31个代理建议仍pending，完整标注和人工质量复核未完成，不能写正式准确率。用户已要求本轮不跑全量视频，002/003均已停止；不得自动恢复它们。本轮没有后台自动提醒任务，没有推送。

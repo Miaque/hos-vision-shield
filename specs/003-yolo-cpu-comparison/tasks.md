@@ -1,5 +1,7 @@
 # Tasks: YOLO 人脸与车牌 CPU 效果对比
 
+**当前范围：仅16张图片，两组32份结果已交付。** 用户已取消本轮全量视频；执行状态以文末 I001–I006 与 comparison.md 为准，禁止自动恢复旧视频 run。T018/T024 的正式人工标注与复核仍待办。
+
 **Input**: 本目录 spec.md、plan.md、research.md、data-model.md、contracts/evaluation.md、quickstart.md。
 
 **Worktree**: 当前续作 `C:/Users/zhanjh/.codex/worktrees/yolo-cpu-evaluation/hos-vision-shield`，分支 `feature/yolo-cpu-evaluation`，基于已合并 main 的 feature/yolo-comparison；旧 worktree 已移除。以下路径均相对此 worktree；不得在主工作区实现。
@@ -132,3 +134,16 @@ US2 的小型 CLI/媒体测试可独立使用替身数据验证，但真实比�
 ## 续作核对（2026-10-20）
 
 197 passed、1 skipped 的回归日志见 data/validation/yolo-setup/resumed-tests.txt；另有报告相对链接修复后的 16 项定向测试通过。当前正式 run 为 yolo-cpu-003，候选冻结提交 a9f5ad2，包含原始21份及补充修正副本1份。98个固定样本已查看原图并准备47个待确认建议，尚非完整人工真值，T018/T024 不勾选。T019 正在顺序执行，不能把本节当作全量完成。yolo-cpu-002 因原始预览跨盘 file URL 改进而中止，保留全部记录，不并入本轮结果。
+
+## 图片优先范围（用户最新指令，2026-10-20）
+
+全量视频已停止，T019的全量视频部分本轮取消；不得在后台或恢复时自动执行。视频任务和原始失败保留供后续明确恢复，不构成本轮交付的完成条件。
+
+- [x] I001 新建 data/validation/yolo-images-001，只冻结16张图片；26项比较/媒体测试通过，其中新用例证明不打开视频文件。
+- [x] I002 固定0664be4 quality CPU顺序完成16张图片。
+- [x] I003 当前YOLO CPU完成相同16张图片，共32份完整产物。
+- [x] I004 生成并浏览器核对16组三栏图片、原图/输出/样本均可读，失败状态可见。
+- [x] I005 从两组结果生成前保存的原图建议按SHA256迁移，共16样本、31目标建议，保持pending；不宣称完整真值或正式质量指标。
+- [x] I006 更新comparison.md、validation.md与progress.md，只报告本轮图片证据，列明人工复核边界及视频未运行。
+
+图片阶段六项均完成，完整性32/32、浏览器96/96图片加载、最终回归198 passed/1 skipped；质量人工复核仍待办。原计划T019视频全量已被用户最新指令取消本轮执行，不再作为图片阶段完成门槛。

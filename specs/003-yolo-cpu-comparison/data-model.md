@@ -4,14 +4,15 @@
 
 ## Run（一次对比）
 
+- scope=all|images；images只冻结16张JPEG，后续run/report以该清单决定完成门槛32份，不打开视频。
 - run_id、created_at、baseline_commit、candidate_commit、candidate_diff_sha256、实际源码路径与指纹。
 - environment：Python/依赖版本、CPU、线程数、device=cpu；models：角色、来源/revision、sha256、许可、实际输入输出与预后处理参数。
 - manifest_sha256、annotation_revision；status：prepared → running → processed → reviewed；任一素材失败时为 incomplete，可在输入和配置不变时重跑该完整素材。
 - processed 仅代表媒体完整处理；reviewed 需要指定样本全部有人工确认或明确争议状态，不等于模型更好。
 
-## Media（21 份输入）
+## Media（全量21份，当前图片范围16份）
 
-- media_id=内容 SHA-256；源文件名/路径、kind=image|video、尺寸、图像方向。
+- media_id为本次清单的两位序号，sha256单独保存内容身份；源文件名/路径、kind=image|video、尺寸、图像方向。
 - 视频：解码帧数、逐帧序号与有理数 PTS/time_base、时长、音轨信息；不能信任本批素材值为 0 的帧数元数据。
 - 原媒体只读；run 下每份媒体关联 baseline 和 candidate 两条 Result。
 

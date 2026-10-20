@@ -31,3 +31,15 @@
 - 本地预览使用现有 Starlette StaticFiles/Uvicorn（仅127.0.0.1:18767，支持Range）。普通 `python -m http.server` 不支持视频Range，不能据此判断MP4不可播放。浏览器已确认22个素材区块、16张原图加载成功、6个原始/修正视频元数据可读，首段实际播放已解码5帧；全部正式输出的浏览器核验仍待全量运行结束。后台标签页会被浏览器节电策略暂停，不能把 AbortError 算成媒体损坏。
 - 当前候选检测/工具源码冻结于 a9f5ad2，正式目录 `data/validation/yolo-cpu-003`。98个原始固定样本的初看及47个代理目标建议先于两组输出，全部 pending；它们不构成完整真值，也没有人工 reviewer 代签。
 - 尚未完成：两组全量运行及正式输出浏览器检查、完整原图标注/人工效果复核、正式分类质量结论。未执行GPU、生产部署、真实RTSP接入或服务器Docker验收。
+
+## 图片范围最终验证（2026-10-20）
+
+- 用户最新要求：先处理图片，视频不要全量运行。已停止003的活动worker及其串行驱动；没有启动视频candidate，没有设置后台自动化，也不再恢复002/003。
+- 新增 `prepare --images-only` 只冻结16张JPEG。失败测试先证实参数不存在，再完成实现；26项比较/合成媒体用例通过，新用例使用损坏MP4占位证明图片prepare不打开视频。
+- 正式图片run为 `data/validation/yolo-images-001`，候选冻结于6bc1cce，基线仍为0664be4。baseline/candidate顺序运行，各16份complete，二者CLI退出码均0，run.status=processed，summary为32/32。全部输出SHA-256匹配，各图尺寸、方向与证据数量通过完整性检查。
+- baseline初始化4.273826秒，16图累计处理111.953541秒；candidate初始化0.431042秒，累计处理32.755061秒。PNG输出/复核与初始化不计入处理耗时；不把这次单样本计时当稳定延迟保证。
+- 原图建议按内容SHA从两组结果生成前的副本迁移：16个样本、31个待确认目标建议。全部pending，无实际人工签字；正式分类漏遮率均为null。另生成provisional-target-coverage.json仅作待复核区域定位，不是正式质量统计。
+- 浏览器实际核验 `http://127.0.0.1:18767/yolo-images-001/index.html`：16个section，96/96个img均有有效naturalWidth，无失败图片；video数量0；三栏宽度584.328px×3；标题含待人工复核、状态32/32、范围明确16图。报告源码不加载外部脚本或媒体；宿主浏览器的杀软扩展注入与favicon请求不属于报告代码。
+- 实际局部对照见run目录cases/：候选补遮图上边缘裁切脸、部分车牌覆盖更宽；也有右边缘人脸基线遮挡而候选未遮挡的风险，并有更大的颈肩遮挡。详情comparison.md，不宣称YOLO整体胜出。
+- 最终回归命令同上节（tests/unit + comparison_media + model_probe + video_pipeline + stream_pipeline + runner_lifecycle）：**198 passed、1 skipped，28.14秒**，日志 `data/validation/yolo-setup/images-final-tests.txt`。Windows下POSIX父EOF用例跳过，未降级为通过。
+- 生产/GPU/真实RTSP/Docker未测；全量视频按用户指令取消本轮执行，人工完整目标与质量复核未完成。图片交付已完成，不把这些边界算作图片32份产物失败。

@@ -105,3 +105,7 @@ models/
 ## 实施修订
 
 固定人脸 ONNX 的 NonZero 算子在 OpenCV 4.14.0 中实际加载失败，YOLO 执行器改为 ONNX Runtime CPUExecutionProvider（2 个推理线程，1 个 inter-op 线程，串行双模型）。其余媒体、基线与权重选择不变。以下实施以这一修订覆盖此前 OpenCV DNN 运行方案；实际输入/输出将在模型 manifest 记录。
+
+## 当前图片优先增量（2026-10-20）
+
+用户已取消本轮全量视频：停止 yolo-cpu-003 的活动worker，不自动开始其candidate。新run yolo-images-001冻结16张JPEG，使用新增的prepare --images-only；后续run/report仍只消费冻结清单，无须运行时过滤或修改清单。两组顺序处理，图片成功门槛32份。视频任务保留为后续计划，不作为本轮未完成项追跑。

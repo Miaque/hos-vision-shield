@@ -1,5 +1,7 @@
 # CPU 对比与人工复核
 
+**当前只执行图片。** 用户已明确要求“先处理图片，视频不要全量运行”；使用本文末尾的“图片优先”四条命令。下方包含视频的流程是历史计划，本轮不要执行或恢复 yolo-cpu-002/003。
+
 在独立 worktree 执行。当前续作目录为 `C:/Users/zhanjh/.codex/worktrees/yolo-cpu-evaluation/hos-vision-shield`；原始素材已迁至 `E:/workspace/python/hos-vision-shield/tests/test_assets`，共 16 张 JPEG、5 段 MP4。原始文件只读，权重和运行产物不提交 Git。
 
 ## 环境与模型
@@ -12,7 +14,7 @@ uv run --no-sync pytest tests/unit/test_yolo_download.py tests/unit/test_yolo_de
 
 还需按原有 manifest 准备 `face.jit`、`license_plate.jit`、`yunet_face.onnx`、`hyperlpr_plate.onnx`。prepare 会校验全部六份模型。YOLO 固定 640 输入，quality 最长边 1280；这两项不能混写为相同网络输入尺寸。模型来源和许可差异见 models/README.md。
 
-## 冻结输入及运行
+## 历史全量流程（本轮不执行）
 
 ```powershell
 uv run --no-sync python scripts/compare-yolo.py prepare --source E:/workspace/python/hos-vision-shield/tests/test_assets --run-dir data/validation/yolo-cpu-003
@@ -66,3 +68,16 @@ uv run --no-sync pytest tests/unit tests/integration/test_yolo_comparison_media.
 ```
 
 需要本机 FFmpeg，真实模型冒烟另需六份已校验模型；外部 Redis/RTSP 测试仍按原有前提单独执行。通过本地文件比较不等于真实 RTSP、服务器部署或 GPU 验收。详细命令、结果与未运行项写入 validation.md。
+
+## 图片优先（当前执行范围）
+
+最新指令是先完成图片、视频不要全量运行。使用独立目录冻结16张图片；与前面的全量视频计划分开，不运行repair或任何视频run：
+
+```powershell
+uv run --no-sync python scripts/compare-yolo.py prepare --source E:/workspace/python/hos-vision-shield/tests/test_assets --run-dir data/validation/yolo-images-001 --images-only
+uv run --no-sync python scripts/compare-yolo.py run --run-dir data/validation/yolo-images-001 --variant baseline
+uv run --no-sync python scripts/compare-yolo.py run --run-dir data/validation/yolo-images-001 --variant candidate
+uv run --no-sync python scripts/compare-yolo.py report --run-dir data/validation/yolo-images-001
+```
+
+本轮期望16×2=32份图片；run的scope=images，清单不含视频，报告明确声明视频未纳入。不要对yolo-cpu-002/003调用run；其中中止的视频不续跑，不计为通过。

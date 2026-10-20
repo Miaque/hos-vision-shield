@@ -12,6 +12,8 @@
 
 ## CLI
 
+当前用户范围为仅图片：prepare增加`--images-only`，恰好冻结16张JPEG、scope=images，不打开视频。该标志只用于prepare，run/report始终消费冻结清单；本轮完成门槛为32份图片。下文默认全量视频命令保留为历史计划，本轮不执行。
+
 工作目录为本 worktree。`scripts/compare-yolo.py` 提供三个子命令：
 
 ```powershell
@@ -25,6 +27,7 @@ python scripts/compare-yolo.py report --run-dir data/validation/yolo-cpu-001
 - run：核对输入及配置未变，再运行指定版本。自动准备固定提交源码快照并验证实际导入位置；candidate 记录提交加 dirty diff 指纹。只处理未完成的整个素材；已有 complete 结果先校验其指纹。逐项写入状态，失败返回非零退出码。
 - report：只读运行证据与标注，生成 index.html、summary.json、timings.csv；缺失结果明确列出。标注 pending 时仍可生成视觉报告，但标题注明“待人工复核”，不得标质量通过。
 - 输出目录必须独立于输入目录；不覆盖输入；路径包含空格和中文也能处理；HTML 对文件名和错误文本进行转义。
+- report以校验过哈希的originals/只读副本展示原始媒体，全部链接相对run目录，既可从本地打开也可通过本机HTTP预览；不使用跨盘file URL。
 
 ## 输出目录
 
