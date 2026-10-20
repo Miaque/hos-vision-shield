@@ -36,6 +36,12 @@ Remove-Item Env:RUN_GPU_TESTS
 本机已完成真实模型、图片/视频子进程及同图 CPU/GPU 对比，边界与结果见 [GTX 1080 验证记录](specs/002-compose-cpu-gpu/local-gpu.md)。
 GPU 模式下，两路独立的全图检测同时执行，随后仍按原顺序进行局部复核；固定全集输出保持一致，最新耗时见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)。
 
+### YOLO CPU 候选
+
+运行 `./scripts/download-yolo-models.ps1` 后，将 `.env` 中对应字段改为 `DETECTION_BACKEND=yolo`、`INFERENCE_DEVICE=cpu`、`FACE_MODEL_PATH=models/yolov8n-face.onnx`、`PLATE_MODEL_PATH=models/yolov11s-plate.onnx`，再运行原有启动脚本。默认仍为 quality；YOLO 只加载这两份 ONNX，使用 ONNX Runtime CPUExecutionProvider 串行推理，不接受 cuda。worker 会在接单前核验清单、哈希和真实推理；缺失、损坏或加载失败均禁止就绪。
+
+YOLO 全图及重叠分块均采用 640×640 RGB letterbox；`DETECTION_MAX_SIDE` 不改变其网络输入。分块布局、实心遮挡及 200ms 历史保持复用现有流程。固定来源、许可差异和阈值见 [模型说明](models/README.md)；完整 CPU 对比、失败项与人工复核步骤见 [对比指南](specs/003-yolo-cpu-comparison/quickstart.md)。接入和模型冒烟通过不代表效果改善。
+
 ## 服务器 Docker Compose
 
 目标为 Ubuntu 24.04 x86_64，沿用服务器现有 Docker 和 `docker-compose v2.29.2`；不在 Windows 本机安装 Docker。默认 CPU，GPU 模式指定一张卡供文件与流 worker 共用。GPU 失败不换卡或回退 CPU，检测策略及四份权重保持相同。

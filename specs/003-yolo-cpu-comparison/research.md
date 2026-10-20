@@ -70,3 +70,9 @@
 ## 实施修订（2026-10-19）
 
 实际 OpenCV 4.14.0 加载固定 yolov8n-face.onnx 失败：NonZero 算子不支持。保留权重及其哈希，改用 ONNX Runtime CPUExecutionProvider；不重新导出、不静默换模型。新增 onnxruntime 运行依赖，以 uv.lock 固定实际版本；双模型共用顺序推理，intra_op_num_threads=2、inter_op_num_threads=1，禁用 provider fallback。官方接口依据：https://onnxruntime.ai/docs/api/python/api_summary.html 。本修订替代上述 OpenCV DNN 执行选择，OpenCV 仍用于预处理/NMS。
+
+## 无损修正副本实测（2026-10-20）
+
+原视频SHA-256为 `db44dd993fe35ae9bbd68c4af26867b0597d994a2f21629c28d4da22020d67ca`。首次草稿防护在AAC重复时钟处中止；实际重复包依次为视频515250/90000、音频46016/8000、视频965790/90000，PTS=DTS。用户已授权三处各增加一个本流刻度；原始媒体不改写，原始失败保留，补充副本单列。
+
+remux后的SHA-256为 `c4869970bb36036b105bbe59429d88e0642e1db21bcab30a838be9f962d0f9a0`。逐流压缩包内容与计数、900帧解码像素全部一致；其余PTS/DTS严格相等。MP4可能重排跨流交错顺序并根据新DTS推导邻接包duration，不能把全局demux顺序变化误判为载荷变化。修正证据位于本地run目录的repair.json。

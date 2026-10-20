@@ -69,3 +69,17 @@ uv run python scripts/compare-yolo.py report --run-dir data/validation/yolo-cpu-
 ```
 
 原始失败记录会使 run 返回非零，须检查逐素材结果后再继续另一组；不得隐藏失败退出码。没有人工确认时，只能报告暂定视觉差异。当前没有生产部署、GPU或真实RTSP验收结果。
+
+## 本轮续作位置（2026-10-20）
+
+- 旧 worktree 已不存在；现位于 `C:/Users/zhanjh/.codex/worktrees/yolo-cpu-evaluation/hos-vision-shield`，分支 `feature/yolo-cpu-evaluation`，从主工作区已合并main的 bad26b6 创建，主工作区未修改。
+- 用户确认当前原始素材路径为 `E:/workspace/python/hos-vision-shield/tests/test_assets`（仍16图5视频）。基线四模型已从主工作区复制并校验；YOLO两模型按固定清单重新下载并通过CPU实测。
+- 已定位并修复中止原因：原始视频除两处重复视频PTS/DTS外，还有AAC包46016/8000秒处重复；用户在本会话追加授权该音频包时钟增加1/8000秒。修正只针对原始SHA `db44dd...0d67ca`，逐流全部压缩包、900帧像素、其余PTS/DTS均校验相等。repair.json 已生成。
+- 比较工具已补：总状态须两组全齐、音频内容及包时序/时长校验、失败/取消钩子恢复、采样PNG移出处理计时、样本定位冻结、工具/配置指纹、完整标注检查、unknown误遮及新增漏遮定位、相对原始媒体预览。README、.env.example、模型说明及复核指南已更新。
+- 回归197 passed、1 skipped；修正相对链接后16项定向通过。最新代码提交 a9f5ad2；后续只可修改文档和人工标注，不修改冻结检测/比较源码。
+- 正式run：`data/validation/yolo-cpu-003`。原始21份+补充修正1份，98个固定样本。已在查看两组结果前看原图、准备47个代理建议并保存 annotations-before-results.json，全部pending，未构成完整目标真值。空列表不能解释为无目标。
+- `yolo-cpu-002` 因浏览器不能访问跨盘file原始链接而主动中止，保留部分产物/运行状态和原因，不并入003；原始预览现为原始文件的哈希校验副本及相对链接。
+- baseline已启动，候选仍待baseline完成后串行执行；原始01视频预期失败，另有21修正副本。每组应有21份成功、1份原始失败；总结果原始40/42，补充2/2，不能以合计42掩盖失败。运行未结束，不得写成上述结果已达到。
+- 运行句柄失效时查 `data/validation/yolo-cpu-003/baseline/*.json` / `candidate/*.json`、各组log、execution.json及实际进程，不以旧句柄失败推断任务结束。CLI用同一run可跳过哈希一致的complete；有未预期失败先诊断，不开始另一组。
+- 本地浏览器预览服务为127.0.0.1:18767（现有Starlette StaticFiles/Uvicorn，支持Range）；普通http.server预览不支持Range，曾造成视频读取等待。已核对22个区块、16原图及6个原始/修正视频元数据，首段实际播放解码5帧。完整输出尚待浏览器检查；后台标签页节电AbortError单列为环境限制。
+- 未做人工签名/正式质量统计；未执行GPU、服务器Docker、生产或真实RTSP验收。本续作未推送。

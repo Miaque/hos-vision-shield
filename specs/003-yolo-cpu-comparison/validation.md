@@ -16,3 +16,18 @@
 - `uv run --no-sync pytest tests/unit tests/integration/test_runner_lifecycle.py -q`：153 passed、1 skipped，14.72 秒。跳过项为 POSIX 冷加载父 EOF，Windows 结果不替代 Linux 实测。
 - GPU 部署锁重新生成 70 项，安装 dry-run 与共同版本检查通过；没有实际在本机安装 Linux CUDA 依赖。
 - 主工作区没有 YOLO 的两份真实权重，未执行 test_yolo_model_probe.py；没有重跑媒体全量比较、人工效果复核或服务器 Docker 验收，不以单元测试代替。
+
+## 续作验证（2026-10-20）
+
+- 当前 worktree：`C:/Users/zhanjh/.codex/worktrees/yolo-cpu-evaluation/hos-vision-shield`，分支 `feature/yolo-cpu-evaluation`；主工作区未改。锁定环境通过 `uv sync --frozen` 重新准备，两份 YOLO 权重按固定 manifest 重新下载，四份基线权重从主工作区只读复制并由 prepare 核验。
+- 原素材现位于 `E:/workspace/python/hos-vision-shield/tests/test_assets`，用户在本会话确认。实际解码帧数仍为 900、915、1550、1524、1511。
+- 修复草稿中止的根因：除第84、160帧外，AAC第46个包也重复 DTS=PTS=46016、time_base=1/8000。用户明确追加授权该包增加1刻度；不是 PyAV 时间基换算造成的误判。新修复以有理时间比较，拒绝倒退或 PTS/DTS 不一致，只允许指定原始 SHA-256 和2个视频+1个音频重复时钟。
+- 实际修复验证：900帧逐帧 RGB 相等；视频900包和AAC470包逐流压缩字节相等，逐包 PTS/DTS 仅授权三处变化；其余时钟相等。封装器按新 DTS 重排跨流包顺序并推导相邻 duration，因此校验不能按全局 demux 顺序配对。repair.json 只在验证成功后写入，部分文件不加入 manifest。
+- 时间基与 mux 约定参考 [PyAV 官方时间文档](https://pyav.org/docs/stable/api/time.html)，结论以本机逐包验证为准。
+- `uv run --no-sync pytest tests/unit tests/integration/test_yolo_comparison_media.py tests/integration/test_yolo_model_probe.py tests/integration/test_video_pipeline.py tests/integration/test_stream_pipeline.py tests/integration/test_runner_lifecycle.py -q`：**197 passed、1 skipped，25.94秒**；日志 `data/validation/yolo-setup/resumed-tests.txt`。唯一跳过仍为 Windows 下 POSIX 父 EOF 专用用例。
+- 覆盖：下载失败/错哈希不覆盖旧模型、双模型真实CPU forward与图片/24帧合成视频/共享流帧函数、RGB letterbox逆映射/分块偏移/扩框一次/异常传播、变帧率实际解码及末帧、完整性/音频内容与时序、保持框证据不改变生产像素、失败/取消恢复钩子、黑色原像素不作为遮挡证据、重复/非法标注、未知误遮并集、零分母、争议及新增漏遮定位、整组状态、源码冻结、恢复跳过已完成产物及输出哈希变更拒绝。
+- 故意反转总状态的完成条件，单项回归如预期失败；恢复文件后通过。没有使用绿色测试代替条件生效的证据。
+- 浏览器工具禁止直接打开 file URL；原稿跨盘原始媒体链接在 HTTP 预览中不可用。已改为报告目录内哈希校验的只读原始副本和相对链接；相关16项定向测试通过。保留 yolo-cpu-002 部分运行与中止原因，创建独立 yolo-cpu-003，不混入旧产物。
+- 本地预览使用现有 Starlette StaticFiles/Uvicorn（仅127.0.0.1:18767，支持Range）。普通 `python -m http.server` 不支持视频Range，不能据此判断MP4不可播放。浏览器已确认22个素材区块、16张原图加载成功、6个原始/修正视频元数据可读，首段实际播放已解码5帧；全部正式输出的浏览器核验仍待全量运行结束。后台标签页会被浏览器节电策略暂停，不能把 AbortError 算成媒体损坏。
+- 当前候选检测/工具源码冻结于 a9f5ad2，正式目录 `data/validation/yolo-cpu-003`。98个原始固定样本的初看及47个代理目标建议先于两组输出，全部 pending；它们不构成完整真值，也没有人工 reviewer 代签。
+- 尚未完成：两组全量运行及正式输出浏览器检查、完整原图标注/人工效果复核、正式分类质量结论。未执行GPU、生产部署、真实RTSP接入或服务器Docker验收。

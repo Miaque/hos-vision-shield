@@ -1,5 +1,13 @@
 # 模型文件
 
+## YOLO CPU 候选
+
+在仓库根目录执行 `./scripts/download-yolo-models.ps1`，下载固定版本的 `yolov8n-face.onnx` 和 `yolov11s-plate.onnx`。来源与 SHA-256 见 [yolo-manifest.json](yolo-manifest.json)；已有正确文件直接复用，下载或哈希失败不覆盖旧文件。启动时模型及此清单须处于同一目录，不在运行期间下载。
+
+设置 `DETECTION_BACKEND=yolo`、`INFERENCE_DEVICE=cpu`，两条模型路径分别指向上述文件。实际执行器为 ONNX Runtime CPUExecutionProvider，双模型串行，intra-op 2 线程、inter-op 1 线程；OpenCV 无法加载人脸模型的 NonZero 算子。全图和每个源分块固定 640×640 RGB/255 letterbox，`DETECTION_MAX_SIDE` 仅兼容公共配置，不改变该输入。阈值均为 0.25；人脸输出 `[1,300,21]` 已含 NMS，车牌 `[1,5,8400]` 使用 IoU 0.45 的 NMS。保留跨视图遮挡并集，默认扩框人脸每侧 15%、车牌水平 30%/垂直 15%。
+
+人脸仓库声明 GPL-3.0，权重 metadata 声明 AGPL-3.0；车牌权重 metadata 声明 AGPL-3.0。两种声明均保留在清单和 [NOTICE.md](NOTICE.md)，部署许可尚未核定。本轮仅作本地 CPU 比较，不改变默认 quality 或服务器离线包。
+
 ## 服务器离线交付
 
 默认 quality 的 CPU/GPU 两种部署都使用同一组 `face.jit`、`license_plate.jit`、`yunet_face.onnx`、`hyperlpr_plate.onnx`。离线包还须包含 `manifest.json`、`cpu-manifest.json`、本文件、`NOTICE.md` 与完整 `licenses/`；四份权重合计 842,516,699 字节，设备切换不更换模型或阈值。归属与许可见 [NOTICE.md](NOTICE.md)。
