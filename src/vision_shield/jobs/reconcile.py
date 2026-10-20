@@ -3,6 +3,8 @@
 import asyncio
 import contextlib
 import logging
+import os
+import signal
 from uuid import uuid4
 
 from redis.asyncio import Redis
@@ -27,17 +29,22 @@ async def main():
     from vision_shield.media.publisher import Publisher
 
     settings = Settings()
+    current = asyncio.current_task()
+    if os.name != "nt":
+        loop = asyncio.get_running_loop()
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(signum, current.cancel)
     owner = str(uuid4())
     client = Redis.from_url(settings.redis_url.get_secret_value(), socket_connect_timeout=2, socket_timeout=2)
     store = TaskStore(client, settings.file_task_limit, settings.stream_task_limit, settings.lease_seconds)
-    await file_broker.startup()
-    await stream_broker.startup()
 
     async def dispatch(task):
         function = process_stream if task["kind"] == "stream" else process_file
         await function.kicker().with_labels(job_id=task["id"]).kiq(task["id"])
 
     try:
+        await file_broker.startup()
+        await stream_broker.startup()
         while True:
             try:
                 leader = await client.eval(
@@ -56,5 +63,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    with contextlib.suppress(KeyboardInterrupt):
+    with contextlib.suppress(KeyboardInterrupt, asyncio.CancelledError):
         asyncio.run(main())

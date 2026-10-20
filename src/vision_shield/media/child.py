@@ -29,19 +29,34 @@ def main():
         # The supervisor died; no detached process may keep a camera/publisher alive.
         os._exit(3)
 
+    # Linux 在冷加载前监听父管道，防止父进程退出后遗留加载中的模型进程。
+    if os.name != "nt":
+        threading.Thread(target=watch_parent, daemon=True).start()
+
     try:
+        cfg = payload["config"]
+        if payload["kind"] == "probe":
+            from vision_shield.detection.preflight import run_preflight
+            report = run_preflight(cfg)
+            if os.name == "nt":
+                threading.Thread(target=watch_parent, daemon=True).start()
+            if not stop.is_set():
+                emit({"probe": report})
+            return
         from vision_shield.detection import load_detector
         from vision_shield.media.images import process_image
         from vision_shield.media.video import process_video
         from vision_shield.media.streams import process_stream
         from PIL import Image
 
-        cfg = payload["config"]
+        loading = time.monotonic()
         detector = load_detector(cfg)
         Image.init()
+        emit({"model_load_seconds": time.monotonic() - loading})
         # Windows numerical DLL initialization can deadlock against a blocking
         # CRT stdin reader. Load dependencies before starting the control thread.
-        threading.Thread(target=watch_parent, daemon=True).start()
+        if os.name == "nt":
+            threading.Thread(target=watch_parent, daemon=True).start()
         directory = Path(payload["directory"])
         directory.mkdir(parents=True, exist_ok=True)
         started = time.monotonic()
@@ -71,6 +86,10 @@ def main():
         else:
             raise ValueError("Unsupported task kind")
     except Exception as error:
+        if payload["kind"] == "probe":
+            from vision_shield.detection.preflight import PreflightError
+            emit({"preflight_error": str(error) if isinstance(error, PreflightError) else "模型预检失败：内部异常"})
+            sys.exit(1)
         retryable = payload["kind"] == "stream" and isinstance(error, RETRYABLE_STREAM_ERRORS)
         code = "storage_full" if isinstance(error, OSError) and error.errno == 28 else "processing_failed"
         emit({"retryable": retryable, "failure_type": type(error).__name__,

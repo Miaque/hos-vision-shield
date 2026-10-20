@@ -12,6 +12,7 @@ from PIL import Image
 
 from vision_shield.config import Settings
 from vision_shield.detection import load_detector
+from vision_shield.detection.preflight import run_preflight
 from vision_shield.redaction import redact
 
 
@@ -19,12 +20,11 @@ from vision_shield.redaction import redact
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
 def test_quality_cuda_runs_local_models_and_preserves_reviewed_regions():
     assert torch.cuda.is_available(), "显式 GPU 验证要求 CUDA 可用"
-    for manifest_name in ("manifest.json", "cpu-manifest.json"):
-        manifest = json.loads((Path("models") / manifest_name).read_text("utf-8"))
-        for model in manifest["models"]:
-            with (Path("models") / model["path"]).open("rb") as stream:
-                assert hashlib.file_digest(stream, "sha256").hexdigest() == model["sha256"]
     config = Settings(_env_file=None, inference_device="cuda")
+    report = run_preflight(config.model_dump(mode="json"))
+    assert len(report["models"]) == 4
+    assert report["model_devices"] == ["cuda"] and report["nms_device"] == "cuda"
+    assert report["cuda_build"] and report["gpu_name"] and report["architectures"]
     detector = load_detector(config.model_dump())
     assert detector.primary.device.type == "cuda"
     assert all(next(model.parameters()).is_cuda for model in detector.primary.models)

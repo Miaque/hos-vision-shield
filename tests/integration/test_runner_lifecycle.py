@@ -2,6 +2,9 @@ import asyncio
 import sys
 import json
 import subprocess
+import os
+
+import pytest
 
 from vision_shield.config import Settings
 from tests.conftest import ROOT, NO_WINDOW
@@ -41,6 +44,24 @@ def test_parent_pipe_eof_terminates_real_media_child(tmp_path):
         process.stdin.flush()
         process.stdin.close()
         assert process.wait(timeout=30) == 3
+        assert b"result_ref" not in process.stdout.read()
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        process.stdout.close()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux 冷加载父管道保护须在 POSIX 实测")
+def test_parent_eof_terminates_during_model_loading(tmp_path):
+    command = [sys.executable, "-u", "-c", "import time; import vision_shield.detection as d; "
+               "d.load_detector=lambda cfg: time.sleep(30); "
+               "from vision_shield.media.child import main; main()"]
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        process.stdin.write((json.dumps(dict(kind="image", config={}, directory=str(tmp_path))) + "\n").encode())
+        process.stdin.close()
+        assert process.wait(timeout=5) == 3
         assert b"result_ref" not in process.stdout.read()
     finally:
         if process.poll() is None:
