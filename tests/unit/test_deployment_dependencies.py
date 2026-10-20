@@ -30,3 +30,19 @@ def test_gpu_lock_keeps_common_versions_and_root_requirements():
     for block in re.split(r"\n(?=[a-z0-9-]+==)", text):
         if re.search(r"(?m)^[a-z0-9-]+==", block):
             assert "--hash=sha256:" in block
+
+
+def test_image_dependency_layers_do_not_depend_on_source_or_readme():
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "deploy/Dockerfile").read_text("utf-8")
+    application_copy = min(match.start() for match in re.finditer(r"(?m)^COPY .*", text)
+                           if "src/" in match[0] or "README.md" in match[0])
+    dependencies = text[:application_copy]
+    application = text[application_copy:]
+    assert "--no-install-project" in dependencies, "CPU 依赖须在复制源码前独立安装"
+    assert "uv pip sync" in dependencies and "--require-hashes" in dependencies
+    assert "FROM dependencies AS builder" in dependencies
+    assert "uv build --wheel" in application
+    assert "COPY --from=dependencies /opt/venv /opt/venv" in application
+    assert "COPY --from=builder /opt/venv" not in application
+    assert "uv pip install" in application and "--no-deps /dist/*.whl" in application

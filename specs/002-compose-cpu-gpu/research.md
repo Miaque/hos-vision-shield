@@ -72,7 +72,7 @@ uv pip compile pyproject.toml --no-sources --torch-backend cu126 --constraint co
 
 实施已生成 `deploy/requirements-cu126.txt`，并重新执行共同版本检查及安装 dry-run；没有安装或替换本机依赖。生成时附加 `--no-annotate --emit-index-annotation --custom-compile-command '<仓库相对路径的生成命令>'`，省去注释中的本机临时目录。维护者从仓库根目录导出共同约束到临时目录，将上述 compile 的输入设为根 pyproject.toml、约束设为临时文件、输出设为 deploy/requirements-cu126.txt；服务器正常部署直接使用交付锁，不需要在宿主安装 uv。
 
-CPU 构建使用 `uv sync --locked --no-dev --no-editable`；GPU 在空 `/opt/venv` 执行 `uv pip sync --python /opt/venv/bin/python --require-hashes --torch-backend cu126 --no-build deploy/requirements-cu126.txt`，再以 `uv pip install --python /opt/venv/bin/python --no-deps .` 安装同一项目。项目构建依赖继续遵循已有 build-system 范围。两类运行入口统一使用安装后的 Python 包，运行镜像不执行 uv sync，避免将 CUDA 构建换回根规则中的 CPU 构建。
+CPU 依赖层使用 `uv sync --locked --no-dev --no-editable --no-install-project`；GPU 依赖层在空 `/opt/venv` 执行 `uv pip sync --python /opt/venv/bin/python --require-hashes --torch-backend cu126 --no-build deploy/requirements-cu126.txt`。独立 builder 阶段复制源码与 README 后通过 `uv build --wheel` 构建应用；运行镜像先复制依赖层的虚拟环境，再用临时挂载的 uv 以 `uv pip install --no-deps` 安装该 wheel。这样源码变化不会使依赖安装层及最终镜像中的大依赖复制层失效。项目构建依赖继续遵循已有 build-system 范围。两类运行入口统一使用安装后的 Python 包，运行镜像不执行 uv sync，避免将 CUDA 构建换回根规则中的 CPU 构建。
 
 **比较方案**：直接把 torch 移到互斥 extras 会使原有默认 Windows 安装缺少模型依赖。保留主依赖再叠加 GPU extra 的隔离实验出现索引冲突；使用 extra 反向 marker 又使默认解析错误选择 CUDA，不能采用。默认 dependency group 虽可运行却改变正式包元数据；uv.toml 不支持 sources。生成一份 GPU 部署锁的影响局限于部署，比改动本机安装或先装 CPU 再覆盖更小。
 
