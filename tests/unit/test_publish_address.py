@@ -1,0 +1,34 @@
+"""内部推流地址不得改变调用方的播放地址。"""
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from urllib.parse import urlsplit
+
+import pytest
+from pydantic import ValidationError
+
+from vision_shield.config import Settings
+from vision_shield.media.publisher import Publisher
+from vision_shield.api.routes import public
+
+
+@pytest.mark.parametrize("address", ["http://media:8554", "rtsp://u:p@media", "rtsp://media?q=1", "rtsp://media#x"])
+def test_internal_publish_address_reuses_service_validation(address):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, rtsp_publish_base_url=address)
+
+
+@pytest.mark.parametrize("internal,expected", [(None, "external"), ("rtsp://mediamtx:8554/", "mediamtx")])
+async def test_publisher_uses_internal_address_and_response_stays_public(internal, expected):
+    settings = Settings(_env_file=None, rtsp_public_base_url="rtsp://external:8554",
+                        rtsp_publish_base_url=internal)
+    publisher = Publisher(None, settings)
+    publisher.close = AsyncMock(return_value=True)
+    publisher._change = AsyncMock(return_value=True)
+    record = dict(id="job", kind="stream", state="running", desired_state="run", ready=True,
+                  created_at="now", updated_at="now", error=None, stats={})
+    address = urlsplit(await publisher.prepare(record, "owner", 2))
+    assert address.hostname == expected and address.username == "job.2"
+    assert address.password == "owner"
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)))
+    assert public(request, record).playback_url == "rtsp://external:8554/redacted/job"
