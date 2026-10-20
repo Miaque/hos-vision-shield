@@ -43,3 +43,14 @@
 - 实际局部对照见run目录cases/：候选补遮图上边缘裁切脸、部分车牌覆盖更宽；也有右边缘人脸基线遮挡而候选未遮挡的风险，并有更大的颈肩遮挡。详情comparison.md，不宣称YOLO整体胜出。
 - 最终回归命令同上节（tests/unit + comparison_media + model_probe + video_pipeline + stream_pipeline + runner_lifecycle）：**198 passed、1 skipped，28.14秒**，日志 `data/validation/yolo-setup/images-final-tests.txt`。Windows下POSIX父EOF用例跳过，未降级为通过。
 - 生产/GPU/真实RTSP/Docker未测；全量视频按用户指令取消本轮执行，人工完整目标与质量复核未完成。图片交付已完成，不把这些边界算作图片32份产物失败。
+
+## 图片误遮修复验证（2026-10-20）
+
+- 使用同两份真实ONNX权重及反馈原图复现，旧框与网络解码/分块偏移一致；右侧背景车牌误框分数约0.572、0.257和0.400，树木人脸约0.296/0.311。真实反馈回归先失败，再加入弱候选局部复核。
+- 单一640源视野会过滤06里的小而部分遮挡人脸。新增真实三图回归及480视野重试用例先失败，补充较近视野后通过；保留640以保护模糊脸。单元测试另覆盖0.6直通边界、同类复核、无重叠不佐证、坐标偏移、原遮挡几何和异常传播。
+- 最终命令：设置 `YOLO_REGRESSION_SOURCE=E:/workspace/python/hos-vision-shield/tests/test_assets`，运行 `.venv/Scripts/python.exe -m pytest tests/unit tests/integration/test_yolo_false_masks.py tests/integration/test_yolo_comparison_media.py tests/integration/test_yolo_model_probe.py tests/integration/test_video_pipeline.py tests/integration/test_stream_pipeline.py tests/integration/test_runner_lifecycle.py -q`。**210 passed、1 skipped，41.80秒**；日志 `data/validation/yolo-false-mask-debug/final-regression-tests.txt`。唯一跳过为Windows下POSIX父EOF用例；真实三图回归确已运行，未因缺环境变量跳过。
+- 正式重跑：`compare-yolo.py prepare --images-only`创建002，候选冻结ce4efa9，旧001不改；源SHA/尺寸匹配后迁移31个结果前建议，全部pending。baseline和candidate串行、退出码均0，32/32 complete，run.status=processed；源码/工具/模型冻结检查、全部输出哈希和尺寸/方向通过。
+- `data/validation/yolo-images-002/verify-feedback.py`再次核对32份输出、反馈点、所有保留框几何及31个建议。5张减少8个候选，其余11张框完全相同。4个反馈背景点从遮挡变为未遮挡，5个真实目标回归点仍遮挡；06粗框减少280/2193个建议像素，partial类别不变，局部观察为颈部遮挡减少，仍待人工确认。保留这项差异，不宣称无新增漏遮。
+- baseline累计109.478364秒、初始化4.633587秒；候选累计35.883396秒、初始化0.419213秒。完整记录在002的image-verification.json/timings.csv；只是单次图片批次，不推广到视频或其他数据。
+- 浏览器检查002：false-mask-comparison.html有6个区块、10/10图片；index.html有16个区块、96/96图片。均三栏，video为0，全图页显示32/32和待人工复核。图片decode()等待在当前浏览器未返回，已停止该等待，改用complete/naturalWidth实际加载检查；不把等待当作媒体损坏。
+- 按最新授权未改默认后端、未更新启动切换配置，未运行全量视频、生产、GPU或真实RTSP。正式人工质量复核仍未完成，首轮已记录的11边缘脸风险保留。

@@ -98,3 +98,14 @@ uv run python scripts/compare-yolo.py report --run-dir data/validation/yolo-cpu-
 - 浏览器16个区块、96张图片全部加载，无video；明确显示32/32和待人工复核。暂定视觉取舍见comparison.md：有裁切人脸补遮，也有右边缘人脸漏遮风险；保持默认quality。
 - 最终回归198 passed、1 skipped（28.14秒），日志data/validation/yolo-setup/images-final-tests.txt。
 - 16样本/31个代理建议仍pending，完整标注和人工质量复核未完成，不能写正式准确率。用户已要求本轮不跑全量视频，002/003均已停止；不得自动恢复它们。本轮没有后台自动提醒任务，没有推送。
+
+## 最新保存点：图片误打码修复（2026-10-20）
+
+- 用户反馈0ab3b44e…jpg、d3326728…jpg误遮，并明确“先只修复和更新图片对比”。不切换默认quality或启动示例，不跑全量视频。
+- 根因已由真实模型原始输出复现：弱车牌候选把右侧背景文字/网格判为车牌，第二张另有树木/支撑物弱人脸候选；坐标反投影正确。YOLO新增低于0.6候选的同类局部复核，IoU至少0.2才保留原框；人脸640源像素复核失败后再试480，保护06中的弱小遮挡人脸。0.25检测阈值、权重、网络640输入、扩框均不变。
+- 修复源码提交 `ce4efa9`；新正式目录 `data/validation/yolo-images-002`，不得混入旧001输出。基线0664be4与修复候选已串行完成16+16图，CLI均0，run.status=processed，32/32输出哈希与尺寸有效。旧001完整保留。
+- 最新查看入口：`http://127.0.0.1:18767/yolo-images-002/false-mask-comparison.html`（两张原图/旧YOLO/新YOLO及局部）；`index.html`是全部16图的quality/YOLO比较。浏览器10/10及96/96图片加载，video均0。
+- 本轮baseline处理109.478秒、初始化4.634秒；candidate处理35.883秒、初始化0.419秒。单次本机计时，约3.05倍处理速度；不含初始化、PNG、完整性验证和报告。
+- 真实三图回归证明4个反馈背景点去遮、5个真实目标点保留遮挡；初版640单视野误删弱小脸，已由失败回归拦截并经480补充视野修复。最终210 passed、1 skipped（41.80秒），日志 `data/validation/yolo-false-mask-debug/final-regression-tests.txt`。
+- 16样本/31建议仍pending，来源为001生成结果前的副本，未冒充完整人工真值。06粗略face-2区域减少280个颈部建议像素，仍partial，详见image-verification.json和comparison.md；不得据此宣称零漏遮或总体准确率提升。首轮11既有边缘脸漏遮风险未解决。
+- 当前worktree仍为 `C:/Users/zhanjh/.codex/worktrees/yolo-cpu-evaluation/hos-vision-shield`。本轮只更新YOLO修复、测试、图片对比与相关文档；不改主工作区、不推送、不恢复旧视频run。
