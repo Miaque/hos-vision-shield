@@ -1,0 +1,32 @@
+services:
+  file-worker:
+    image: vision-shield:cu126
+    build:
+      args:
+        TORCH_BACKEND: cu126
+    environment:
+      INFERENCE_DEVICE: cuda
+      GPU_DEVICE_ID: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}"]
+
+  stream-worker:
+    image: vision-shield:cu126
+    build:
+      args:
+        TORCH_BACKEND: cu126
+    environment:
+      INFERENCE_DEVICE: cuda
+      GPU_DEVICE_ID: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}"]

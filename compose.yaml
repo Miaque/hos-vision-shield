@@ -1,0 +1,124 @@
+name: vision-shield
+
+x-app: &app
+  image: vision-shield:cpu
+  platform: linux/amd64
+  build:
+    context: .
+    dockerfile: deploy/Dockerfile
+    args:
+      TORCH_BACKEND: cpu
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 60s
+  environment:
+    REDIS_URL: redis://redis:6379/0
+    MEDIA_ROOT: /data
+    DETECTION_BACKEND: quality
+    INFERENCE_DEVICE: cpu
+    DETECTION_MAX_SIDE: 1280
+    DETECTION_BOX_PADDING: 0.15
+    MEDIAMTX_CONTROL_URL: http://mediamtx:9997
+    RTSP_PUBLISH_BASE_URL: rtsp://mediamtx:8554
+    RTSP_PUBLIC_BASE_URL: ${RTSP_PUBLIC_BASE_URL:?请设置客户端可达的 RTSP 播放地址}
+    SOURCE_ALLOWLIST: ${SOURCE_ALLOWLIST:-[]}
+
+x-media: &media
+  type: bind
+  source: ${MEDIA_DIR:?请设置已准备且可写的媒体绝对目录}
+  target: /data
+  bind:
+    create_host_path: false
+
+x-models: &models
+  type: bind
+  source: ${MODEL_DIR:?请设置已准备的离线模型绝对目录}
+  target: /models
+  read_only: true
+  bind:
+    create_host_path: false
+
+services:
+  redis:
+    image: redis:7.4.3@sha256:236e397c1d5ab7a94adaf1a51eec3ca8333b05fafcd6d423c6c7cc5987e519a0
+    platform: linux/amd64
+    restart: unless-stopped
+    command: [redis-server, /etc/redis/redis.conf]
+    volumes:
+      - redis-data:/data
+      - ./deploy/redis.compose.conf:/etc/redis/redis.conf:ro
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.2@sha256:c7540465f868a02652118bea5a0daab12a29ac0f6cb8485abd535939ecddf886
+    platform: linux/amd64
+    restart: unless-stopped
+    volumes:
+      - ./deploy/mediamtx.compose.yml:/mediamtx.yml:ro
+    ports:
+      - target: 8554
+        published: ${RTSP_PORT:-8554}
+        host_ip: ${BIND_ADDRESS:-127.0.0.1}
+        protocol: tcp
+
+  api:
+    <<: *app
+    command: [python, -m, uvicorn, "vision_shield.main:app", --host, 0.0.0.0, --port, "8000", --no-access-log, --limit-concurrency, "32"]
+    volumes:
+      - *media
+    ports:
+      - target: 8000
+        published: ${API_PORT:-8000}
+        host_ip: ${BIND_ADDRESS:-127.0.0.1}
+        protocol: tcp
+    depends_on:
+      redis:
+        condition: service_healthy
+      mediamtx:
+        condition: service_started
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 130s
+
+  reconciler:
+    <<: *app
+    command: [python, -m, vision_shield.jobs.reconcile]
+    depends_on:
+      redis:
+        condition: service_healthy
+      mediamtx:
+        condition: service_started
+
+  file-worker:
+    <<: *app
+    command: [python, -m, vision_shield.jobs.worker, files]
+    volumes:
+      - *media
+      - *models
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  stream-worker:
+    <<: *app
+    command: [python, -m, vision_shield.jobs.worker, streams]
+    volumes:
+      - *media
+      - *models
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+      mediamtx:
+        condition: service_started
+
+volumes:
+  redis-data:
