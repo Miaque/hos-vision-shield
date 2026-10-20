@@ -142,14 +142,16 @@ def verify_source(record):
         raise ValueError('Source changed: ' + record['id'])
 
 
-def prepare(source, directory):
+def prepare(source, directory, *, images_only=False):
     source, directory = source.resolve(), directory.resolve()
     if directory == source or source in directory.parents or directory in source.parents:
         raise ValueError('Run directory must be separate from inputs')
     if directory.exists():
         raise ValueError('Run directory already exists')
     files = sorted(p for p in source.iterdir() if p.is_file())
-    if sum(p.suffix.lower() == '.jpg' for p in files) != 16 or sum(p.suffix.lower() == '.mp4' for p in files) != 5 or len(files) != 21:
+    if images_only:
+        files=[p for p in files if p.suffix.lower()=='.jpg']
+    if sum(p.suffix.lower() == '.jpg' for p in files) != 16 or (not images_only and (sum(p.suffix.lower() == '.mp4' for p in files) != 5 or len(files) != 21)):
         raise ValueError('Expected exactly 16 JPEGs and 5 MP4s')
     directory.mkdir(parents=True)
     (directory/'samples').mkdir()
@@ -190,7 +192,7 @@ def prepare(source, directory):
          candidate_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
          candidate_diff_sha256=hashlib.sha256(subprocess.check_output(['git','diff','HEAD','--','src'],cwd=ROOT)).hexdigest(),
          models={m['path']:m['sha256'] for m in models}, manifest_sha256=sha(directory/'manifest.json'),
-         status='prepared', python=sys.version, executable=sys.executable,parameters=PARAMETERS,tool_source=tool_fingerprint(),
+         status='prepared',scope='images' if images_only else 'all', python=sys.version, executable=sys.executable,parameters=PARAMETERS,tool_source=tool_fingerprint(),
          environment=dict(cpu=platform.processor(),os=platform.platform(),dependencies={p:version(p) for p in
              ('av','numpy','opencv-python-headless','onnxruntime','Pillow','torch','torchvision','pydantic-settings')}),
          sample_sources=sample_sources(samples),lock_sha256=sha(ROOT/'uv.lock')))
@@ -449,7 +451,7 @@ def report(directory):
     evidence=[e for r in results if r['status']=='complete' for e in r['evidence']]
     summary=summarize(samples,evidence)
     summary.update(completed=sum(r['status']=='complete' for r in results),expected=len(records)*2,
-                   annotation_revision=sha(directory/'annotations.json'),status=result_status(directory),
+                   annotation_revision=sha(directory/'annotations.json'),status=result_status(directory),scope=run.get('scope','all'),
                    timing_scope='single batch run; initialization separate; decode+detect+mask+encode; excludes integrity verification, sample PNGs and report')
     original_ids={m['id'] for m in records if not m.get('original_id')}
     summary['original_outputs']=dict(completed=sum(r['status']=='complete' and r['media_id'] in original_ids for r in results),expected=len(original_ids)*2)
@@ -463,7 +465,7 @@ def report(directory):
           '<style>body{font:16px system-ui;background:#f4f6f8;color:#182433;margin:24px}section{background:white;padding:16px;margin:16px 0;border-radius:8px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}img,video{width:100%;background:#ddd}h1{font-size:26px}pre{white-space:pre-wrap} @media(max-width:800px){.grid{grid-template-columns:1fr}}</style>',
           '<h1>main quality CPU / YOLO CPU'+(' · 待人工复核' if summary['pending_samples'] else '')+'</h1>',
           f'<p>完整产物 {summary["completed"]}/{summary["expected"]}；人工确认样本 {summary["formal_samples"]}；待复核 {summary["pending_samples"]}。未复核结果不代表准确率。</p>',
-          '<p>成功视频均通过全长完整性检查，失败或未完成项单列；下方固定采样每5秒及末帧。效果优先，耗时为单次辅助记录。</p>']
+          '<p>'+('本次仅比较16张图片；视频未纳入本轮运行。' if run.get('scope')=='images' else '成功视频均通过全长完整性检查，失败或未完成项单列；下方固定采样每5秒及末帧。')+'效果优先，耗时为单次辅助记录。</p>']
     for media in records:
         original=directory/'originals'/(media['id']+Path(media['path']).suffix.lower())
         if not original.exists():
@@ -506,10 +508,12 @@ if __name__=='__main__':
     parser.add_argument('--run-dir',type=Path,required=True)
     parser.add_argument('--source',type=Path)
     parser.add_argument('--variant',choices=['baseline','candidate'])
+    parser.add_argument('--images-only',action='store_true',help='prepare only: compare the 16 JPEGs without opening videos')
     args=parser.parse_args();directory=args.run_dir.resolve()
+    if args.images_only and args.command!='prepare':parser.error('--images-only is only used by prepare; run uses the frozen manifest')
     if args.command=='prepare':
         if args.source is None:parser.error('--source required')
-        prepare(args.source,directory)
+        prepare(args.source,directory,images_only=args.images_only)
     elif args.command=='report':report(directory)
     else:
         if args.variant is None:parser.error('--variant required')

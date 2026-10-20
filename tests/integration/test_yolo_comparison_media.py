@@ -131,3 +131,15 @@ def test_prepare_freezes_exact_inventory_and_vfr_samples(generated_media,tmp_pat
     with pytest.raises(ValueError,match='separate'):compare.prepare(source,source/'output')
     (source/'00.jpg').unlink()
     with pytest.raises(ValueError,match='16 JPEGs'):compare.prepare(source,tmp_path/'other-run')
+
+
+def test_images_only_prepare_never_opens_videos(tmp_path):
+    from PIL import Image
+    source=tmp_path/'source';source.mkdir()
+    for i in range(16):Image.new('RGB',(10,10),'black').save(source/f'{i:02d}.jpg')
+    for i in range(5):(source/f'{i:02d}.mp4').write_bytes(b'Video must not be decoded')
+    directory=tmp_path/'images'
+    compare.prepare(source,directory,images_only=True)
+    records=compare.read(directory/'manifest.json')
+    assert len(records)==16 and all(m['kind']=='image' for m in records)
+    assert compare.read(directory/'run.json')['scope']=='images'
