@@ -6,12 +6,11 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `compose.yaml` | 完整六服务 CPU 部署，不预留 GPU |
+| `compose.yaml` | 五服务 CPU 部署，复用现有带密码 Redis，不预留 GPU |
 | `compose.gpu.yaml` | 仅覆盖两类 worker 的镜像、构建参数、设备设置和同一张 GPU 预留 |
 | `deploy/Dockerfile` | 一个构建定义，生成 CPU 与 cu126 两种应用镜像 |
 | `deploy/requirements-cu126.txt` | 从根声明与原锁共同版本约束生成的带哈希 GPU 锁，不改变本机默认依赖 |
 | `deploy/compose.env.example` | 服务器配置示例，复制为根目录 `.env.compose` |
-| `deploy/redis.compose.conf` | 容器网络监听、AOF always、noeviction、Redis 数据目录 |
 | `deploy/mediamtx.compose.yml` | 内部控制接口、RTSP TCP、指向 API 服务的发布鉴权回调 |
 | `.dockerignore` | 排除权重、压缩包、媒体、样本、虚拟环境、Git 和本机环境文件 |
 
@@ -36,13 +35,14 @@ docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compo
 | --- | --- | --- |
 | `MODEL_DIR` | 必填宿主绝对目录；必须已经存在 | worker 只读挂载 `/models`，禁止缺目录时隐式创建空目录 |
 | `MEDIA_DIR` | 必填宿主绝对目录；运行用户须可写 | API、两个 worker 统一挂载 `/data` |
-| `BIND_ADDRESS` | 默认 `127.0.0.1`；外部接入时填写服务器允许访问的接口地址 | 宿主 API 与 RTSP 端口绑定 |
+| `REDIS_URL` | 必填带凭据的现有 Redis 地址；部署示例使用 `192.168.1.104:6378`、数据库 `6` | 四个应用服务统一使用，密码须做 URL 编码 |
+| `BIND_ADDRESS` | 部署示例为 `192.168.1.104`；未配置时回落 `127.0.0.1` | 宿主 API 与 RTSP 端口绑定 |
 | `API_PORT` / `RTSP_PORT` | 默认 `8000` / `8554` | 宿主发布端口 |
 | `RTSP_PUBLIC_BASE_URL` | 必填 `rtsp://<客户端可达地址>:<RTSP_PORT>` | 仅用于既有响应中的 `playback_url` |
 | `SOURCE_ALLOWLIST` | 默认 `[]`，远程媒体须填授权主机/IP/CIDR 的 JSON 数组 | 保留现有来源校验 |
 | `GPU_DEVICE_ID` | GPU 模式必填一个卡号或 UUID；不允许空值、`all` 或列表 | 两类 worker 预留同一设备 |
 
-两种应用镜像固定 `WORKDIR=/app`，并在镜像 ENV 设置 `FACE_MODEL_PATH=/models/yunet_face.onnx`、`PLATE_MODEL_PATH=/models/hyperlpr_plate.onnx`、`EGOBLUR_FACE_MODEL_PATH=/models/face.jit`、`EGOBLUR_PLATE_MODEL_PATH=/models/license_plate.jit`，使独立预检与 Compose 使用同一绝对路径。Compose 固定设置 `REDIS_URL=redis://redis:6379/0`、`MEDIA_ROOT=/data`、`MEDIAMTX_CONTROL_URL=http://mediamtx:9997`。默认 `DETECTION_BACKEND=quality`、`DETECTION_MAX_SIDE=1280`、`DETECTION_BOX_PADDING=0.15`，继承既有限流和缓冲参数。
+两种应用镜像固定 `WORKDIR=/app`，并在镜像 ENV 设置 `FACE_MODEL_PATH=/models/yunet_face.onnx`、`PLATE_MODEL_PATH=/models/hyperlpr_plate.onnx`、`EGOBLUR_FACE_MODEL_PATH=/models/face.jit`、`EGOBLUR_PLATE_MODEL_PATH=/models/license_plate.jit`，使独立预检与 Compose 使用同一绝对路径。Compose 从 `.env.compose` 读取 `REDIS_URL`，示例为 `redis://:URL编码后的密码@192.168.1.104:6378/6`。`MEDIA_ROOT=/data`、`MEDIAMTX_CONTROL_URL=http://mediamtx:9997` 保持固定。默认 `DETECTION_BACKEND=quality`、`DETECTION_MAX_SIDE=1280`、`DETECTION_BOX_PADDING=0.15`，继承既有限流和缓冲参数。
 
 新增通用应用配置仅 `RTSP_PUBLISH_BASE_URL`：可选 RTSP 基地址，复用现有 URL 校验约束；未设置时回落 `RTSP_PUBLIC_BASE_URL`，保持本机行为。Compose 显式设置为 `rtsp://mediamtx:8554`，只改变 worker 推流，不改变业务响应结构。
 
@@ -60,16 +60,15 @@ GPU 覆盖将相同 `GPU_DEVICE_ID` 同时注入两个 worker 的环境。probe 
 
 | 服务 | 入口 | 依赖与数据 |
 | --- | --- | --- |
-| `redis` | 官方 Redis，载入容器专用配置 | 命名卷挂到 `/data`；不发布宿主端口 |
 | `mediamtx` | 官方 MediaMTX，载入容器专用配置 | RTSP TCP 对外；控制 9997 仅容器网络；无录像 |
-| `api` | `python -m uvicorn vision_shield.main:app --host 0.0.0.0 --port 8000 --no-access-log --limit-concurrency 32` | Redis healthy、MediaMTX started；媒体目录可读写 |
-| `reconciler` | `python -m vision_shield.jobs.reconcile` | Redis healthy、MediaMTX started；无需模型或媒体挂载 |
-| `file-worker` | `python -m vision_shield.jobs.worker files` | Redis healthy；模型只读、媒体可读写 |
-| `stream-worker` | `python -m vision_shield.jobs.worker streams` | Redis healthy、API/MediaMTX started；模型只读、媒体可读写 |
+| `api` | `python -m uvicorn vision_shield.main:app --host 0.0.0.0 --port 8000 --no-access-log --limit-concurrency 32` | MediaMTX started；媒体目录可读写 |
+| `reconciler` | `python -m vision_shield.jobs.reconcile` | MediaMTX started；无需模型或媒体挂载 |
+| `file-worker` | `python -m vision_shield.jobs.worker files` | 模型只读、媒体可读写 |
+| `stream-worker` | `python -m vision_shield.jobs.worker streams` | API/MediaMTX started；模型只读、媒体可读写 |
 
 API healthcheck 使用既有 `/health/ready`；任何 worker 均不得等待 API healthy，避免 ready 依赖 worker 的循环。MediaMTX 不等待 API ready；其发布回调改为 `http://api:8000/internal/media/publish-check`，保留 owner/generation 鉴权、禁止发布者覆盖及禁录像。冷启动时的暂时连接失败沿用已有恢复流程。
 
-应用使用非 root 用户 `10001:10001`，部署人员准备媒体目录权限；Redis 使用官方镜像入口管理自身卷。仅 API 和 RTSP 端口按指定接口发布，Redis 与控制接口不发布。沿用既有受信网络接入边界，不新增用户鉴权、TLS 网关或管理界面。
+应用使用非 root 用户 `10001:10001`，部署人员准备媒体目录权限。Redis 复用已部署实例，不定义 Redis 服务或数据卷，也不操作其生命周期；部署方核对端口可达性、认证、持久化和淘汰策略。仅 API 和 RTSP 端口按指定接口发布，控制接口不发布。沿用既有受信网络接入边界，不新增用户鉴权、TLS 网关或管理界面。
 
 ## 就绪、失败与停止
 

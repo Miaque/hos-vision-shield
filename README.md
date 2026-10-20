@@ -49,7 +49,9 @@ docker-compose --env-file .env.compose -p vision-shield -f compose.yaml up -d --
 docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml up -d --build
 ```
 
-`compose.yaml` 包含 Redis、MediaMTX、API、reconciler 和两个 worker；仅 API/RTSP 端口按配置发布。默认绑定回环地址，外部访问须修改 `BIND_ADDRESS` 与 `RTSP_PUBLIC_BASE_URL`，远程输入还须配置来源允许列表。Redis/媒体持久化，切换前按原文件组合执行 `down`，保留数据，不使用 `down -v`。
+`compose.yaml` 包含 MediaMTX、API、reconciler 和两个 worker，共五个服务，直接复用现有带密码 Redis。在 `.env.compose` 设置 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`，并将文件权限设为 `600`；四个应用服务统一读取该地址。宿主发布端口须能从 Docker 网络访问。现有 Redis 的持久化及淘汰策略由部署方核对，不修改共享实例配置。
+
+仅 API/RTSP 端口按配置发布；部署示例设置 `BIND_ADDRESS=192.168.1.104`、`RTSP_PUBLIC_BASE_URL=rtsp://192.168.1.104:8554`，API 文档地址为 `http://192.168.1.104:8000/docs`。模型及媒体目录分别为 `/data/hos-vision-shield/models`、`/data/hos-vision-shield/data`。容器内部推流与控制沿用服务名，远程输入还须配置来源允许列表。媒体目录保留在宿主机，切换前按原文件组合执行 `down`，不使用 `down -v`。
 
 镜像构建可以联网安装依赖，模型必须事先离线提供并只读挂载；不随镜像下载或打包。worker 先在有 120 秒总超时的子进程中核验清单/哈希、实际推理及 NMS，成功后才接单并发布心跳；故障后的旧心跳最多有默认 20 秒租约窗口。`RTSP_PUBLISH_BASE_URL` 仅控制容器内部推流，对外仍返回公开播放地址。
 

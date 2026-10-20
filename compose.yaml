@@ -12,7 +12,7 @@ x-app: &app
   restart: unless-stopped
   stop_grace_period: 60s
   environment:
-    REDIS_URL: redis://redis:6379/0
+    REDIS_URL: ${REDIS_URL:?请设置现有 Redis 的连接地址及凭据}
     MEDIA_ROOT: /data
     DETECTION_BACKEND: quality
     INFERENCE_DEVICE: cpu
@@ -39,20 +39,6 @@ x-models: &models
     create_host_path: false
 
 services:
-  redis:
-    image: redis:7.4.3@sha256:236e397c1d5ab7a94adaf1a51eec3ca8333b05fafcd6d423c6c7cc5987e519a0
-    platform: linux/amd64
-    restart: unless-stopped
-    command: [redis-server, /etc/redis/redis.conf]
-    volumes:
-      - redis-data:/data
-      - ./deploy/redis.compose.conf:/etc/redis/redis.conf:ro
-    healthcheck:
-      test: [CMD, redis-cli, ping]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   mediamtx:
     image: bluenviron/mediamtx:1.21.2@sha256:c7540465f868a02652118bea5a0daab12a29ac0f6cb8485abd535939ecddf886
     platform: linux/amd64
@@ -76,8 +62,6 @@ services:
         host_ip: ${BIND_ADDRESS:-127.0.0.1}
         protocol: tcp
     depends_on:
-      redis:
-        condition: service_healthy
       mediamtx:
         condition: service_started
     healthcheck:
@@ -91,8 +75,6 @@ services:
     <<: *app
     command: [python, -m, vision_shield.jobs.reconcile]
     depends_on:
-      redis:
-        condition: service_healthy
       mediamtx:
         condition: service_started
 
@@ -102,9 +84,6 @@ services:
     volumes:
       - *media
       - *models
-    depends_on:
-      redis:
-        condition: service_healthy
 
   stream-worker:
     <<: *app
@@ -113,12 +92,7 @@ services:
       - *media
       - *models
     depends_on:
-      redis:
-        condition: service_healthy
       api:
         condition: service_started
       mediamtx:
         condition: service_started
-
-volumes:
-  redis-data:

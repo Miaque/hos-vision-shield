@@ -36,12 +36,12 @@ docker info --format '{{json .Runtimes}}'
 tar -czf vision-shield-models.tar.gz -C models face.jit license_plate.jit yunet_face.onnx hyperlpr_plate.onnx manifest.json cpu-manifest.json README.md NOTICE.md licenses
 ```
 
-将仓库和模型包传至服务器；解包到独立目录，例如 `/srv/vision-shield/models`，确认模型与清单位于该目录第一层。准备媒体目录：
+将仓库和模型包传至服务器；解包到独立目录 `/data/hos-vision-shield/models`，确认模型与清单位于该目录第一层。准备媒体目录：
 
 ```bash
-sudo install -d -m 755 /srv/vision-shield/models
-sudo install -d -o 10001 -g 10001 -m 750 /srv/vision-shield/data
-sudo tar -xzf ../vision-shield-models.tar.gz -C /srv/vision-shield/models
+sudo install -d -m 755 /data/hos-vision-shield/models
+sudo install -d -o 10001 -g 10001 -m 750 /data/hos-vision-shield/data
+sudo tar -xzf ../vision-shield-models.tar.gz -C /data/hos-vision-shield/models
 ```
 
 模型目录和文件须允许运行用户读取；运行时只读挂载，不让应用修改模型或补下载。镜像可联网构建或获取，权重包不传入构建上下文。
@@ -55,7 +55,7 @@ cp deploy/compose.env.example .env.compose
 mkdir -p acceptance/cpu acceptance/gpu
 ```
 
-填写 `MODEL_DIR`、`MEDIA_DIR`、允许监听的 `BIND_ADDRESS` 和客户端可达的 `RTSP_PUBLIC_BASE_URL`。远程来源须填写 `SOURCE_ALLOWLIST`；授权主机名时也授权实际解析 IP/CIDR，空列表仅允许本地上传。GPU 模式填写所选一张卡的 `GPU_DEVICE_ID`，优先使用 UUID。
+部署示例已设置 `MODEL_DIR=/data/hos-vision-shield/models`、`MEDIA_DIR=/data/hos-vision-shield/data`、`BIND_ADDRESS=192.168.1.104` 和 `RTSP_PUBLIC_BASE_URL=rtsp://192.168.1.104:8554`。`REDIS_URL` 必填现有带密码 Redis 的地址，例如 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`；使用 6 号数据库，文件权限设为 `600`。宿主发布端口须允许 Docker 网络访问，现有 Redis 的持久化及淘汰策略另行核对，不由本项目修改。远程来源须填写 `SOURCE_ALLOWLIST`；授权主机名时也授权实际解析 IP/CIDR，空列表仅允许本地上传。GPU 模式使用已核对的第 6 号卡 UUID，换卡时修改 `GPU_DEVICE_ID`。
 
 以下 Bash 数组统一保存当前模式的命令，避免后续启动与停止使用不同文件组合：
 
@@ -68,6 +68,12 @@ if [ "$MODE" = gpu ]; then dc+=(-f compose.gpu.yaml); fi
 ```
 
 两种组合都必须通过配置解析，并在本地用 `"${dc[@]}" config` 检查合并配置的镜像与构建参数：CPU 组合四个应用服务均为 `image: vision-shield:cpu`、`build.args.TORCH_BACKEND: cpu`，没有设备预留；GPU 组合两个 worker 均为 `image: vision-shield:cu126`、`build.args.TORCH_BACKEND: cu126`，且必须只有同一个 device_ids 元素，API/reconciler 保持 CPU 镜像及构建参数、不分配 GPU。不要将含凭据的完整展开配置提交或贴入日志。
+
+构建完成后，从应用容器验证 Redis 认证及数据库选择：
+
+```bash
+"${dc[@]}" run --rm --no-deps api python -c 'import os; from redis import Redis; r=Redis.from_url(os.environ["REDIS_URL"],socket_connect_timeout=3,socket_timeout=3); assert r.connection_pool.connection_kwargs["db"]==6; assert r.ping(); print("Redis DB6 PING OK")'
+```
 
 ## 3. 验证镜像与模型离线加载
 
@@ -92,7 +98,7 @@ GPU 模式随后使用当前 GPU 文件组合验证唯一设备和非空 NMS；�
 另外用无网络的独立容器执行模型预检。将下面目录与卡标识设为实际值；预检入口与 worker 内部 probe 复用同一验证函数：
 
 ```bash
-MODEL_DIR=/srv/vision-shield/models
+MODEL_DIR=/data/hos-vision-shield/models
 docker run --rm --network none --mount type=bind,source="$MODEL_DIR",target=/models,readonly -e INFERENCE_DEVICE=cpu vision-shield:cpu python -m vision_shield.detection.preflight
 # 仅 GPU 模式：填写实际所选 UUID
 GPU_DEVICE_ID=GPU-替换为所选卡UUID
@@ -107,7 +113,7 @@ docker run --rm --network none --gpus "device=$GPU_DEVICE_ID" --mount type=bind,
 "${dc[@]}" up -d
 "${dc[@]}" ps
 "${dc[@]}" logs --tail 100 file-worker stream-worker
-curl --fail http://127.0.0.1:8000/health/ready
+curl --fail http://192.168.1.104:8000/health/ready
 ```
 
 示例 curl 地址须与实际 API 绑定和端口一致；只绑定指定 LAN 接口时使用该接口地址。预期两类 worker 均完成预检且无残留 probe，ready 返回 200。干净首次启动中某类 worker 预检失败时不得 ready；运行中崩溃后等待原心跳租约过期再验证 ready 失败，默认窗口最多约 20 秒，正常退出主动撤心跳。仅看到容器 running 或 GPU 列表不能算通过。
@@ -117,7 +123,7 @@ curl --fail http://127.0.0.1:8000/health/ready
 准备包含可人工核对人脸及车牌的授权图片和 MP4/H.264 视频。每种模式分别保存输入哈希、请求与查询结果、下载结果及人工核对记录。
 
 ```bash
-API=http://127.0.0.1:8000  # 改成实际 API 地址
+API=http://192.168.1.104:8000
 curl --fail -F kind=image -F file=@samples/validation.jpg "$API/v1/file-tasks/uploads"
 curl --fail -F kind=video -F file=@samples/validation.mp4 "$API/v1/file-tasks/uploads"
 # 将 TASK_ID 替换为各次响应 id，重复查询直至终态
