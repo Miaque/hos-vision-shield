@@ -15,6 +15,7 @@ from taskiq.receiver import Receiver
 
 from vision_shield.config import Settings
 from vision_shield.jobs.tasks import file_broker, stream_broker
+from vision_shield.jobs.diagnostics import observe_resources
 from vision_shield.media.runner import run_process
 
 PROBE_TIMEOUT = 120
@@ -54,7 +55,7 @@ async def main(pool, stop=None):
             await client.zadd(f"vs:workers:{pool}", {worker_id: now})
             await asyncio.sleep(settings.heartbeat_seconds)
 
-    heartbeat = None
+    heartbeat = resources = None
     try:
         await probe_models(settings, stop)
         if stop.is_set():
@@ -66,6 +67,7 @@ async def main(pool, stop=None):
         await broker.startup()
         receiver = Receiver(broker, max_async_tasks=1, max_prefetch=0, wait_tasks_timeout=settings.process_stop_timeout)
         heartbeat = asyncio.create_task(announce())
+        resources = asyncio.create_task(observe_resources(client, pool, worker_id, settings.inference_device))
         receiver.run_startup = False
         await receiver.listen(stop)
     finally:
@@ -73,6 +75,9 @@ async def main(pool, stop=None):
         if heartbeat:
             heartbeat.cancel()
             await asyncio.gather(heartbeat, return_exceptions=True)
+        if resources:
+            resources.cancel()
+            await asyncio.gather(resources, return_exceptions=True)
         try:
             if client:
                 await client.zrem(f"vs:workers:{pool}", worker_id)

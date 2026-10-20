@@ -30,6 +30,57 @@ class Stats(BaseModel):
     elapsed_seconds: Annotated[float, Field(ge=0)] = 0
 
 
+class CpuUsage(BaseModel):
+    scope: Literal['cgroup_v2']
+    percent: float | None
+    limit_cores: float | None
+    unavailable_reason: str | None
+
+
+class MemoryUsage(BaseModel):
+    scope: Literal['cgroup_v2']
+    used_bytes: int | None
+    limit_bytes: int | None
+    unavailable_reason: str | None
+
+
+class GpuDevice(BaseModel):
+    uuid: str
+    name: str
+    utilization_percent: float | None
+    memory_used_bytes: int | None
+    memory_total_bytes: int | None
+    power_watts: float | None
+
+
+class GpuUsage(BaseModel):
+    scope: Literal['device']
+    devices: list[GpuDevice]
+    unavailable_reason: str | None
+
+
+class ResourceSnapshot(BaseModel):
+    sampled_at_unix: float
+    sample_window_seconds: float | None
+    cpu: CpuUsage
+    memory: MemoryUsage
+    gpu: GpuUsage
+
+
+class WorkerResources(BaseModel):
+    worker_id: str
+    pool: Literal['files', 'streams']
+    age_seconds: float | None
+    stale: bool
+    unavailable_reason: str | None
+    snapshot: ResourceSnapshot | None
+
+
+class ResourcesResponse(BaseModel):
+    sampled_at_unix: float
+    workers: list[WorkerResources]
+
+
 class TaskResponse(BaseModel):
     id: str
     kind: Literal["image", "video", "stream"]

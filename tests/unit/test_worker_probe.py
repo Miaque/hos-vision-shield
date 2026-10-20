@@ -41,6 +41,7 @@ async def test_probe_success_and_supervisor_timeout(monkeypatch):
 
 async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
     stop, active, reclaimed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    sampling, sampling_stopped = asyncio.Event(), asyncio.Event()
     calls = []
     broker = SimpleNamespace(state=SimpleNamespace(), connection_pool=None, get_all_tasks=lambda: {},
                              startup=AsyncMock(), shutdown=AsyncMock(), middlewares=[])
@@ -52,6 +53,13 @@ async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
     async def probe(settings, stopping):
         calls.append("probe")
         assert not broker.startup.called and not client.zadd.called
+    async def observe(resource_client, pool, worker_id, device):
+        assert resource_client is client and pool == 'files' and device == 'cpu'
+        sampling.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            sampling_stopped.set()
     receiver_class = worker.Receiver
     def receiver(*args, **kwargs):
         assert calls == ["probe"]
@@ -67,6 +75,7 @@ async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
     monkeypatch.setattr(worker, "file_broker", broker)
     monkeypatch.setattr(worker, "Redis", lambda **kw: client)
     monkeypatch.setattr(worker, "probe_models", probe)
+    monkeypatch.setattr(worker, "observe_resources", observe)
     monkeypatch.setattr(worker, "Receiver", receiver)
     running = asyncio.create_task(worker.main("files", stop))
     try:
@@ -77,6 +86,7 @@ async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
         running.cancel()
         await asyncio.gather(running, return_exceptions=True)
     assert reclaimed.is_set()
+    assert sampling.is_set() and sampling_stopped.is_set()
     client.zrem.assert_awaited_once()
     assert client.zrem.call_args.args[0] == "vs:workers:files"
     broker.shutdown.assert_awaited_once()

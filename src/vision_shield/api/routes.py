@@ -5,8 +5,11 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile
+from pydantic import ValidationError
 
-from vision_shield.api.schemas import DesiredStateInput, FileUrlInput, StreamInput, TaskResponse
+from vision_shield.api.schemas import (DesiredStateInput, FileUrlInput, StreamInput, TaskResponse,
+                                      ResourceSnapshot, ResourcesResponse)
+from vision_shield.jobs.diagnostics import STALE_SECONDS
 from vision_shield.jobs.service import require_worker
 from vision_shield.media.source import SourceError, validate_source
 
@@ -15,6 +18,31 @@ router = APIRouter(prefix="/v1")
 
 def public(request, task):
     return TaskResponse.from_record(task, request.app.state.settings.rtsp_public_base_url)
+
+
+@router.get('/diagnostics/resources', response_model=ResourcesResponse)
+async def resources(request: Request):
+    client = request.app.state.redis
+    seconds, micros = await client.time()
+    now = seconds + micros / 1_000_000
+    pools = ('files', 'streams')
+    groups = await asyncio.gather(*(client.zrangebyscore(f'vs:workers:{pool}',
+        int((now - request.app.state.settings.lease_seconds) * 1000), '+inf') for pool in pools))
+    workers = [(pool, worker.decode() if isinstance(worker, bytes) else worker)
+               for pool, group in zip(pools, groups) for worker in group]
+    samples = await client.mget([f'vs:resources:{pool}:{worker}' for pool, worker in workers]) if workers else []
+    result = []
+    for (pool, worker), raw in zip(workers, samples):
+        snapshot, age, reason = None, None, 'no_sample'
+        if raw:
+            try:
+                snapshot = ResourceSnapshot.model_validate_json(raw)
+                age, reason = max(0, now - snapshot.sampled_at_unix), None
+            except ValidationError:
+                reason = 'invalid_sample'
+        result.append(dict(worker_id=worker, pool=pool, age_seconds=age,
+                           stale=age is None or age > STALE_SECONDS, unavailable_reason=reason, snapshot=snapshot))
+    return dict(sampled_at_unix=now, workers=result)
 
 
 @router.post("/stream-tasks", response_model=TaskResponse, status_code=202)
