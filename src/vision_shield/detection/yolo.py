@@ -1,6 +1,7 @@
 """CPU-only YOLO face/plate inference using the pinned ONNX export contracts."""
 
 import ast
+import math
 
 import cv2
 import numpy as np
@@ -87,10 +88,34 @@ class Detector:
             blob, geometry = prepare(view, 640)
             for index, model in enumerate(self.models):
                 output = model.run(None, {model.get_inputs()[0].name: blob})[0]
-                for box, _ in decode(output, geometry, right-left, bottom-top, face=index == 0):
+                for box, score in decode(output, geometry, right-left, bottom-top, face=index == 0):
                     x1, y1, x2, y2 = box
+                    source_box = (left+x1, top+y1, left+x2, top+y2)
+                    # Recheck weak texture hits with context; retain the original mask geometry.
+                    if score < 0.6 and not self._confirmed(rgb, source_box, index):
+                        continue
                     px = (x2-x1) * self.box_padding * (2 if index else 1)
                     py = (y2-y1) * self.box_padding
                     result.append((max(0, left+x1-px), max(0, top+y1-py),
                                    min(width, left+x2+px), min(height, top+y2+py)))
         return result
+
+    def _confirmed(self, rgb, box, model_index):
+        x1, y1, x2, y2 = box
+        model = self.models[model_index]
+        # Blurred faces need context; a closer retry preserves small occluded faces.
+        for minimum in ((640, 480) if model_index == 0 else (640,)):
+            size = max(minimum, 3 * max(x2-x1, y2-y1))
+            left = max(0, math.floor((x1+x2-size)/2))
+            top = max(0, math.floor((y1+y2-size)/2))
+            right = min(rgb.shape[1], math.ceil((x1+x2+size)/2))
+            bottom = min(rgb.shape[0], math.ceil((y1+y2+size)/2))
+            blob, geometry = prepare(rgb[top:bottom, left:right], 640)
+            output = model.run(None, {model.get_inputs()[0].name: blob})[0]
+            expected = (x1-left, y1-top, x2-left, y2-top)
+            for (a, b, c, d), _ in decode(output, geometry, right-left, bottom-top, face=model_index == 0):
+                intersection = max(0, min(c, expected[2])-max(a, expected[0])) * max(0, min(d, expected[3])-max(b, expected[1]))
+                union = (c-a)*(d-b) + (x2-x1)*(y2-y1) - intersection
+                if intersection >= 0.2 * union:
+                    return True
+        return False
