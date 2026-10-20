@@ -54,3 +54,31 @@ def test_face_post_nms_padding_rows_and_class_validation():
     assert decode(output,(1,1,0,0),10,10,face=True)[0][0]==(2,3,8,9)
     output[0,0,5]=1
     with pytest.raises(ValueError): decode(output,(1,1,0,0),10,10,face=True)
+
+
+def test_detector_applies_padding_once_and_preserves_input():
+    from types import SimpleNamespace
+    from vision_shield.detection.yolo import Detector
+    face=np.zeros((1,300,21),np.float32);face[0,0,:6]=[160,240,480,400,.9,0]
+    plate=np.array([[[320],[320],[320],[160],[.9]]],np.float32)
+    detector=Detector.__new__(Detector);detector.box_padding=.15
+    detector.models=[SimpleNamespace(get_inputs=lambda:[SimpleNamespace(name='images')],run=lambda *a:[face]),
+                     SimpleNamespace(get_inputs=lambda:[SimpleNamespace(name='images')],run=lambda *a:[plate])]
+    pixels=np.full((100,200,3),40,np.uint8)
+    boxes=detector.detect(pixels)
+    assert boxes[0]==pytest.approx((35,17.5,165,82.5))
+    assert boxes[1]==pytest.approx((20,17.5,180,82.5))
+    assert (pixels==40).all()
+    def fail(*args):raise RuntimeError('plate inference failed')
+    detector.models[1].run=fail
+    with pytest.raises(RuntimeError,match='plate'):detector.detect(pixels)
+
+
+def test_tile_offset_maps_back_to_source(monkeypatch):
+    from types import SimpleNamespace
+    from vision_shield.detection.yolo import Detector,DetailDetector
+    monkeypatch.setattr(DetailDetector,'_views',lambda w,h:[(20,10,120,110)])
+    face=np.zeros((1,300,21),np.float32);face[0,0,:6]=[64,64,128,128,.9,0]
+    detector=Detector.__new__(Detector);detector.box_padding=0
+    detector.models=[SimpleNamespace(get_inputs=lambda:[SimpleNamespace(name='images')],run=lambda *a:[face])]
+    assert detector.detect(np.zeros((200,200,3),np.uint8))==[(30,20,40,30)]

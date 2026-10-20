@@ -1,12 +1,16 @@
 """Reproducible local CPU comparison; media stays local and reviews stay human-owned."""
 import argparse
+from datetime import datetime
 import hashlib
 import html
 import io
+from importlib.metadata import version
 import json
 import math
 import os
+import platform
 from pathlib import Path
+from urllib.parse import quote
 import subprocess
 import sys
 import threading
@@ -20,6 +24,8 @@ from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = '0664be4ae9edb6d0eac7bb2635d5563dad9d7956'
+PARAMETERS=dict(device='cpu',sample_interval_seconds=5,max_side=1280,padding=.15,
+                yolo_network_side=640,opencv_threads=2,ort_threads=2,torch_threads=4)
 
 
 def sha(path):
@@ -43,6 +49,21 @@ def source_fingerprint(root):
     return {p.relative_to(root).as_posix(): sha(p) for p in sorted((root/'src').rglob('*.py'))}
 
 
+def tool_fingerprint():
+    return {name:sha(ROOT/name) for name in ('scripts/compare-yolo.py','scripts/repair-comparison-video.py',
+        'pyproject.toml','models/manifest.json','models/cpu-manifest.json','models/yolo-manifest.json')}
+
+
+def sample_sources(samples):
+    return [{k:s[k] for k in ('id','media_id','frame_index','kind','width','height','pts','time_base') if k in s} for s in samples]
+
+
+def verify_samples(directory, samples):
+    validate_annotations(samples)
+    if sample_sources(samples)!=read(directory/'run.json')['sample_sources']:
+        raise ValueError('Frozen sample identity or geometry changed')
+
+
 def sample_indices(times):
     selected, threshold = [], 0
     for index, moment in enumerate(times):
@@ -55,11 +76,12 @@ def sample_indices(times):
 
 
 def inspect_media(path):
-    if path.suffix.lower() in {'.jpg', '.jpeg', '.png'}:
+    path=Path(path)
+    if Path(path.name.removesuffix('.part')).suffix.lower() in {'.jpg', '.jpeg', '.png'}:
         with Image.open(path) as image:
             image = ImageOps.exif_transpose(image)
             return {'kind': 'image', 'width': image.width, 'height': image.height, 'frames': 1, 'times': [0], 'audio': False}
-    times, width, height = [], None, None
+    times, timestamps, width, height = [], [], None, None
     clock_errors = []
     with av.open(str(path)) as reader:
         audio = bool(reader.streams.audio)
@@ -70,13 +92,48 @@ def inspect_media(path):
             if times and moment <= times[-1]:
                 clock_errors.append(len(times))
             times.append(moment)
+            timestamps.append([frame.pts,str(frame.time_base)])
             w, h = (frame.height, frame.width) if frame.rotation % 180 else (frame.width, frame.height)
             if width is not None and (w, h) != (width, height):
                 raise ValueError('Changing frame dimensions')
             width, height = w, h
     if not times:
         raise ValueError('Empty video')
-    return {'kind': 'video', 'width': width, 'height': height, 'frames': len(times), 'times': times, 'audio': audio, 'clock_errors': clock_errors}
+    digest=hashlib.sha256();audio_packets=[]
+    with av.open(str(path)) as reader:
+        audio_info=[dict(codec=s.codec_context.name,rate=s.codec_context.sample_rate,channels=s.codec_context.channels) for s in reader.streams.audio]
+        if len(audio_info)>1:raise ValueError('Multiple audio streams')
+        if audio:
+            for packet in reader.demux(audio=0):
+                if packet.dts is None:continue
+                if packet.pts is None or packet.time_base is None:raise ValueError('Missing audio timestamp')
+                digest.update(bytes(packet))
+                audio_packets.append([float(t*packet.time_base) for t in (packet.pts,packet.dts,packet.duration)])
+    return dict(kind='video',width=width,height=height,frames=len(times),times=times,timestamps=timestamps,
+                audio=audio,audio_info=audio_info,audio_packets=audio_packets,audio_sha256=digest.hexdigest(),clock_errors=clock_errors)
+
+
+def verify_output(original, checked):
+    if any(checked[k]!=original[k] for k in ('kind','width','height','frames','audio')):
+        raise ValueError('Output completeness mismatch')
+    if checked.get('clock_errors') or not np.allclose(checked['times'],original['times'],atol=.001,rtol=0):
+        raise ValueError('Output timestamps differ')
+    if original['audio']:
+        if (checked['audio_info']!=original['audio_info'] or checked['audio_sha256']!=original['audio_sha256']
+                or len(checked['audio_packets'])!=len(original['audio_packets'])
+                or not np.allclose(checked['audio_packets'],original['audio_packets'],atol=.001,rtol=0)):
+            raise ValueError('Output audio payload, duration or timestamps differ')
+
+
+def save_samples(output, directory, selected, variant):
+    if output.suffix=='.jpg':
+        with Image.open(output) as image:
+            image.save(directory/'samples'/(selected[0]['id']+'-'+variant+'.png'))
+    else:
+        with av.open(str(output)) as reader:
+            for index,frame in enumerate(reader.decode(video=0)):
+                if index in selected:
+                    frame.to_image().save(directory/'samples'/(selected[index]['id']+'-'+variant+'.png'))
 
 
 def verify_source(record):
@@ -130,9 +187,12 @@ def prepare(source, directory):
     write(directory/'annotations.json', samples)
     write(directory/'run.json', dict(baseline_commit=BASE, candidate_source=source_fingerprint(ROOT),
          candidate_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+         candidate_diff_sha256=hashlib.sha256(subprocess.check_output(['git','diff','HEAD','--','src'],cwd=ROOT)).hexdigest(),
          models={m['path']:m['sha256'] for m in models}, manifest_sha256=sha(directory/'manifest.json'),
-         status='prepared', python=sys.version, executable=sys.executable, device='cpu', sample_interval_seconds=5,
-         lock_sha256=sha(ROOT/'uv.lock'), max_side=1280, padding=.15, opencv_threads=2, ort_threads=2, torch_threads=4))
+         status='prepared', python=sys.version, executable=sys.executable,parameters=PARAMETERS,tool_source=tool_fingerprint(),
+         environment=dict(cpu=platform.processor(),os=platform.platform(),dependencies={p:version(p) for p in
+             ('av','numpy','opencv-python-headless','onnxruntime','Pillow','torch','torchvision','pydantic-settings')}),
+         sample_sources=sample_sources(samples),lock_sha256=sha(ROOT/'uv.lock')))
 
 
 def mask_pixels(size, boxes):
@@ -141,6 +201,8 @@ def mask_pixels(size, boxes):
     for x1,y1,x2,y2 in boxes:
         if not all(math.isfinite(v) for v in (x1,y1,x2,y2)):
             raise ValueError('Non-finite mask')
+        if x2<=x1 or y2<=y1:
+            raise ValueError('Invalid mask dimensions')
         left,top=max(0,math.floor(x1)),max(0,math.floor(y1))
         right,bottom=min(width,math.ceil(x2)),min(height,math.ceil(y2))
         if right>left and bottom>top:
@@ -153,6 +215,8 @@ def target_pixels(size, polygon):
     points=np.asarray(polygon,dtype=float)
     if points.ndim!=2 or points.shape[1]!=2 or len(points)<3 or not np.isfinite(points).all():
         raise ValueError('Invalid target polygon')
+    if cv2.contourArea(points.astype(np.float32))==0:
+        raise ValueError('Empty target polygon')
     if np.any(points<0) or np.any(points[:,0]>=width) or np.any(points[:,1]>=height):
         raise ValueError('Target outside image')
     mask=np.zeros((height,width),np.uint8)
@@ -166,9 +230,36 @@ def judge(size, boxes, polygon):
     return 'full' if covered.all() else 'partial' if covered.any() else 'missed'
 
 
+def validate_annotations(samples):
+    seen=set()
+    for sample in samples:
+        if sample['id'] in seen or sample['kind'] not in ('image','video') or sample['review_status'] not in ('pending','human_confirmed','disputed'):
+            raise ValueError('Invalid or duplicate sample')
+        seen.add(sample['id'])
+        if any(type(sample[k]) is not int or sample[k]<=0 for k in ('width','height')) or type(sample['frame_index']) is not int or sample['frame_index']<0:
+            raise ValueError('Invalid sample geometry')
+        if sample.get('reviewed_at'):
+            if datetime.fromisoformat(sample['reviewed_at']).utcoffset() is None:
+                raise ValueError('Review timestamp needs timezone')
+        if sample['review_status']=='human_confirmed' and (not isinstance(sample.get('reviewer'),str) or not sample['reviewer'].strip() or not sample.get('reviewed_at')):
+            raise ValueError('Human review needs actual reviewer and timestamp')
+        targets=set()
+        for target in sample['targets']:
+            if not isinstance(target['id'],str) or not target['id'] or target['id'] in targets or target['kind'] not in ('face','plate') or type(target.get('uncertain',False)) is not bool:
+                raise ValueError('Invalid or duplicate target')
+            targets.add(target['id'])
+            target_pixels((sample['width'],sample['height']),target['polygon'])
+        for case in sample.get('oversized_cases',[]):
+            if case['variant'] not in ('baseline','candidate') or not isinstance(case.get('note'),str) or not case['note'].strip():
+                raise ValueError('Invalid oversized-mask review')
+
+
 def summarize(samples, evidence):
-    summary={'formal_samples':0,'pending_samples':0,'variants':{}}
+    validate_annotations(samples)
+    summary={'formal_samples':0,'pending_samples':0,'disputed_samples':0,'unavailable_samples':0,'variants':{},'new_misses':[],'false_mask_cases':[]}
     lookup={(item['sample_id'],item['variant']):item for item in evidence}
+    if len(lookup)!=len(evidence) or any(e['variant'] not in ('baseline','candidate') for e in evidence):
+        raise ValueError('Invalid or duplicate evidence')
     for variant in ('baseline','candidate'):
         summary['variants'][variant]={kind:{cls:dict(full=0,partial=0,missed=0,miss_rate=None) for cls in ('face','plate')} for kind in ('image','video')}
     summary['false_mask_regions']={'baseline':0,'candidate':0}
@@ -176,11 +267,13 @@ def summarize(samples, evidence):
     for sample in samples:
         if sample['review_status']!='human_confirmed':
             summary['pending_samples']+=1
+            summary['disputed_samples']+=sample['review_status']=='disputed'
             continue
         if not sample.get('reviewer') or not sample.get('reviewed_at'):
             raise ValueError('Human review needs actual reviewer and timestamp')
         if any((sample['id'],v) not in lookup for v in ('baseline','candidate')):
-            raise ValueError('Reviewed sample missing output evidence')
+            summary['unavailable_samples']+=1
+            continue
         summary['formal_samples']+=1
         size=sample['width'],sample['height']
         for variant in ('baseline','candidate'):
@@ -196,13 +289,26 @@ def summarize(samples, evidence):
                 summary['variants'][variant][sample['kind']][target['kind']][outcome]+=1
                 summary['judgments'].append(dict(sample_id=sample['id'],variant=variant,target_id=target['id'],outcome=outcome))
             count,labels=cv2.connectedComponents(mask_pixels(size,boxes))
-            summary['false_mask_regions'][variant]+=sum(not np.any(all_targets[labels==i]) for i in range(1,count))
+            for i in range(1,count):
+                if not np.any(all_targets[labels==i]):
+                    summary['false_mask_regions'][variant]+=1
+                    ys,xs=np.where(labels==i)
+                    summary['false_mask_cases'].append(dict(sample_id=sample['id'],variant=variant,kind='unknown',
+                        box=[int(xs.min()),int(ys.min()),int(xs.max())+1,int(ys.max())+1]))
+        outcomes={(j['variant'],j['target_id']):j['outcome'] for j in summary['judgments'] if j['sample_id']==sample['id']}
+        for target in sample['targets']:
+            if target.get('uncertain'):continue
+            before,after=(outcomes[v,target['id']] for v in ('baseline','candidate'))
+            if ('full','partial','missed').index(after)>('full','partial','missed').index(before):
+                summary['new_misses'].append(dict(sample_id=sample['id'],target_id=target['id'],kind=target['kind'],baseline=before,candidate=after))
     for groups in summary['variants'].values():
         for group in groups.values():
             for counts in group.values():
                 total=counts['full']+counts['partial']+counts['missed']
                 counts['miss_rate']=(counts['partial']+counts['missed'])/total if total else None
     summary['false_mask_kind']='unknown: baseline masks do not expose classes'
+    summary['unreviewed_fraction']=summary['pending_samples']/len(samples) if samples else None
+    summary['oversized_cases']=[dict(sample_id=s['id'],**case) for s in samples for case in s.get('oversized_cases',[])]
     return summary
 
 
@@ -229,8 +335,10 @@ def worker(directory, variant):
     started=time.perf_counter();detector=load_detector(config);init=time.perf_counter()-started
     write(directory/variant/'initialization.json',dict(seconds=init,source=str(actual),config={k:str(v) for k,v in options.items()}))
     samples=read(directory/'annotations.json')
+    verify_samples(directory,samples)
     records=sorted(read(directory/'manifest.json'),key=lambda m:m['kind']!='image')
     original_redact=redaction.redact
+    original_image_redact=images.redact
     stop=threading.Event()
     failed=False
     for media in records:
@@ -238,7 +346,9 @@ def worker(directory, variant):
         record_path=directory/variant/(media['id']+'.json')
         if record_path.exists():
             previous=read(record_path)
-            if previous['status']=='complete' and sha(directory/previous['output'])==previous['output_sha256']:
+            if previous['status']=='complete':
+                if sha(directory/previous['output'])!=previous['output_sha256']:
+                    raise ValueError('Completed output changed: '+media['id'])
                 continue
         suffix='.jpg' if media['kind']=='image' else '.mp4'
         output=directory/variant/(media['id']+suffix);output.parent.mkdir(exist_ok=True)
@@ -252,7 +362,6 @@ def worker(directory, variant):
             if frame_index in selected:
                 sample=selected[frame_index]
                 evidence.append(dict(sample_id=sample['id'],variant=variant,boxes=boxes))
-                Image.fromarray(result).save(directory/'samples'/(sample['id']+'-'+variant+'.png'))
             frame_index+=1
             return result
         redaction.redact=recording_redact
@@ -268,15 +377,14 @@ def worker(directory, variant):
             else:
                 process_video(media['path'],temporary,detector,config,stop,lambda event: None)
             elapsed=time.perf_counter()-started
-            # Inspect using the actual format suffix; the production processing already closed the file.
+            checked=inspect_media(temporary)
+            verify_output(media,checked)
+            if len(evidence)!=len(selected):raise ValueError('Missing sample masking evidence')
             temporary.replace(output)
-            checked=inspect_media(output)
-            if any(checked[k]!=media[k] for k in ('kind','width','height','frames','audio')):
-                raise ValueError('Output completeness mismatch')
-            if not np.allclose(checked['times'],media['times'],atol=.001,rtol=0):
-                raise ValueError('Output timestamps differ')
+            save_samples(output,directory,selected,variant)
             result.update(status='complete',processing_seconds=elapsed,frames=frame_index,
-                          output_sha256=sha(output),evidence=evidence)
+                          output_sha256=sha(output),evidence=evidence,output_integrity=checked,
+                          timing_scope='decode+detect+mask+encode; excludes initialization, verification, sample PNGs and report',measurement_count=1)
             print(variant,media['id'],'complete',round(elapsed,2),flush=True)
         except KeyboardInterrupt:
             result.update(status='cancelled');write(record_path,result);raise
@@ -284,9 +392,21 @@ def worker(directory, variant):
             failed=True
             result.update(status='failed',error=str(exc),processing_seconds=time.perf_counter()-started)
             print(variant,media['id'],'FAILED',str(exc),flush=True)
+        finally:
+            redaction.redact=original_redact
+            images.redact=original_image_redact
         write(record_path,result)
     if failed:
         raise SystemExit(1)
+
+
+def result_status(directory):
+    for media in read(directory/'manifest.json'):
+        for variant in ('baseline','candidate'):
+            path=directory/variant/(media['id']+'.json')
+            if not path.exists() or read(path)['status']!='complete':
+                return 'incomplete'
+    return 'processed'
 
 
 def run_variant(directory, variant):
@@ -295,6 +415,9 @@ def run_variant(directory, variant):
         raise ValueError('Frozen manifest or dependencies changed')
     if source_fingerprint(ROOT)!=run['candidate_source']:
         raise ValueError('Candidate source changed; prepare a new run')
+    if tool_fingerprint()!=run['tool_source'] or PARAMETERS!=run['parameters'] or run['baseline_commit']!=BASE:
+        raise ValueError('Frozen comparison tools or parameters changed; prepare a new run')
+    verify_samples(directory,read(directory/'annotations.json'))
     for name,digest in run['models'].items():
         if sha(ROOT/'models'/name)!=digest:raise ValueError('Model changed')
     snapshot=directory/'baseline-source'
@@ -306,33 +429,45 @@ def run_variant(directory, variant):
     if source_fingerprint(snapshot)!=read(directory/'baseline-source.json'):
         raise ValueError('Baseline snapshot changed')
     run['status']='running';write(directory/'run.json',run)
-    result=subprocess.run([sys.executable,str(Path(__file__).resolve()),'_worker','--run-dir',str(directory),'--variant',variant],
-                          cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
-    run['status']='processed' if result.returncode==0 else 'incomplete'
-    write(directory/'run.json',run)
+    try:
+        result=subprocess.run([sys.executable,str(Path(__file__).resolve()),'_worker','--run-dir',str(directory),'--variant',variant],
+                              cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+    finally:
+        run['status']=result_status(directory)
+        write(directory/'run.json',run)
     if result.returncode:raise SystemExit(result.returncode)
 
 
 def report(directory):
     import csv
     records=read(directory/'manifest.json');samples=read(directory/'annotations.json')
+    run=read(directory/'run.json')
+    if sha(directory/'manifest.json')!=run['manifest_sha256']:raise ValueError('Frozen manifest changed')
+    verify_samples(directory,samples)
     results=[read(p) for v in ('baseline','candidate') for p in (directory/v).glob('[0-9][0-9].json')]
     evidence=[e for r in results if r['status']=='complete' for e in r['evidence']]
     summary=summarize(samples,evidence)
     summary.update(completed=sum(r['status']=='complete' for r in results),expected=len(records)*2,
-                   timing_scope='single batch run; initialization separate; decode+detect+mask+encode+sample evidence capture; excludes integrity verification and report')
+                   annotation_revision=sha(directory/'annotations.json'),status=result_status(directory),
+                   timing_scope='single batch run; initialization separate; decode+detect+mask+encode; excludes integrity verification, sample PNGs and report')
+    original_ids={m['id'] for m in records if not m.get('original_id')}
+    summary['original_outputs']=dict(completed=sum(r['status']=='complete' and r['media_id'] in original_ids for r in results),expected=len(original_ids)*2)
+    summary['supplemental_outputs']=dict(completed=sum(r['status']=='complete' and r['media_id'] not in original_ids for r in results),expected=(len(records)-len(original_ids))*2)
     write(directory/'summary.json',summary)
     with (directory/'timings.csv').open('w',newline='',encoding='utf-8-sig') as stream:
         writer=csv.writer(stream);writer.writerow(['variant','media_id','status','seconds','frames'])
         for r in results:writer.writerow([r['variant'],r['media_id'],r['status'],r.get('processing_seconds'),r.get('frames')])
     lookup={(r['media_id'],r['variant']):r for r in results}
-    text=['<!doctype html><html lang="zh"><meta charset="utf-8"><title>CPU 脱敏对比</title>',
+    text=['<!doctype html><html lang="zh"><meta charset="utf-8"><title>CPU 脱敏对比 · '+('待人工复核' if summary['pending_samples'] else '已复核')+'</title>',
           '<style>body{font:16px system-ui;background:#f4f6f8;color:#182433;margin:24px}section{background:white;padding:16px;margin:16px 0;border-radius:8px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}img,video{width:100%;background:#ddd}h1{font-size:26px}pre{white-space:pre-wrap} @media(max-width:800px){.grid{grid-template-columns:1fr}}</style>',
-          '<h1>main quality CPU / YOLO CPU</h1>',
+          '<h1>main quality CPU / YOLO CPU'+(' · 待人工复核' if summary['pending_samples'] else '')+'</h1>',
           f'<p>完整产物 {summary["completed"]}/{summary["expected"]}；人工确认样本 {summary["formal_samples"]}；待复核 {summary["pending_samples"]}。未复核结果不代表准确率。</p>',
           '<p>视频均为完整处理；下方固定采样每5秒及末帧。效果优先，耗时为单次辅助记录。</p>']
     for media in records:
-        text.append('<section><h2>'+html.escape(media['name'])+'</h2><div class="grid">')
+        text.append('<section><h2>'+html.escape(media['name'])+'</h2>')
+        if media.get('original_id'):
+            text.append('<p>补充修正副本：原始素材 '+html.escape(media['original_id'])+' 的失败保留；此副本单列。</p>')
+        text.append('<div class="grid">')
         tag='img' if media['kind']=='image' else 'video controls preload="metadata"'
         text.append(f'<div>原始<{tag} src="{html.escape(Path(media["path"]).as_uri(),quote=True)}"></'+('div>' if media['kind']=='image' else 'video></div>'))
         for variant in ('baseline','candidate'):
@@ -344,12 +479,16 @@ def report(directory):
             else:text.append('<div>'+variant+' · '+html.escape(str(r.get('error',r['status']) if r else '未运行'))+'</div>')
         text.append('</div>')
         for sample in (s for s in samples if s['media_id']==media['id']):
-            text.append(f'<details><summary>{sample["id"]} · 帧 {sample["frame_index"]} · {html.escape(sample["review_status"])}</summary><div class="grid">')
+            text.append(f'<details id="{html.escape(sample["id"],quote=True)}"><summary>{html.escape(sample["id"])} · 帧 {sample["frame_index"]} · {html.escape(sample["review_status"])}</summary><div class="grid">')
             for variant in ('original','baseline','candidate'):
                 name=f'samples/{sample["id"]}-{variant}.png'
-                text.append(f'<div>{variant}<a href="{name}"><img loading="lazy" src="{name}"></a></div>' if (directory/name).exists() else '<div>未生成</div>')
+                url=html.escape(quote(name),quote=True)
+                text.append(f'<div>{variant}<a href="{url}"><img loading="lazy" src="{url}"></a></div>' if (directory/name).exists() else '<div>未生成</div>')
             text.append('</div></details>')
         text.append('</section>')
+    text.append('<h2>已确认新增漏遮</h2>')
+    for miss in summary['new_misses']:
+        text.append('<p><a href="#'+html.escape(miss['sample_id'],quote=True)+'">'+html.escape(miss['sample_id']+' / '+miss['target_id'])+'</a> '+miss['baseline']+' → '+miss['candidate']+'</p>')
     text.append('<h2>复核统计</h2><pre>'+html.escape(json.dumps(summary,ensure_ascii=False,indent=2))+'</pre></html>')
     (directory/'index.html').write_text('\n'.join(text),'utf-8')
 

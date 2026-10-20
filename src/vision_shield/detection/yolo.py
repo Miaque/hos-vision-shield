@@ -59,6 +59,7 @@ def decode(output: np.ndarray, geometry: tuple, width: int, height: int,
 
 class Detector:
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15):
+        # Both pinned networks use 640 per view; max_side is accepted for the shared loader only.
         cv2.setNumThreads(2)
         self.max_side, self.box_padding = max_side, box_padding
         options = ort.SessionOptions()
