@@ -11,6 +11,7 @@ import os
 import platform
 from pathlib import Path
 from urllib.parse import quote
+import shutil
 import subprocess
 import sys
 import threading
@@ -464,12 +465,18 @@ def report(directory):
           f'<p>完整产物 {summary["completed"]}/{summary["expected"]}；人工确认样本 {summary["formal_samples"]}；待复核 {summary["pending_samples"]}。未复核结果不代表准确率。</p>',
           '<p>成功视频均通过全长完整性检查，失败或未完成项单列；下方固定采样每5秒及末帧。效果优先，耗时为单次辅助记录。</p>']
     for media in records:
+        original=directory/'originals'/(media['id']+Path(media['path']).suffix.lower())
+        if not original.exists():
+            verify_source(media)
+            original.parent.mkdir(exist_ok=True)
+            shutil.copyfile(media['path'],original)
+        if sha(original)!=media['sha256']:raise ValueError('Original preview changed')
         text.append('<section><h2>'+html.escape(media['name'])+'</h2>')
         if media.get('original_id'):
             text.append('<p>补充修正副本：原始素材 '+html.escape(media['original_id'])+' 的失败保留；此副本单列。</p>')
         text.append('<div class="grid">')
         tag='img' if media['kind']=='image' else 'video controls preload="metadata"'
-        text.append(f'<div>原始<{tag} src="{html.escape(Path(media["path"]).as_uri(),quote=True)}"></'+('div>' if media['kind']=='image' else 'video></div>'))
+        text.append(f'<div>原始<{tag} src="{quote(original.relative_to(directory).as_posix())}"></'+('div>' if media['kind']=='image' else 'video></div>'))
         for variant in ('baseline','candidate'):
             r=lookup.get((media['id'],variant))
             if r and r['status']=='complete':

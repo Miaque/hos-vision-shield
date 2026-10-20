@@ -121,7 +121,9 @@ def test_resume_runs_only_unfinished_media_and_checks_frozen_tools(tmp_path,monk
 
 
 def test_report_escapes_names_and_lists_failures(tmp_path):
-    media=dict(id='00',name='<中文 & 图片>.jpg',kind='image',path=str(tmp_path/'input.jpg'))
+    from PIL import Image
+    source=tmp_path/'input.jpg';Image.new('RGB',(10,10),'black').save(source)
+    media=dict(id='00',name='<中文 & 图片>.jpg',kind='image',path=str(source),sha256=compare.sha(source))
     sample=annotation('pending')
     compare.write(tmp_path/'manifest.json',[media])
     compare.write(tmp_path/'annotations.json',[sample])
@@ -131,5 +133,6 @@ def test_report_escapes_names_and_lists_failures(tmp_path):
     page=(tmp_path/'index.html').read_text('utf-8')
     assert '&lt;中文 &amp; 图片&gt;.jpg' in page
     assert '&lt;bad&gt;' in page and '待人工复核' in page and '未运行' in page
-    assert '<img src="file:///' in page
+    assert '<img src="originals/00.jpg"' in page and 'file:///' not in page
+    assert compare.sha(tmp_path/'originals/00.jpg')==media['sha256']
     assert compare.read(tmp_path/'summary.json')['status']=='incomplete'
