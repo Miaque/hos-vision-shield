@@ -316,7 +316,8 @@
       "id": "face-video1-2s",
       "file": "face-video1-2s.png",
       "sha256": "2df6b3d24e34d796733c6d4d9784d47ba735c02af158e72c102b492381f733f2",
-      "masked_regions": [
+      "masked_regions": [],
+      "optional_masked_regions": [
         [
           926,
           250,
@@ -324,7 +325,8 @@
           256
         ]
       ],
-      "preserved_regions": []
+      "preserved_regions": [],
+      "review": "2026-10-21用户允许极小目标漏遮；此处原图人脸约8x10像素，保留历史内区供效果对比，不再强制遮挡。"
     }
   ]
 }

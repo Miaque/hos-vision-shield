@@ -19,7 +19,7 @@ def test_quality_is_default_and_requires_both_primary_and_detail_models(monkeypa
     assert detector.primary is primary and detector.detail is detail
     assert received[0][1][:2] == (settings.egoblur_face_model_path, settings.egoblur_plate_model_path)
     assert received[0][2] == {"face_threshold": 0.1, "device": "cpu"}
-    assert received[1][2] == {"face_threshold": 0.3, "parallel": False}
+    assert received[1][2] == {"face_threshold": 0.3, "parallel": False, "tile_side": 1920}
 
 
 @pytest.mark.parametrize("failed", [None, "primary", "detail"])
@@ -53,6 +53,7 @@ def test_cuda_overlaps_independent_models_and_waits_for_failure(monkeypatch, fai
 
     def detail_detector(*args, **kwargs):
         assert kwargs["parallel"] is True
+        assert kwargs["tile_side"] == 1920
         return Detail()
 
     from vision_shield.detection import cuda_detail

@@ -14,10 +14,11 @@ PLATE_THRESHOLD = 0.25
 
 class Detector:
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=FACE_THRESHOLD,
-                 parallel=False):
+                 parallel=False, tile_side=640):
         cv2.setNumThreads(2)
         self.max_side, self.box_padding = max_side, box_padding
         self.parallel = parallel
+        self.tile_side = tile_side
         self.face = cv2.FaceDetectorYN.create(str(face_path), "", (320, 320), face_threshold, 0.3, 5000,
                                             cv2.dnn.DNN_BACKEND_OPENCV, cv2.dnn.DNN_TARGET_CPU)
         self.plate = cv2.dnn.readNetFromONNX(str(plate_path))
@@ -47,7 +48,7 @@ class Detector:
             raise ValueError("Expected nonempty RGB uint8 pixels")
         height, width = rgb.shape[:2]
         boxes = []
-        for left, top, right, bottom in self._views(width, height):
+        for left, top, right, bottom in self._views(width, height, self.tile_side):
             view = cv2.cvtColor(rgb[top:bottom, left:right], cv2.COLOR_RGB2BGR)
             view_height, view_width = view.shape[:2]
             scale = min(1, self.max_side / max(view_width, view_height))
@@ -71,14 +72,14 @@ class Detector:
         return boxes
 
     @staticmethod
-    def _views(width, height):
+    def _views(width, height, tile_side=640):
         yield 0, 0, width, height
-        if max(width, height) <= 640:
+        if max(width, height) <= tile_side:
             return
 
         def spans(length):
             # At most 8 positions per axis; enlarge source tiles instead of skipping image regions.
-            span = min(length, max(640, math.ceil(length / 6.6)))
+            span = min(length, max(tile_side, math.ceil(length / 6.6)))
             count = min(8, math.ceil((length - span) / (0.8 * span)) + 1)
             return [(int(start), int(start) + span) for start in np.linspace(0, length - span, count).round()]
 

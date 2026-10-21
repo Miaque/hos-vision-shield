@@ -23,9 +23,10 @@ class Detector:
         if self.inference_device == "cuda":
             from vision_shield.detection.cuda_detail import Detector as CUDADetailDetector
             detail_type = CUDADetailDetector
+        # Dense 640px tiles recover tiny faces at high cost; retain larger tiles for 4K coverage.
         self.detail = detail_type(config["face_model_path"], config["plate_model_path"],
                                      self.max_side, self.box_padding, face_threshold=0.3,
-                                     parallel=self.inference_device == "cuda")
+                                     parallel=self.inference_device == "cuda", tile_side=1920)
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         return [detection.box for detection in self.detect_regions(rgb)]

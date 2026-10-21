@@ -9,6 +9,7 @@ def detector_with(predict, *, max_side=1280, padding=0):
 
     detector = Detector.__new__(Detector)
     detector.max_side, detector.box_padding = max_side, padding
+    detector.tile_side = 640
     detector._detect_view = MethodType(lambda self, view, **kwargs: predict(view), detector)
     return detector
 
@@ -77,6 +78,48 @@ def test_empty_predictions_produce_no_masks():
     assert detector_with(lambda view: []).detect(pixels) == []
 
 
+def test_global_only_detail_uses_one_view_and_keeps_full_resolution_box_mapping():
+    from vision_shield.detection import Detection
+
+    seen = []
+
+    def predict(view):
+        seen.append(view.shape)
+        return [Detection("face", (100, 20, 200, 80), 0.9)]
+
+    detector = detector_with(predict)
+    detector.tile_side = 1920
+    boxes = detector.detect(np.zeros((536, 1920, 3), np.uint8))
+    assert seen == [(357, 1280, 3)]
+    assert boxes == [pytest.approx((150, 20 * 536 / 357, 300, 80 * 536 / 357))]
+
+
+def test_large_detail_tiles_cover_ultrawide_image_and_keep_bottom_right_target():
+    from vision_shield.detection import Detection
+
+    pixels = np.zeros((1080, 3840, 3), np.uint8)
+    pixels[-30:, -30:] = [11, 23, 47]
+    shapes = []
+
+    def predict(view):
+        shapes.append(view.shape)
+        rows, columns = np.where(np.all(view == [47, 23, 11], axis=2))
+        if not len(rows):
+            return []
+        return [Detection("plate", (columns.min(), rows.min(), columns.max() + 1, rows.max() + 1), 0.9)]
+
+    detector = detector_with(predict)
+    detector.tile_side = 1920
+    boxes = detector.detect(pixels)
+    assert len(shapes) == 4
+    assert any(np.allclose(box, (3810, 1050, 3840, 1080), atol=2) for box in boxes)
+    coverage = np.zeros((1080, 3840), dtype=bool)
+    for left, top, right, bottom in detector._views(3840, 1080, 1920):
+        if (left, top, right, bottom) != (0, 0, 3840, 1080):
+            coverage[top:bottom, left:right] = True
+    assert coverage.all()
+
+
 @pytest.mark.parametrize("box,score", [
     ((float("nan"), 10, 30, 40), 0.9),
     ((10, 10, float("inf"), 40), 0.9),
@@ -107,10 +150,11 @@ def test_face_and_plate_margins_differ_and_are_clipped_to_the_source():
 
 
 @pytest.mark.parametrize("width,height", [(10**9, 1), (1, 10**9), (10**9, 10**9)])
-def test_extreme_source_views_cover_every_region_with_a_bounded_grid(width, height):
+@pytest.mark.parametrize("tile_side", [640, 1920])
+def test_extreme_source_views_cover_every_region_with_a_bounded_grid(width, height, tile_side):
     from vision_shield.detection.cpu import Detector
 
-    views = list(Detector._views(width, height))
+    views = list(Detector._views(width, height, tile_side))
     assert views[0] == (0, 0, width, height)
     tiles = views[1:]
     assert 1 < len(views) <= 65
@@ -144,6 +188,7 @@ def detector_with_raw_outputs(faces, plates):
             return plates
 
     detector = Detector.__new__(Detector)
+    detector.tile_side = 640
     detector.face, detector.plate = Face(), Plate()
     detector.parallel = False
     return detector

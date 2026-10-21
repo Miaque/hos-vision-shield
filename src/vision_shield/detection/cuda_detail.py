@@ -38,7 +38,7 @@ def decode_faces(outputs, width, height, threshold):
 
 class Detector(CPUDetector):
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=0.3,
-                 parallel=True):
+                 parallel=True, tile_side=640):
         import torch
         import onnx
         import onnxruntime as ort
@@ -47,6 +47,7 @@ class Detector(CPUDetector):
             raise RuntimeError("YuNet/HyperLPR require ONNX Runtime CUDA")
         cv2.setNumThreads(2)
         self.max_side, self.box_padding, self.parallel = max_side, box_padding, parallel
+        self.tile_side = tile_side
         self.face_threshold = face_threshold
         options = ort.SessionOptions()
         options.intra_op_num_threads = 1
