@@ -148,3 +148,48 @@ def test_local_recheck_error_propagates_instead_of_returning_an_unmasked_frame()
     redactor.apply(pixels, 0)
     with pytest.raises(RuntimeError, match="local inference failed"):
         redactor.apply(pixels, 0.04)
+
+
+def test_fast_small_face_does_not_accumulate_masks_at_previous_positions():
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    texture = np.random.default_rng(52).integers(40, 220, (30, 24, 3), dtype=np.uint8)
+    for index in range(8):
+        left = 30 + index * 40
+        pixels = np.full((100, 400, 3), 180, np.uint8)
+        pixels[30:60, left:left + 24] = texture
+        detector.boxes = [(left, 30, left + 24, 60)]
+        output = redactor.apply(pixels, index / 20)
+        assert (output[30:60, left:left + 24] == 64).all()
+        assert np.array_equal(output[:, :left - 6], pixels[:, :left - 6])
+        assert len(redactor.history) == 1
+
+
+def test_overlapping_model_detections_share_one_track_and_preserve_all_edges():
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    for index in range(6):
+        detector.boxes = [(20, 20, 40, 40), (22, 21, 42, 41)] if index % 2 == 0 else [(21, 20, 41, 40)]
+        output = redactor.apply(pixels, index / 20)
+        for x, y, right, bottom in detector.boxes:
+            assert (output[y:bottom, x:right] == 64).all()
+        assert len(redactor.history) == 1
+
+
+def test_identical_face_and_plate_boxes_remain_separate_tracks():
+    detections = [Detection(kind, (20, 20, 40, 40), 0.9) for kind in ("face", "plate")]
+    assert FrameRedactor._merge_detections(detections) == detections
+
+
+def test_repeated_texture_cannot_move_a_track_to_a_different_copy():
+    redactor = FrameRedactor(Detections())
+    previous = np.full((100, 300), 180, np.uint8)
+    current = previous.copy()
+    texture = np.random.default_rng(17).integers(40, 220, (20, 20), dtype=np.uint8)
+    for left in (40, 120):
+        previous[30:50, left:left + 20] = texture
+    for left in (80, 160):
+        current[30:50, left:left + 20] = texture
+    redactor.gray = previous
+    assert redactor._follow(current, (120, 30, 140, 50)) is None

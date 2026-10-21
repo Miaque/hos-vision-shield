@@ -66,7 +66,7 @@ class FrameRedactor:
             self.gray = None
         elapsed = moment - self.moment if not reset else 0
         self.previous, self.shape, self.moment = thumbnail, pixels.shape, moment
-        detections = self._detections(pixels)
+        detections = self._merge_detections(self._detections(pixels))
         boxes = [detection.box for detection in detections]
         gray = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
         retained, history = [], []
@@ -131,6 +131,21 @@ class FrameRedactor:
         return detections
 
     @staticmethod
+    def _merge_detections(detections):
+        # Multiple models/views can describe one target; retain the union, not NMS's smaller mask.
+        merged = []
+        for detection in sorted(detections, key=lambda item: item.score, reverse=True):
+            for index, other in enumerate(merged):
+                if detection.kind == other.kind and FrameRedactor._overlap(detection.box, other.box) >= 0.6:
+                    a, b = detection.box, other.box
+                    merged[index] = Detection(other.kind, (min(a[0], b[0]), min(a[1], b[1]),
+                                                           max(a[2], b[2]), max(a[3], b[3])), other.score)
+                    break
+            else:
+                merged.append(detection)
+        return merged
+
+    @staticmethod
     def _smooth(previous, current, elapsed):
         # Never shrink inside today's detection; bound the trailing margin on moving targets.
         weight = 1 - math.exp(-elapsed / 0.1)
@@ -154,15 +169,28 @@ class FrameRedactor:
         x1, y1, x2, y2 = box
         left, top = max(0, math.floor(x1)), max(0, math.floor(y1))
         right, bottom = min(width, math.ceil(x2)), min(height, math.ceil(y2))
+        # Mask padding contains stationary background that must not anchor a moving face.
+        inset_x, inset_y = (right - left) // 5, (bottom - top) // 5
+        left, right = left + inset_x, right - inset_x
+        top, bottom = top + inset_y, bottom - inset_y
         patch = self.gray[top:bottom, left:right]
         if min(patch.shape) < 3 or patch.std() < 2:
             return None
-        margin = min(96, max(8, max(patch.shape) // 2))
+        # Small faces can move farther than their own width between adjacent frames.
+        margin = 96
         # shortcut: template matching follows translations; large rotation/scale needs a new detection.
         sx, sy = max(0, left - margin), max(0, top - margin)
         search = gray[sy:min(height, bottom + margin), sx:min(width, right + margin)]
         _, score, _, location = cv2.minMaxLoc(cv2.matchTemplate(search, patch, cv2.TM_CCOEFF_NORMED))
         if score < 0.8:
+            return None
+        matched = search[location[1]:location[1] + patch.shape[0],
+                         location[0]:location[0] + patch.shape[1]]
+        previous_search = self.gray[sy:sy + search.shape[0], sx:sx + search.shape[1]]
+        _, reverse_score, _, reverse = cv2.minMaxLoc(
+            cv2.matchTemplate(previous_search, matched, cv2.TM_CCOEFF_NORMED))
+        # Repeated background textures must return to the same source patch.
+        if reverse_score < 0.8 or abs(sx + reverse[0] - left) > 2 or abs(sy + reverse[1] - top) > 2:
             return None
         dx, dy = sx + location[0] - left, sy + location[1] - top
         return max(0, x1 + dx), max(0, y1 + dy), min(width, x2 + dx), min(height, y2 + dy)
