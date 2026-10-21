@@ -49,6 +49,9 @@ class Detector:
                 recovered = False
                 if detection.kind == "face" and detection.score < (0.3 if is_primary else 0.6):
                     x1, y1, x2, y2 = detection.box
+                    # 用户允许极小目标漏遮；不再为低分微小人脸启动放大复核。
+                    if min(x2 - x1, y2 - y1) < 20:
+                        continue
                     if is_primary:
                         recovered = (x2 - x1 < 0.75 * (y2 - y1) and min(x2 - x1, y2 - y1) < 128
                                      and not any(other.kind == "face" and other.score >= 0.3

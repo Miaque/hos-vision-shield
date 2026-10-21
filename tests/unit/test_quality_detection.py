@@ -151,17 +151,42 @@ def test_two_weak_global_plate_candidates_cannot_confirm_each_other():
     assert detector.detect(rgb) == [], "两个低分全图框仍须通过局部复核"
 
 
+@pytest.mark.parametrize("source,score", [("primary", 0.2), ("detail", 0.4)])
+@pytest.mark.parametrize("short_side", [19.99, 20])
+def test_tiny_weak_faces_do_not_trigger_enlarged_confirmation(source, score, short_side):
+    from vision_shield.detection.quality import Detector
+
+    candidate = Detection("face", (100, 100, 100 + short_side, 140), score)
+
+    class Model:
+        def __init__(self, name):
+            self.name = name
+
+        def candidates(self, pixels, *, kind=None):
+            return [candidate] if self.name == source else []
+
+    detector = Detector.__new__(Detector)
+    detector.inference_device, detector.box_padding = "cpu", 0
+    detector.primary, detector.detail = Model("primary"), Model("detail")
+    calls = []
+    detector._recover_face = lambda *a: calls.append("recover") or True
+    detector._confirmed = lambda *a, **kw: calls.append("confirm") or True
+    regions = detector.detect_regions(np.zeros((320, 320, 3), np.uint8))
+    assert bool(regions) is (short_side >= 20)
+    assert len(calls) == (1 if short_side >= 20 else 0)
+
+
 @pytest.mark.parametrize("local_score,expected", [(0.65, False), (0.8, True)])
 def test_weak_small_detail_face_needs_trusted_local_primary(local_score, expected):
     from vision_shield.detection.quality import Detector
 
-    rgb = np.full((10, 40, 3), 180, np.uint8)
+    rgb = np.full((96, 96, 3), 180, np.uint8)
     class Primary:
         def candidates(self, pixels, *, kind=None):
-            return [] if pixels is rgb else [Detection("face", (8, 16, 72, 40), local_score)]
+            return [] if pixels is rgb else [Detection("face", (0, 0, 128, 128), local_score)]
     class Detail:
         def candidates(self, pixels, *, kind=None):
-            return [Detection("face", (1, 2, 9, 5), 0.4)] if pixels is rgb else []
+            return [Detection("face", (0, 0, 24, 24), 0.4)] if pixels is rgb else []
 
     detector = Detector.__new__(Detector)
     detector.primary, detector.detail = Primary(), Detail()
@@ -173,18 +198,18 @@ def test_weak_small_detail_face_needs_trusted_local_primary(local_score, expecte
 def test_moderate_small_face_requires_matching_normal_and_mirrored_local_views(mirror_matches):
     from vision_shield.detection.quality import Detector
 
-    rgb = np.zeros((10, 40, 3), np.uint8)
-    rgb[:, :, 0] = np.arange(40)[None, :] * 3
+    rgb = np.zeros((96, 96, 3), np.uint8)
+    rgb[:, :, 0] = np.arange(96)[None, :] * 2
     class Primary:
         def candidates(self, pixels, *, kind=None):
             if pixels is rgb:
                 return []
             mirrored = pixels[0, 0, 0] > 100
-            box = (248, 16, 312, 40) if mirrored and mirror_matches else (8, 16, 72, 40)
+            box = (192, 0, 320, 128) if mirrored and mirror_matches else (0, 0, 128, 128)
             return [Detection("face", box, 0.4)]
     class Detail:
         def candidates(self, pixels, *, kind=None):
-            return [Detection("face", (1, 2, 9, 5), 0.4)] if pixels is rgb else []
+            return [Detection("face", (0, 0, 24, 24), 0.4)] if pixels is rgb else []
 
     detector = Detector.__new__(Detector)
     detector.primary, detector.detail = Primary(), Detail()
@@ -240,19 +265,19 @@ def test_weak_profile_recovery_maps_mirrored_border_view_and_propagates_errors(m
 def test_weak_global_face_support_requires_local_confirmation(score, local_match, expected):
     from vision_shield.detection.quality import Detector
 
-    rgb = np.full((10, 40, 3), 180, np.uint8)
+    rgb = np.full((96, 96, 3), 180, np.uint8)
     local_calls = []
 
     class Primary:
         def candidates(self, pixels, *, kind=None):
             if pixels is rgb:
-                return [Detection("face", (1, 2, 9, 5), score)]
+                return [Detection("face", (0, 0, 24, 24), score)]
             local_calls.append(pixels.shape)
-            return [Detection("face", (8, 16, 72, 40), 0.2)] if local_match else []
+            return [Detection("face", (0, 0, 128, 128), 0.2)] if local_match else []
 
     class Detail:
         def candidates(self, pixels, *, kind=None):
-            return [Detection("face", (1, 2, 9, 5), 0.63)] if pixels is rgb else []
+            return [Detection("face", (0, 0, 24, 24), 0.63)] if pixels is rgb else []
 
     detector = Detector.__new__(Detector)
     detector.inference_device = "cpu"
