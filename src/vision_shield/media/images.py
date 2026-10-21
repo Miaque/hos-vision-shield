@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from vision_shield.detection import Detector
 
 
-def process_image(source: str | Path, destination: str | Path, detector: "Detector", max_pixels: int) -> int:
+def process_image(source: str | Path, destination: str | Path, detector: "Detector", max_pixels: int, *, redaction_mode: str = "solid") -> int:
     """Write a fresh JPEG/PNG with normalized orientation; return the number of boxes."""
     with Image.open(source) as image:
         if image.format not in {"JPEG", "PNG"}:
@@ -19,6 +19,6 @@ def process_image(source: str | Path, destination: str | Path, detector: "Detect
         pixels = np.array(ImageOps.exif_transpose(image).convert("RGB"))
     boxes = detector.detect(pixels)
     # Create a fresh image so original EXIF thumbnails cannot escape redaction.
-    result = Image.fromarray(redact(pixels, boxes))
+    result = Image.fromarray(redact(pixels, boxes, mode=redaction_mode))
     result.save(destination, format=format_name)
     return len(boxes)

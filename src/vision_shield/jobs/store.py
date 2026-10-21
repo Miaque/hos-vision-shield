@@ -105,11 +105,14 @@ class TaskStore:
             raise InvalidTransition
         return json.loads(result) if result else None
 
-    async def create(self, kind: str, source_kind: str, source_ref: str, task_id: str | None = None) -> dict:
+    async def create(self, kind: str, source_kind: str, source_ref: str, task_id: str | None = None,
+                     *, redaction_mode: str = "solid") -> dict:
+        if redaction_mode not in {"solid", "mosaic"}:
+            raise ValueError("Unsupported redaction mode")
         task_id = task_id or str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
         task = dict(
-            id=task_id, kind=kind, state="queued", desired_state="run", ready=False,
+            id=task_id, kind=kind, redaction_mode=redaction_mode, state="queued", desired_state="run", ready=False,
             created_at=now, updated_at=now, source_kind=source_kind, source_ref=source_ref,
             result_ref=None, owner_id=None, generation=0, lease_until=0,
             dispatch_pending=True, dispatch_until=0, error=None, publish_allowed=False,

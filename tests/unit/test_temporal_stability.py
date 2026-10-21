@@ -1,0 +1,150 @@
+import numpy as np
+import pytest
+
+from vision_shield.detection import Detection
+from vision_shield.redaction import FrameRedactor
+
+
+class Detections:
+    boxes = []
+
+    def detect(self, pixels):
+        return self.boxes
+
+
+def mask_bounds(pixels):
+    rows, columns = np.nonzero(np.all(pixels == 64, axis=2))
+    assert len(rows), "本帧应包含遮挡"
+    return columns.min(), rows.min(), columns.max() + 1, rows.max() + 1
+
+
+def test_mask_shrinks_gradually_without_losing_current_detection():
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    detector.boxes = [(30, 30, 70, 70)]
+    redactor.apply(pixels, 0)
+    detector.boxes = [(34, 34, 66, 66)]
+    output = redactor.apply(pixels, 0.04)
+    left, top, right, bottom = mask_bounds(output)
+    assert 32 < right - left <= 40, "连续检测框收缩不能立即把遮挡边缘跳回去"
+    assert 32 < bottom - top <= 40
+    for index in range(2, 31):
+        output = redactor.apply(pixels, index / 25)
+        assert (output[34:66, 34:66] == 64).all(), "平滑不得缩进当帧可信检测框"
+    left, top, right, bottom = mask_bounds(output)
+    assert right - left <= 34 and bottom - top <= 34, "稳定小目标不应永远保留旧大框"
+    assert np.all(pixels == 180), "不能改写原始帧供下一帧跟踪"
+
+
+def test_stationary_target_has_less_edge_jitter_than_alternating_detections():
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    edges = []
+    for index in range(30):
+        left = 30 if index % 2 else 34
+        detector.boxes = [(left, 30, left + 30, 60)]
+        output = redactor.apply(pixels, index / 25)
+        assert (output[30:60, left:left + 30] == 64).all()
+        edges.append(mask_bounds(output))
+    steady = np.asarray(edges[10:])
+    assert np.ptp(steady[:, 0]) < 4, "静止目标左边缘不应完整复现检测器的4像素跳变"
+    assert np.ptp(steady[:, 2]) < 4, "静止目标右边缘不应完整复现检测器的4像素跳变"
+
+
+def test_smoothing_never_exposes_fast_moving_detection_or_leaves_unbounded_trail():
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    texture = np.random.default_rng(23).integers(40, 220, (20, 20, 3), dtype=np.uint8)
+    for index in range(20):
+        left = 20 + index * 7
+        pixels = np.full((100, 200, 3), 180, np.uint8)
+        pixels[30:50, left:left + 20] = texture
+        detector.boxes = [(left, 30, left + 20, 50)]
+        original = pixels.copy()
+        output = redactor.apply(pixels, index / 25)
+        assert (output[30:50, left:left + 20] == 64).all(), "平滑不能落在运动目标后面而露出前缘"
+        assert mask_bounds(output)[0] >= left - 20, "运动遮挡不能累积成沿整个路径的黑色拖尾"
+        assert np.array_equal(pixels, original)
+
+
+def test_smoothing_does_not_extend_a_disappeared_target_indefinitely():
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    for index in range(10):
+        edge = 30 if index % 2 else 34
+        detector.boxes = [(edge, edge, 100 - edge, 100 - edge)]
+        redactor.apply(pixels, index / 25)
+    detector.boxes = []
+    for index in range(10, 31):
+        output = redactor.apply(pixels, index / 25)
+    assert np.array_equal(output, pixels), "无新检测时，平滑状态不能无限续命"
+
+
+def test_plate_cannot_renew_an_overlapping_face_during_local_recheck():
+    class TypedDetections:
+        first = True
+
+        def detect_regions(self, pixels, *, kind=None):
+            if self.first:
+                self.first = False
+                return [Detection("face", (20, 20, 60, 60), 0.9)]
+            if pixels.shape == (100, 100, 3):
+                return [Detection("plate", (30, 30, 50, 50), 0.9)]
+            # The 100px source crop is enlarged to 320px for local verification.
+            return [Detection("plate", (64, 64, 192, 192), 0.9)]
+
+    redactor = FrameRedactor(TypedDetections())
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    for index in range(17):
+        output = redactor.apply(pixels, index / 25)
+    assert (output[30:50, 30:50] == 64).all()
+    assert np.array_equal(output[20:30, 20:30], pixels[20:30, 20:30]), "车牌局部命中不能为旧人脸续期"
+
+
+def test_one_detection_does_not_discard_a_second_overlapping_target():
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    pixels[30:60, 20:70] = np.random.default_rng(51).integers(40, 220, (30, 50, 3), dtype=np.uint8)
+    detector.boxes = [(20, 30, 50, 60), (40, 30, 70, 60)]
+    redactor.apply(pixels, 0)
+    detector.boxes = [(22, 30, 52, 60)]
+    output = redactor.apply(pixels, 0.04)
+    assert (output[30:60, 22:52] == 64).all()
+    assert (output[31:59, 53:69] == 64).all(), "已关联到左侧目标的检测不能再取消右侧目标的短时遮挡"
+
+
+@pytest.mark.parametrize("detection", [
+    Detection("face", (20, 20, float("nan"), 40), 0.9),
+    Detection("face", (20, 20, 40, 40), 1.1),
+    Detection("person", (20, 20, 40, 40), 0.9),
+])
+def test_invalid_typed_output_is_not_published_as_a_successful_frame(detection):
+    class Invalid:
+        def detect_regions(self, pixels, *, kind=None):
+            return [detection]
+
+    with pytest.raises(ValueError, match="Invalid detector output"):
+        FrameRedactor(Invalid()).apply(np.full((100, 100, 3), 180, np.uint8), 0)
+
+
+def test_local_recheck_error_propagates_instead_of_returning_an_unmasked_frame():
+    class FailedRecheck:
+        first = True
+
+        def detect_regions(self, pixels, *, kind=None):
+            if pixels.shape != (100, 100, 3):
+                raise RuntimeError("local inference failed")
+            if self.first:
+                self.first = False
+                return [Detection("face", (20, 20, 40, 40), 0.9)]
+            return []
+
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    redactor = FrameRedactor(FailedRecheck())
+    redactor.apply(pixels, 0)
+    with pytest.raises(RuntimeError, match="local inference failed"):
+        redactor.apply(pixels, 0.04)

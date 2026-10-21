@@ -42,7 +42,8 @@ async def test_stopping_worker_does_not_claim_another_task(monkeypatch):
     await tasks.execute("job", broker, None)
 
 
-async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path, monkeypatch):
+@pytest.mark.parametrize("mode", [None, "solid", "mosaic"])
+async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path, monkeypatch, mode):
     stop = asyncio.Event()
     broker = SimpleNamespace(connection_pool=None, state=SimpleNamespace(stop_event=stop), ack_message=AsyncMock())
     record = dict(id="job", kind="image", generation=1, source_kind="url", source_ref="http://approved/input", desired_state="run")
@@ -52,7 +53,10 @@ async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path
     monkeypatch.setattr(tasks, "TaskStore", lambda *a: store)
     monkeypatch.setattr(tasks, "Redis", lambda **kw: None)
     monkeypatch.setattr(tasks, "download", AsyncMock())
+    if mode is not None:
+        record["redaction_mode"] = mode
     async def run(command, payload, cancel, on_event, timeout):
+        assert payload["config"]["redaction_mode"] == (mode or "solid")
         await asyncio.sleep(0.04)
         assert not cancel.is_set()
         return dict(returncode=0, result_ref=str(tmp_path / "job/attempt-1/result.png"))

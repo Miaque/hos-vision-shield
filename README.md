@@ -1,6 +1,6 @@
 # Vision Shield
 
-Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP 流中的人脸和车牌实心遮挡，不做识别或音频脱敏。
+Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP 流中的人脸和车牌深灰色遮挡或马赛克，不做识别或音频脱敏。
 支持直接在 Windows 本机运行；服务器另提供 CPU／指定单卡 GPU 的 Docker Compose 部署。
 项目以 `main` 分支作为主干。
 
@@ -149,7 +149,7 @@ $tasks.queued
 
 ## 模块与运行边界
 
-`api/`负责HTTP契约，`jobs/`负责Taskiq、持久状态和租约，`media/`负责输入、进程生命周期及音视频流水线，`detection/`输出遮挡坐标，`redaction.py`执行实心遮挡及有界的相邻帧补偿。
+`api/`负责HTTP契约，`jobs/`负责Taskiq、持久状态和租约，`media/`负责输入、进程生命周期及音视频流水线，`detection/`输出遮挡坐标，`redaction.py`执行可选遮挡及有界的相邻帧补偿。
 
 默认每池最多100个未结束任务、每队列100条消息。实时流只缓存2个待处理画面，过载取最新帧；文件逐帧处理。AAC缓存超过16秒或4MiB会重建流会话，不无限堆积；该上限保留自EgoBlur CPU校准，并不是延迟保证。
 
@@ -192,3 +192,19 @@ uv run pytest -q
 实际摄像头接入时在 `.env` 中将 `SOURCE_ALLOWLIST` 设置为授权主机/IP/CIDR的JSON数组；默认空数组拒绝远程来源。
 
 当前没有用户鉴权或自动文件删除，原音频不脱敏；检测效果、完整故障恢复与容量以各阶段实测为准。
+
+### 遮挡样式
+
+创建任务时传入 `redaction_mode`：`solid`（默认）为不透明深灰色矩形 RGB `(64, 64, 64)`，`mosaic` 为马赛克。此参数由接口请求控制，不使用环境变量。每个任务单独保存，查询响应会返回所选样式，流重连继续使用原值；未指定或历史任务缺少该字段时使用 `solid`。
+
+- `POST /v1/file-tasks`：JSON 增加 `"redaction_mode": "mosaic"`，与 `kind`、`url` 一起提交。
+- `POST /v1/stream-tasks`：JSON 增加 `"redaction_mode": "mosaic"`，与 `url` 一起提交。
+- `POST /v1/file-tasks/uploads`：multipart 增加文本字段 `redaction_mode=mosaic`，与 `kind`、`file` 一起提交。
+
+仅接受 `solid`、`mosaic`，非法值返回422。样式在创建时确定，不支持修改正在处理的任务。马赛克每个区域最多8×8色块；小于2像素的窄区域使用深灰色，避免原像素直接透出。
+
+### 优化轮次与回退
+
+从2026-10-21开始，每轮优化完成验证后必须提交，并创建不可覆盖的 Git 附注标签 `opt-YYYYMMDD-NN`（当日序号从01递增）。标签说明记录改动、验证和未完成的验收；这些是优化检查点，不代表生产性能认证或正式语义版本发布。不得移动已有标签；提交和标签默认只保存在本地，推送须明确授权。
+
+本轮之前的基线为 `opt-20261021-00`，本轮完成点为 `opt-20261021-01`。效果不理想时，可先用 `git worktree add --detach ../hos-vision-shield-baseline opt-20261021-00` 检查基线，保留当前工作区；正式回退使用经确认的 revert 或按标签重新部署，不默认使用 `reset --hard`。源码标签不包含模型、环境配置、Redis任务和忽略的样例文件，重新部署需保留对应运行资料。

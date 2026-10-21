@@ -73,7 +73,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     """Read/publish RTSP until stop or failure; emit only processed frames and bounded stats."""
     buffer = StreamBuffer(config["frame_buffer_size"], config["audio_buffer_seconds"], config["audio_buffer_bytes"], stop)
     writer_done = threading.Event()
-    redactor = FrameRedactor(detector)
+    redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"))
 
     def read_source():
         source_reader = None

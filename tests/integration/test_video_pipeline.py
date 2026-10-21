@@ -24,7 +24,7 @@ def test_video_preserves_frames_clocks_and_audio(generated_media, tmp_path, name
     with av.open(str(target)) as b:
         frames = list(b.decode(video=0))
         assert [frame.pts * frame.time_base for frame in frames] == expected
-        assert max(frames[0].to_ndarray(format="rgb24")[20, 20]) < 10
+        assert all(abs(int(v) - 64) < 10 for v in frames[0].to_ndarray(format="rgb24")[20, 20])
     if name == "aac.mp4":
         assert audio_payloads(source) == audio_payloads(target)
 
@@ -76,3 +76,17 @@ def test_decoded_frame_dimensions_are_bounded_independently_of_metadata():
         frame = av.VideoFrame(width, height, "rgb24")
         with pytest.raises(ValueError, match="dimensions"):
             check_dimensions(frame.width, frame.height, config)
+
+
+def test_video_mosaic_configuration_reaches_encoded_frames(generated_media, tmp_path):
+    from vision_shield.redaction import redact
+    source, target = generated_media / 'silent.mp4', tmp_path / 'mosaic.mp4'
+    config = {**Settings(_env_file=None).model_dump(), "redaction_mode": "mosaic"}
+    process_video(source, target, FixedDetector(), config, threading.Event(), lambda event: None)
+    with av.open(str(source)) as reader:
+        pixels = next(reader.decode(video=0)).to_ndarray(format='rgb24')
+    expected = redact(pixels, [(10, 10, 30, 30)], mode='mosaic')[20, 20]
+    with av.open(str(target)) as reader:
+        actual = next(reader.decode(video=0)).to_ndarray(format='rgb24')[20, 20]
+    assert all(abs(int(a) - int(b)) < 10 for a, b in zip(actual, expected))
+    assert any(abs(int(v) - 64) > 10 for v in actual), '必须实际使用马赛克而非默认灰块'

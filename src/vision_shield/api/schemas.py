@@ -7,11 +7,13 @@ class FileUrlInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     kind: Literal["image", "video"]
     url: Annotated[str, Field(min_length=1, max_length=4096)]
+    redaction_mode: Literal["solid", "mosaic"] = "solid"
 
 
 class StreamInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     url: Annotated[str, Field(min_length=1, max_length=4096)]
+    redaction_mode: Literal["solid", "mosaic"] = "solid"
 
 
 class DesiredStateInput(BaseModel):
@@ -82,6 +84,7 @@ class ResourcesResponse(BaseModel):
 
 
 class TaskResponse(BaseModel):
+    redaction_mode: Literal["solid", "mosaic"] = "solid"
     id: str
     kind: Literal["image", "video", "stream"]
     state: Literal["queued", "processing", "succeeded", "failed", "cancelled", "connecting", "running", "recovering", "stopped"]
@@ -97,6 +100,7 @@ class TaskResponse(BaseModel):
     @classmethod
     def from_record(cls, record, rtsp_base):
         fields = {key: record[key] for key in ("id", "kind", "state", "desired_state", "ready", "created_at", "updated_at", "error", "stats")}
+        fields["redaction_mode"] = record.get("redaction_mode", "solid")
         fields["result_url"] = f"/v1/tasks/{record['id']}/result" if record["state"] == "succeeded" else None
         fields["playback_url"] = f"{rtsp_base}/redacted/{record['id']}" if record["kind"] == "stream" else None
         return cls(**fields)

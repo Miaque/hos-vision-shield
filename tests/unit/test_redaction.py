@@ -6,8 +6,8 @@ from vision_shield.redaction import redact
 def test_both_classes_and_partial_overlap_are_solid_and_clipped():
     pixels = np.full((10, 20, 3), 200, dtype=np.uint8)
     result = redact(pixels, [(-2, -1, 4.2, 5.2), (15, 5, 25, 12)])
-    assert (result[:6, :5] == 0).all()
-    assert (result[5:, 15:] == 0).all()
+    assert (result[:6, :5] == 64).all()
+    assert (result[5:, 15:] == 64).all()
     assert (result[:, 6:14] == 200).all()
     assert (pixels == 200).all()
 

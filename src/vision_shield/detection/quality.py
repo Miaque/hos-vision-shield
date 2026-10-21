@@ -8,6 +8,7 @@ import numpy as np
 
 from vision_shield.detection.cpu import Detector as DetailDetector
 from vision_shield.detection.egoblur import Detector as PrimaryDetector
+from vision_shield.detection import Detection
 
 
 class Detector:
@@ -27,15 +28,18 @@ class Detector:
                                      parallel=self.inference_device == "cuda")
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
+        return [detection.box for detection in self.detect_regions(rgb)]
+
+    def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Retain strong primary detections and confirmed complementary masks."""
         if self.inference_device == "cuda":
             # 两路全图检测互不依赖；等待两路结束后再复核，异常不返回部分结果。
             with ThreadPoolExecutor(max_workers=1) as pool:
-                pending = pool.submit(self.primary.candidates, rgb)
-                detail = self.detail.candidates(rgb)
+                pending = pool.submit(self.primary.candidates, rgb, kind=kind)
+                detail = self.detail.candidates(rgb, kind=kind)
                 primary = pending.result()
         else:
-            primary, detail = self.primary.candidates(rgb), self.detail.candidates(rgb)
+            primary, detail = self.primary.candidates(rgb, kind=kind), self.detail.candidates(rgb, kind=kind)
         height, width = rgb.shape[:2]
         boxes = []
         for candidates, others, verifier, is_primary in [(primary, detail, self.detail, True),
@@ -76,8 +80,8 @@ class Detector:
                 x1, y1, x2, y2 = detection.box
                 pad_x = (x2 - x1) * self.box_padding * (2 if not is_primary and detection.kind == "plate" else 1)
                 pad_y = (y2 - y1) * self.box_padding
-                boxes.append((max(0, x1 - pad_x), max(0, y1 - pad_y),
-                              min(width, x2 + pad_x), min(height, y2 + pad_y)))
+                boxes.append(Detection(detection.kind, (max(0, x1 - pad_x), max(0, y1 - pad_y),
+                                       min(width, x2 + pad_x), min(height, y2 + pad_y)), detection.score))
         return boxes
 
     def _recover_face(self, rgb, detection):

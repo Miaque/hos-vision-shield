@@ -46,7 +46,7 @@ def test_quality_cuda_runs_local_models_and_preserves_reviewed_regions(case_id):
     masked = redact(pixels, actual)
     assert np.array_equal(masked, redact(pixels, expected))
     for left, top, right, bottom in case["masked_regions"]:
-        assert not masked[top:bottom, left:right].any(), "已标记目标必须遮挡"
+        assert (masked[top:bottom, left:right] == 64).all(), "已标记目标必须遮挡"
     for left, top, right, bottom in case["preserved_regions"]:
         assert np.array_equal(masked[top:bottom, left:right], pixels[top:bottom, left:right]), "误遮区域应保留"
 

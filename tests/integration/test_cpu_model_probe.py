@@ -22,4 +22,4 @@ def test_cpu_models_match_manifest_and_mask_a_real_face():
         pixels = np.asarray(source.convert("RGB"))
     from vision_shield.redaction import redact
     masked = redact(pixels, detector.detect(pixels))
-    assert (masked[270, 560] == 0).all()
+    assert (masked[270, 560] == 64).all()

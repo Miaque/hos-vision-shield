@@ -25,16 +25,19 @@ class Detector:
         self.plate.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
+        return [detection.box for detection in self.detect_regions(rgb)]
+
+    def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Return padded source xyxy masks from a global view and overlapping source tiles."""
         height, width = rgb.shape[:2]
         boxes = []
-        for detection in self.candidates(rgb):
+        for detection in self.candidates(rgb, kind=kind):
             x1, y1, x2, y2 = detection.box
             # Plates need more horizontal margin when blurred or partly occluded.
             pad_x = (x2 - x1) * self.box_padding * (2 if detection.kind == "plate" else 1)
             pad_y = (y2 - y1) * self.box_padding
-            boxes.append((max(0, x1 - pad_x), max(0, y1 - pad_y),
-                          min(width, x2 + pad_x), min(height, y2 + pad_y)))
+            boxes.append(Detection(detection.kind, (max(0, x1 - pad_x), max(0, y1 - pad_y),
+                                   min(width, x2 + pad_x), min(height, y2 + pad_y)), detection.score))
         # Keep overlapping masks: suppressing a wider, lower-score box can expose a plate edge.
         return boxes
 

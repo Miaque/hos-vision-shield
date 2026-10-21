@@ -1,15 +1,20 @@
-"""Shared solid masking in RGB pixel coordinates, independent of media and HTTP."""
+"""Shared opaque masking in RGB pixel coordinates, independent of media and HTTP."""
 
 import math
 from collections.abc import Iterable
 from collections import deque
+from typing import NamedTuple
 
 import cv2
 import numpy as np
 
+from vision_shield.detection import Detection
 
-def redact(pixels: np.ndarray, boxes: Iterable[tuple[float, float, float, float]]) -> np.ndarray:
-    """Copy RGB pixels and fill each clipped xyxy region with opaque black."""
+
+def redact(pixels: np.ndarray, boxes: Iterable[tuple[float, float, float, float]], *, mode: str = "solid") -> np.ndarray:
+    """Copy RGB pixels and apply dark gray or coarse mosaic to clipped regions."""
+    if mode not in {"solid", "mosaic"}:
+        raise ValueError("Unsupported redaction mode")
     result = pixels.copy()
     height, width = result.shape[:2]
     for x1, y1, x2, y2 in boxes:
@@ -18,14 +23,32 @@ def redact(pixels: np.ndarray, boxes: Iterable[tuple[float, float, float, float]
         left, top = max(0, math.floor(x1)), max(0, math.floor(y1))
         right, bottom = min(width, math.ceil(x2)), min(height, math.ceil(y2))
         if right > left and bottom > top:
-            result[top:bottom, left:right] = 0
+            region = result[top:bottom, left:right]
+            if mode == "solid" or min(region.shape[:2]) < 2:
+                region[:] = 64
+            else:
+                # Use original pixels to avoid repeatedly degrading overlapping regions.
+                small = cv2.resize(pixels[top:bottom, left:right],
+                                   (max(1, min(8, (right - left) // 12)),
+                                    max(1, min(8, (bottom - top) // 12))), interpolation=cv2.INTER_AREA)
+                region[:] = cv2.resize(small, (right - left, bottom - top), interpolation=cv2.INTER_NEAREST)
     return result
+
+
+class _Track(NamedTuple):
+    seen: float
+    checked: float
+    box: tuple[float, float, float, float]
+    kind: str
 
 
 class FrameRedactor:
     """Follow confirmed masks briefly; only actual detections may renew their lifetime."""
 
-    def __init__(self, detector):
+    def __init__(self, detector, *, mode="solid"):
+        if mode not in {"solid", "mosaic"}:
+            raise ValueError("Unsupported redaction mode")
+        self.mode = mode
         self.detector = detector
         self.history = deque(maxlen=128)
         self.previous, self.shape, self.moment = None, None, None
@@ -41,36 +64,82 @@ class FrameRedactor:
         if reset:
             self.history.clear()
             self.gray = None
+        elapsed = moment - self.moment if not reset else 0
         self.previous, self.shape, self.moment = thumbnail, pixels.shape, moment
-        boxes = self.detector.detect(pixels)
+        detections = self._detections(pixels)
+        boxes = [detection.box for detection in detections]
         gray = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
         retained, history = [], []
-        for seen, checked, box in self.history:
-            if moment - seen > 0.5 or any(self._overlap(box, current) >= 0.2 for current in boxes):
+        pairs = sorted(((self._overlap(track.box, detection.box), old, new)
+                        for old, track in enumerate(self.history) for new, detection in enumerate(detections)
+                        if track.kind == detection.kind and moment - track.seen <= 0.5), reverse=True)
+        matched_old, matched_new = set(), set()
+        for overlap, old, new in pairs:
+            if overlap < 0.2:
+                break
+            if old in matched_old or new in matched_new:
+                continue
+            matched_old.add(old)
+            matched_new.add(new)
+            boxes[new] = self._smooth(self.history[old].box, boxes[new], elapsed)
+        for old, (seen, checked, box, kind) in enumerate(self.history):
+            if moment - seen > 0.5 or old in matched_old:
                 continue
             predicted = self._follow(gray, box)
             if predicted is None:
-                confirmed = self._recheck(pixels, box)
+                confirmed = self._recheck(pixels, box, kind) if kind else self._recheck(pixels, box)
                 if confirmed is not None:
                     retained.append(confirmed)
-                    history.append((moment, moment, confirmed))
+                    history.append(_Track(moment, moment, confirmed, kind))
                     continue
                 if moment - seen <= 0.2:
                     retained.append(box)
-                    history.append((seen, checked, box))
+                    history.append(_Track(seen, checked, box, kind))
                 continue
-            if any(self._overlap(predicted, current) >= 0.2 for current in boxes):
+            matches = [(self._overlap(predicted, detection.box), new)
+                       for new, detection in enumerate(detections)
+                       if new not in matched_new and detection.kind == kind]
+            overlap, new = max(matches, default=(0, -1))
+            if overlap >= 0.2:
+                matched_new.add(new)
+                boxes[new] = self._smooth(predicted, boxes[new], elapsed)
                 continue
             if moment - seen > 0.2 and moment - checked >= 0.2:
-                confirmed = self._recheck(pixels, predicted)
+                confirmed = self._recheck(pixels, predicted, kind) if kind else self._recheck(pixels, predicted)
                 checked = moment
                 if confirmed is not None:
                     predicted, seen = confirmed, moment
             retained.append(predicted)
-            history.append((seen, checked, predicted))
-        self.history = deque(history + [(moment, moment, box) for box in boxes], maxlen=128)
+            history.append(_Track(seen, checked, predicted, kind))
+        self.history = deque(history + [_Track(moment, moment, box, detection.kind)
+                                       for box, detection in zip(boxes, detections, strict=True)], maxlen=128)
         self.gray = gray
-        return redact(pixels, boxes + retained)
+        return redact(pixels, boxes + retained, mode=self.mode)
+
+    def _detections(self, pixels, kind=None):
+        regions = getattr(self.detector, "detect_regions", None)
+        if regions:
+            detections = regions(pixels, kind=kind) if kind else regions(pixels)
+        else:
+            detections = [Detection("", box, 1) for box in self.detector.detect(pixels)]
+        for detection in detections:
+            x1, y1, x2, y2 = detection.box
+            if (regions and detection.kind not in {"face", "plate"}
+                    or not all(math.isfinite(v) for v in (*detection.box, detection.score))
+                    or not 0 <= detection.score <= 1 or x2 <= x1 or y2 <= y1):
+                raise ValueError("Invalid detector output")
+        return detections
+
+    @staticmethod
+    def _smooth(previous, current, elapsed):
+        # Never shrink inside today's detection; bound the trailing margin on moving targets.
+        weight = 1 - math.exp(-elapsed / 0.1)
+        margin = ((current[2] - current[0]) * 0.25, (current[3] - current[1]) * 0.25)
+        blended = [old + weight * (new - old) for old, new in zip(previous, current, strict=True)]
+        return (max(current[0] - margin[0], min(current[0], blended[0])),
+                max(current[1] - margin[1], min(current[1], blended[1])),
+                min(current[2] + margin[0], max(current[2], blended[2])),
+                min(current[3] + margin[1], max(current[3], blended[3])))
 
     @staticmethod
     def _overlap(a, b):
@@ -98,7 +167,7 @@ class FrameRedactor:
         dx, dy = sx + location[0] - left, sy + location[1] - top
         return max(0, x1 + dx), max(0, y1 + dy), min(width, x2 + dx), min(height, y2 + dy)
 
-    def _recheck(self, pixels, box):
+    def _recheck(self, pixels, box, kind=""):
         x1, y1, x2, y2 = box
         size = max(96, 3 * max(x2 - x1, y2 - y1))
         left, top = max(0, math.floor((x1 + x2 - size) / 2)), max(0, math.floor((y1 + y2 - size) / 2))
@@ -108,6 +177,7 @@ class FrameRedactor:
         view = cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
         xs, ys = (right - left) / view.shape[1], (bottom - top) / view.shape[0]
         candidates = [(left + a * xs, top + b * ys, left + c * xs, top + d * ys)
-                      for a, b, c, d in self.detector.detect(view)]
+                      for detection in self._detections(view, kind) if detection.kind == kind
+                      for a, b, c, d in [detection.box]]
         candidates = [candidate for candidate in candidates if self._overlap(box, candidate) >= 0.2]
         return max(candidates, key=lambda candidate: self._overlap(box, candidate)) if candidates else None

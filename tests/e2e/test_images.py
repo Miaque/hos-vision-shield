@@ -29,7 +29,7 @@ async def test_real_native_queue_and_image_model(native_app, http_media):
     assert output.status_code == 200
     with Image.open(io.BytesIO(output.content)) as result:
         assert result.size == (1080, 1920)
-        assert max(result.getpixel((560, 270))) < 10
+        assert all(abs(v - 64) < 10 for v in result.getpixel((560, 270)))
     assert list(native_app["root"].glob("*/source.bin"))
     created = await client.post("/v1/file-tasks", json={"kind": "image", "url": f"{base}/no-target.png"})
     done = await wait_terminal(client, created.json()["id"])

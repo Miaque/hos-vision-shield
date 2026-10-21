@@ -50,7 +50,7 @@ async def create_stream(data: StreamInput, request: Request, response: Response)
     settings = request.app.state.settings
     await validate_source(data.url, settings.source_allowlist, ("rtsp",))
     await require_worker(request.app.state.redis, "stream", settings.lease_seconds)
-    task = await request.app.state.store.create("stream", "rtsp", data.url)
+    task = await request.app.state.store.create("stream", "rtsp", data.url, redaction_mode=data.redaction_mode)
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)
 
@@ -60,7 +60,7 @@ async def file_url(data: FileUrlInput, request: Request, response: Response):
     settings = request.app.state.settings
     await validate_source(data.url, settings.source_allowlist)
     await require_worker(request.app.state.redis, data.kind, settings.lease_seconds)
-    task = await request.app.state.store.create(data.kind, "url", data.url)
+    task = await request.app.state.store.create(data.kind, "url", data.url, redaction_mode=data.redaction_mode)
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)
 
@@ -70,16 +70,21 @@ async def file_url(data: FileUrlInput, request: Request, response: Response):
                  "type": "object", "required": ["kind", "file"], "properties": {
                      "kind": {"type": "string", "enum": ["image", "video"]},
                      "file": {"type": "string", "format": "binary"},
+                     "redaction_mode": {"type": "string", "enum": ["solid", "mosaic"], "default": "solid"},
                  }}}}}})
 async def upload(request: Request, response: Response):
     settings = request.app.state.settings
     await require_worker(request.app.state.redis, "image", settings.lease_seconds)
     async with asyncio.timeout(settings.upload_timeout):
-        async with request.form(max_files=1, max_fields=1) as form:
-            if set(form) != {"kind", "file"} or len(form.multi_items()) != 2:
+        async with request.form(max_files=1, max_fields=2) as form:
+            if (not {"kind", "file"} <= set(form) or set(form) - {"kind", "file", "redaction_mode"}
+                    or len(form.multi_items()) != len(form)):
                 raise HTTPException(422, "invalid_input")
             kind, file = form["kind"], form["file"]
             if kind not in {"image", "video"} or not isinstance(file, UploadFile):
+                raise HTTPException(422, "invalid_input")
+            redaction_mode = form.get("redaction_mode", "solid")
+            if redaction_mode not in ("solid", "mosaic"):
                 raise HTTPException(422, "invalid_input")
             task_id = str(uuid4())
             directory = settings.media_root.resolve() / task_id
@@ -95,7 +100,7 @@ async def upload(request: Request, response: Response):
                     await asyncio.to_thread(output.write, block)
             finally:
                 await asyncio.to_thread(output.close)
-    task = await request.app.state.store.create(kind, "upload", str(target), task_id)
+    task = await request.app.state.store.create(kind, "upload", str(target), task_id, redaction_mode=redaction_mode)
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)
 

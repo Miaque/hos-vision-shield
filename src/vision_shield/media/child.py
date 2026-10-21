@@ -67,7 +67,8 @@ def main():
                 suffix = ".jpg" if source.format == "JPEG" else ".png"
             result = directory / ("result" + suffix)
             temporary = directory / ("result" + suffix + ".part")
-            process_image(payload["source"], temporary, detector, cfg["max_image_pixels"])
+            process_image(payload["source"], temporary, detector, cfg["max_image_pixels"],
+                          redaction_mode=cfg.get("redaction_mode", "solid"))
             if stop.is_set():
                 return
             temporary.replace(result)

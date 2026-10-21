@@ -87,9 +87,9 @@ def test_quality_keeps_strong_primary_and_confirmed_wider_edges():
     rgb = np.full((10, 40, 3), 200, np.uint8)
     from vision_shield.redaction import redact
     masked = redact(rgb, detector.detect(rgb))
-    assert not masked[1:7, :10].any()
+    assert (masked[1:7, :10] == 64).all()
     assert (masked[3:8, 15:18] == 200).all()
-    assert not masked[3:8, 30:39].any()
+    assert (masked[3:8, 30:39] == 64).all()
     assert (rgb == 200).all()
 
 
@@ -410,3 +410,20 @@ def test_invalid_primary_metadata_cannot_be_used_as_confirmation(bad):
     detector.max_side, detector.box_padding = 1280, 0.15
     with pytest.raises(ValueError, match="Invalid detector output"):
         detector.candidates(np.zeros((10, 10, 3), np.uint8))
+
+@pytest.mark.parametrize('kind', ['face', 'plate'])
+def test_typed_quality_recheck_does_not_run_unrelated_models(kind):
+    from vision_shield.detection.quality import Detector
+
+    class Model:
+        def candidates(self, pixels, *, kind=None):
+            assert kind == expected, '局部补检不应执行无关类别模型'
+            return [Detection(kind, (20, 20, 40, 40), 0.95)]
+
+    expected = kind
+    detector = Detector.__new__(Detector)
+    detector.inference_device = 'cpu'
+    detector.primary = detector.detail = Model()
+    detector.box_padding = 0
+    regions = detector.detect_regions(np.zeros((100, 100, 3), np.uint8), kind=kind)
+    assert regions and all(region.kind == kind for region in regions)

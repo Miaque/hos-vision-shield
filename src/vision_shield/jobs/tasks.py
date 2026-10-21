@@ -97,7 +97,7 @@ async def execute(task_id, broker, context):
         result = {}
         if not cancel.is_set():
             payload = dict(kind=record["kind"], source=str(source), directory=str(directory),
-                           config=settings.model_dump(mode="json"))
+                           config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid")})
             result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                        payload, cancel, event_received, settings.process_stop_timeout)
         current = await store.get(task_id)
@@ -152,7 +152,7 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                         await store.update_owned(task_id, owner, generation, **values)
 
                 payload = dict(kind="stream", source=str(original.copy_with(host=address)),
-                               publish_url=publish_url, config=settings.model_dump(mode="json"),
+                               publish_url=publish_url, config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid")},
                                directory=str(settings.media_root.resolve() / task_id / f"attempt-{generation}"))
                 result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                            payload, cancel, event_received, settings.process_stop_timeout)

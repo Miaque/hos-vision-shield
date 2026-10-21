@@ -71,7 +71,7 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                   stop: Event, emit: Callable[[dict], None]) -> int:
     """Write complete MP4, preserving frame clocks and AAC packets; return frame count."""
     count, started = 0, time.monotonic()
-    redactor = FrameRedactor(detector)
+    redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"))
     with av.open(source) as reader, av.open(target, "w", format="mp4") as writer:
         brand = reader.metadata.get("major_brand", "").lower().strip()
         if "mp4" not in reader.format.name.split(",") or brand.startswith(("qt", "3g", "mjp", "mj2")):

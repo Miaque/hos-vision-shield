@@ -54,7 +54,7 @@ def test_short_dropout_is_masked_but_history_expires_and_resets():
 
     masked_frame(frame(0), redactor)
     detector.boxes = []
-    assert not masked_frame(frame(100), redactor).to_ndarray(format="rgb24")[30, 30].any()
+    assert (masked_frame(frame(100), redactor).to_ndarray(format="rgb24")[30, 30] == 64).all()
     # Retained masks never refresh their own expiry.
     assert masked_frame(frame(300), redactor).to_ndarray(format="rgb24")[30, 30].min() == 200
     detector.boxes = [(20, 20, 40, 40)]
@@ -149,7 +149,7 @@ def test_moving_confirmed_mask_follows_pixels_and_only_real_detections_extend_ex
         original = pixels.copy()
         actual = redactor.apply(pixels, index / 20)
         if index <= 9 or local_confirmation:
-            assert not actual[31:49, left + 1:left + 19].any(), "短暂漏检时遮挡必须跟随目标，不能留在旧位置"
+            assert (actual[31:49, left + 1:left + 19] == 64).all(), "短暂漏检时遮挡必须跟随目标，不能留在旧位置"
         if index == 11 and not local_confirmation:
             assert np.array_equal(actual, original), "仅跟踪成功不能无限续期"
         assert np.array_equal(pixels, original)
@@ -168,7 +168,7 @@ def test_track_state_is_bounded_without_discarding_current_masks():
     redactor = FrameRedactor(ManyTargets())
     actual = redactor.apply(np.full((40, 40, 3), 180, np.uint8), 0)
     assert len(redactor.history) == 128
-    assert all(not actual[y1:y2, x1:x2].any() for x1, y1, x2, y2 in boxes)
+    assert all((actual[y1:y2, x1:x2] == 64).all() for x1, y1, x2, y2 in boxes)
 
 
 def test_failed_motion_match_rechecks_current_position(monkeypatch):
@@ -187,6 +187,6 @@ def test_failed_motion_match_rechecks_current_position(monkeypatch):
     monkeypatch.setattr(redactor, "_follow", lambda gray, box: None)
     monkeypatch.setattr(redactor, "_recheck", lambda pixels, box: (30, 20, 50, 40))
     actual = redactor.apply(pixels, 0.05)
-    assert not actual[20:40, 30:50].any()
+    assert (actual[20:40, 30:50] == 64).all()
     assert actual[25, 22].min() == 180
     assert redactor.history[0][0] == 0.05

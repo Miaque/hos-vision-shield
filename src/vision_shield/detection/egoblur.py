@@ -24,11 +24,14 @@ class Detector:
                        for path in (face_path, plate_path)]
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
+        return [detection.box for detection in self.detect_regions(rgb)]
+
+    def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Return padded xyxy boxes in source RGB coordinates without altering the pixels."""
         # Mobile-camera blur can extend beyond the predicted rectangle.
-        return [(x1 - (x2 - x1) * self.box_padding, y1 - (y2 - y1) * self.box_padding,
-                 x2 + (x2 - x1) * self.box_padding, y2 + (y2 - y1) * self.box_padding)
-                for detection in self.candidates(rgb) for x1, y1, x2, y2 in [detection.box]]
+        return [Detection(detection.kind, (x1 - (x2 - x1) * self.box_padding, y1 - (y2 - y1) * self.box_padding,
+                 x2 + (x2 - x1) * self.box_padding, y2 + (y2 - y1) * self.box_padding), detection.score)
+                for detection in self.candidates(rgb, kind=kind) for x1, y1, x2, y2 in [detection.box]]
 
     def candidates(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Return unpadded source boxes with type and score for cross-model confirmation."""
