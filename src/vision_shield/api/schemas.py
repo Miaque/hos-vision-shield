@@ -100,3 +100,8 @@ class TaskResponse(BaseModel):
         fields["result_url"] = f"/v1/tasks/{record['id']}/result" if record["state"] == "succeeded" else None
         fields["playback_url"] = f"{rtsp_base}/redacted/{record['id']}" if record["kind"] == "stream" else None
         return cls(**fields)
+
+
+class TaskListResponse(BaseModel):
+    current: list[TaskResponse]
+    queued: list[TaskResponse]

@@ -120,6 +120,19 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -
 
 PATCH返回202表示停止意图已保存；查询到cancelled/stopped才表示资源清理完成。已成功文件不能再取消（409）。流自动重连并保留停止意图，文件worker崩溃则标记worker_lost，不自动续跑。
 
+`GET /v1/tasks` 查询所有文件和流的未结束任务，返回 `{"current": [...], "queued": [...]}`，没有任务时对应空数组：
+
+- `current`：处理中、连接中、运行中、仍由 worker 持有的恢复中任务，以及等待取消/停止完成的任务。
+- `queued`：等待执行的 `queued` 任务，以及没有 owner、等待重新调度的 `recovering` 任务；只包含仍希望运行的任务。
+
+每项字段与 `GET /v1/tasks/{id}` 相同，不返回源地址、凭据及内部 owner 信息。两组分别按创建时间升序、ID 次序排列，数组长度即该组任务数；展示顺序不代表调度顺序，也不是 Redis 消息队列中的消息数量。查询读取持久状态，非原子快照，状态和 owner 的失效由协调器更新。已结束任务不列出，仍可按 ID 查询。
+
+```powershell
+$tasks = Invoke-RestMethod http://127.0.0.1:8000/v1/tasks
+$tasks.current
+$tasks.queued
+```
+
 `GET /v1/diagnostics/resources` 查看有效 worker 的 CPU、内存和绑定显卡资源快照。CPU 为 worker 的 Linux cgroup v2 口径，包含媒体子进程；GPU 为所选显卡整卡口径，缺失和陈旧值会明确标记。字段单位、部署步骤及后续优化验收见[资源观测说明](specs/002-compose-cpu-gpu/diagnostics.md)。
 
 默认只监听本机。其他系统接入时，部署方需同时修改启动脚本的API监听、MediaMTX的RTSP监听与 `.env` 的 `RTSP_PUBLIC_BASE_URL` 为可达内网地址，并限制防火墙可达范围。MediaMTX控制API和Redis继续仅监听本机。

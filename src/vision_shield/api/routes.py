@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile
 from pydantic import ValidationError
 
-from vision_shield.api.schemas import (DesiredStateInput, FileUrlInput, StreamInput, TaskResponse,
+from vision_shield.api.schemas import (DesiredStateInput, FileUrlInput, StreamInput, TaskResponse, TaskListResponse,
                                       ResourceSnapshot, ResourcesResponse)
 from vision_shield.jobs.diagnostics import STALE_SECONDS
 from vision_shield.jobs.service import require_worker
@@ -98,6 +98,20 @@ async def upload(request: Request, response: Response):
     task = await request.app.state.store.create(kind, "upload", str(target), task_id)
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)
+
+
+@router.get("/tasks", response_model=TaskListResponse)
+async def list_tasks(request: Request):
+    groups = {"current": [], "queued": []}
+    tasks = await request.app.state.store.active()
+    for task in sorted(tasks, key=lambda task: (task["created_at"], task["id"])):
+        if task["state"] not in {"queued", "processing", "connecting", "running", "recovering"}:
+            continue
+        waiting = task["desired_state"] == "run" and (
+            task["state"] == "queued" or (task["state"] == "recovering" and task["owner_id"] is None)
+        )
+        groups["queued" if waiting else "current"].append(public(request, task))
+    return groups
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
