@@ -177,6 +177,8 @@ uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo --o
 
 ## 检测模型
 
+Ampere及更新CUDA架构（计算能力主版本至少8，包括RTX6000 Ada）使用EgoBlur混合精度：卷积骨干FP16，归一化、候选生成、检测头、ROIAlign和后处理FP32；CPU及较旧显卡维持FP32。权重文件、输入尺寸和阈值不变，但浮点分数/框会有细微变化，必须通过真实素材验收。该路径适配当前固定Gen1导出图，更换权重版本须重新验证。
+
 模型来源：OpenCV Zoo及HyperLPR作者仓库固定版本记录在 `models/cpu-manifest.json`，EgoBlur固定版本记录在 `models/manifest.json`。下载、许可和切换方法见[模型说明](models/README.md)。效果优先组合中任一模型文件缺失或推理失败都会使处理失败，不返回部分模型结果或透传原始画面。
 
 ## 运行验证

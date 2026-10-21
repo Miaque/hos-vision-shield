@@ -35,3 +35,24 @@ def test_unavailable_cuda_fails_before_loading_models(monkeypatch):
     monkeypatch.setattr(egoblur.torch.cuda, "is_available", lambda: False)
     with pytest.raises(RuntimeError, match="CUDA"):
         egoblur.Detector("absent-face", "absent-plate", device="cuda")
+
+
+@pytest.mark.parametrize("device,capability,expected", [("cpu", None, []), ("cuda", (6, 1), []), ("cuda", (7, 5), []),
+                                                        ("cuda", (8, 9), ["face", "plate"])])
+def test_half_backbone_is_only_selected_for_tensor_core_cuda(monkeypatch, device, capability, expected):
+    from vision_shield.detection import egoblur
+
+    class Model:
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    converted = []
+    monkeypatch.setattr(egoblur.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(egoblur.torch.cuda, "get_device_capability", lambda device: capability)
+    monkeypatch.setattr(egoblur.torch.jit, "load", lambda *a, **kw: Model())
+    monkeypatch.setattr(egoblur, "_MixedPrecisionModel", lambda model, kind: converted.append(kind) or model)
+    egoblur.Detector("face", "plate", device=device)
+    assert converted == expected
