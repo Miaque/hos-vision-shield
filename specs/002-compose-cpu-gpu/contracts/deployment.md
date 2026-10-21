@@ -11,6 +11,7 @@
 | `deploy/Dockerfile` | 一个构建定义，生成 CPU 与 cu126 两种应用镜像 |
 | `deploy/requirements-cu126.txt` | 从根声明与原锁共同版本约束生成的带哈希 GPU 锁，不改变本机默认依赖 |
 | `deploy/compose.env.example` | 服务器配置示例，复制为根目录 `.env.compose` |
+| `scripts/deploy-server.sh` | GPU 服务器拉取主干、构建镜像、更新容器并等待就绪，复用现有配置及项目名 |
 | `deploy/mediamtx.compose.yml` | 内部控制接口、RTSP TCP、指向 API 服务的发布鉴权回调 |
 | `.dockerignore` | 排除权重、压缩包、媒体、样本、虚拟环境、Git 和本机环境文件 |
 

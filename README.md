@@ -49,6 +49,16 @@ docker-compose --env-file .env.compose -p vision-shield -f compose.yaml up -d --
 docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml up -d --build
 ```
 
+日常更新可直接使用 Git 工作目录；从源码包切换可克隆新目录，或在原目录接入 Git，步骤见[Git 更新与重新构建](specs/002-compose-cpu-gpu/quickstart.md#7-git-更新与重新构建)。GPU 服务器在仓库根目录执行：
+
+```bash
+bash scripts/deploy-server.sh
+```
+
+代码须先从开发机提交并推送到远程 `main`；首次使用前先执行 `git -c http.version=HTTP/1.1 pull --ff-only origin main` 获取脚本。脚本固定使用 GPU 文件组合、项目名 `vision-shield` 和现有 `.env.compose`，依次拉取代码、检查配置、构建、更新容器并等待就绪（最多 240 秒），成功后输出提交号。未提交的跟踪文件修改、分支不符、分叉或本地额外提交均会停止部署。脚本不备份、不强制重置、不自动回滚，网络或构建失败时不会进入容器更新步骤。
+
+日常更新不先执行 `down`，构建成功后才替换容器。重建期间旧容器继续服务，替换时会短暂中断；正在执行的文件任务不会续跑，流任务会尝试恢复。当前 Dockerfile 已分离依赖层与应用层，构建缓存可用且依赖未变时，源码修改可复用已安装的 PyTorch/CUDA 依赖；不要在日常更新中使用 `--no-cache`。
+
 `compose.yaml` 包含 MediaMTX、API、reconciler 和两个 worker，共五个服务，直接复用现有带密码 Redis。在 `.env.compose` 设置 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`，并将文件权限设为 `600`；四个应用服务统一读取该地址。宿主发布端口须能从 Docker 网络访问。现有 Redis 的持久化及淘汰策略由部署方核对，不修改共享实例配置。
 
 仅 API/RTSP 端口按配置发布；部署示例设置 `BIND_ADDRESS=192.168.1.104`、`RTSP_PUBLIC_BASE_URL=rtsp://192.168.1.104:8554`，API 文档地址为 `http://192.168.1.104:8000/docs`。模型及媒体目录分别为 `/data/hos-vision-shield/models`、`/data/hos-vision-shield/data`。容器内部推流与控制沿用服务名，远程输入还须配置来源允许列表。媒体目录保留在宿主机，切换前按原文件组合执行 `down`，不使用 `down -v`。

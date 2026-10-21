@@ -166,3 +166,102 @@ GPU 验收期间记录 `docker stats --no-stream` 和 `nvidia-smi --query-comput
 ```
 
 日常命令不使用 `down -v`。切换模式后重新定义当前模式的 dc 数组，再执行配置检查、构建和启动。保留实际执行命令、退出码及证据；未执行的故障或效果场景必须写明，不能以配置解析或模拟测试替代服务器验收。
+
+## 7. Git 更新与重新构建
+
+当前服务器已经从源码包部署 GPU 版本时，只需将源码获取方式改成 Git；现有 Dockerfile 和 Compose 已支持从本地源码构建。下面以现有项目名 `vision-shield` 为例；若首次部署用了其他 `-p` 名称，后续必须使用原名称。可用 `docker-compose ls` 核对，避免创建第二套服务占用相同端口。
+
+### 首次从源码包目录切换
+
+先在开发机提交并推送需要部署的变更到远程 `main`。服务器需要 Git 及仓库读取权限；私有仓库使用 SSH key 或 Git 凭据管理，不将令牌写进仓库文件。
+
+在服务器替换下面两项占位值，克隆到旧目录旁边的新目录，保留旧目录用于核对：
+
+```bash
+OLD_SOURCE='/实际路径/旧源码目录'
+REPO_URL='仓库的SSH或HTTPS地址'
+cd "$(dirname "$OLD_SOURCE")" &&
+git clone --branch main --single-branch "$REPO_URL" hos-vision-shield-git &&
+cd hos-vision-shield-git &&
+cp -p "$OLD_SOURCE/.env.compose" .env.compose &&
+chmod 600 .env.compose
+```
+
+复制服务器已有配置，不用示例覆盖它。确认其中 `MODEL_DIR`、`MEDIA_DIR` 仍指向原来的宿主绝对目录，`REDIS_URL`（包括数据库编号）、GPU UUID、端口及允许列表保持服务器实际配置。模型、结果文件和 Redis 数据无需搬移；若改过旧目录中的 Compose 或 MediaMTX 配置，先核对差异并保留必要设置，再进行更新。`.env.compose` 已被 Git 和 Docker 构建上下文忽略，后续拉取代码不覆盖此文件。
+
+然后执行下方更新命令。新旧目录均操作同一 Compose 项目，切换后统一从新目录管理服务，不再从旧目录执行 `up` 或 `down`。第一次切换目录时，MediaMTX 配置挂载的宿主路径也会变化，Compose 可能重建该容器，播放会短暂中断。
+
+### 在现有源码包目录原地接入 Git
+
+如果需要保留当前源码目录及所有挂载路径，可以使用此方式代替上面的克隆步骤。以下命令仅用于尚无 `.git` 的源码包目录，且已确认服务器没有独立代码修改；按当前部署约定不执行备份。保持在当前目录，将仓库地址替换为实际值，初始化并关联远程 `main`；此阶段只同步 Git 索引，不覆盖工作目录文件：
+
+```bash
+git init -b main &&
+git remote add origin '仓库的SSH或HTTPS地址' &&
+git fetch origin main &&
+git reset --mixed origin/main &&
+git branch --set-upstream-to=origin/main main
+git diff --stat
+git diff -- compose.yaml compose.gpu.yaml deploy/
+```
+
+核对差异，特别是服务器单独修改过的 Compose、Dockerfile 和 MediaMTX 配置。接下来这条命令会用刚获取的版本覆盖仓库跟踪文件，并补齐原源码包缺少的文件：
+
+```bash
+git restore --worktree -- .
+git status --short
+```
+
+当前仓库未跟踪 `.env.compose`、`data/`、模型 `.jit`/`.onnx` 权重及 `vision-shield-models.tar.gz`，这些文件不会被上述同步覆盖；模型清单和说明属于跟踪文件，会随源码更新。不要执行 `git clean`，也不要把服务器凭据或权重加入暂存区。后续 `pull` 前保持跟踪文件无未提交修改。
+
+然后按下方命令构建及更新 GPU 容器。原地接入 Git 本身不重启容器；实际中断发生在更新容器时。此 Git 迁移流程已在临时目录核对：原有配置、媒体、权重和压缩包内容保持不变，跟踪源码更新；不代表服务器构建或运行已验收。
+
+### 后续日常更新
+
+GPU 服务器使用 `scripts/deploy-server.sh`。前提是当前目录已经接入 Git、分支为 `main`，保留原 `.env.compose`，且原部署项目名为 `vision-shield`。脚本可从任意目录以实际脚本路径调用，会自动进入仓库根目录。
+
+开发机先提交并推送变更；第一次使用时，在服务器仓库根目录获取脚本：
+
+```bash
+git -c http.version=HTTP/1.1 pull --ff-only origin main
+```
+
+成功后，以后每次更新只需执行：
+
+```bash
+bash scripts/deploy-server.sh
+```
+
+脚本依次验证 Git/配置前提、使用 HTTP/1.1 拉取 `origin main`、静默校验 Compose 配置、构建 CPU/GPU 镜像，再更新容器并等待服务运行及 API 健康（最多 240 秒）。沿用原 API `/health/ready` 和 worker 预检机制，成功后显示服务状态及部署提交号；HTTP/1.1 不保证网络可用，拉取失败时直接停止。
+
+脚本拒绝未提交的跟踪文件修改、非 `main` 分支、分叉或本地额外提交，不自动 stash、强制重置、备份或回滚，不输出包含凭据的展开配置。脚本更新自身时，本次执行使用启动时已解析的脚本内容。验证使用真实 Bash 和临时 Git 仓库、替代 Compose 命令；没有执行真实 Docker 构建或服务器部署。
+
+CPU 部署仍可使用手动命令；GPU 模式的手动命令与脚本主体对应如下：
+
+```bash
+dc=(docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml)
+git pull --ff-only origin main &&
+"${dc[@]}" config --quiet &&
+"${dc[@]}" build &&
+"${dc[@]}" up -d --no-build --wait --wait-timeout 240
+```
+
+`--ff-only` 在服务器分支产生分叉时停止更新，不自动合并。服务器的环境差异保存在 `.env.compose`，代码变更在开发机提交；遇到本地修改冲突时先核对，不通过强制重置覆盖。开发机仅提交还不够，必须先推送到远程，服务器才能拉到该提交。
+
+构建时旧容器继续运行，构建失败不会进入 `up`；修复后重新执行即可。`up` 会依据镜像及配置变化重建所需容器；仅执行 `restart` 不会切换到新镜像。日常更新不先 `down`、不删除卷或数据、不使用 `--no-cache`。依赖及构建指令未变化、构建缓存仍可用时，只改源码可复用 PyTorch/CUDA 依赖层。
+
+更新前等文件任务完成，或安排维护窗口：容器替换会中断未完成的文件处理并最终标记 `worker_lost`，文件不自动续跑；未显式停止的流会按原恢复机制重新调度，重连期间播放中断。此流程不提供不停机发布；新镜像启动失败也不会自动回滚。
+
+启动命令退出后核对容器状态和 worker 预检日志，并等就绪接口返回 200：
+
+```bash
+git log -1 --oneline
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml ps
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml logs --tail 100 api file-worker stream-worker
+# 替换为服务器实际绑定的 API 地址；worker 预检完成后应返回 200。
+curl --fail http://192.168.1.104:8000/health/ready
+```
+
+Git 提交号仅标识当前源码，不能单独证明容器已经切换或业务验收通过。以上流程在本地仅核对文档和现有构建配置，服务器实际更新后仍需执行上述检查。
+
+命令行为参考 [Git pull](https://git-scm.com/docs/git-pull)、[Compose up](https://docs.docker.com/reference/cli/docker/compose/up/) 和 [Docker 构建缓存](https://docs.docker.com/build/cache/invalidation/)。
