@@ -193,3 +193,63 @@ def test_repeated_texture_cannot_move_a_track_to_a_different_copy():
         current[30:50, left:left + 20] = texture
     redactor.gray = previous
     assert redactor._follow(current, (120, 30, 140, 50)) is None
+
+
+def test_lost_face_cannot_start_following_the_background_in_later_frames():
+    rng = np.random.default_rng(71)
+    background = rng.integers(150, 210, (100, 200, 3), dtype=np.uint8)
+    first = background.copy()
+    first[30:60, 20:50] = rng.integers(30, 130, (30, 30, 3), dtype=np.uint8)
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    detector.boxes = [(20, 30, 50, 60)]
+    redactor.apply(first, 0)
+    detector.boxes = []
+    held = redactor.apply(background, 0.05)
+    assert (held[30:60, 20:50] == 64).all(), "首次跟丢仍保留原短时保护"
+    for index in range(2, 7):
+        output = redactor.apply(background, index / 20)
+    assert np.array_equal(output, background), "跟丢后旧位置变为背景，不能将背景匹配当作连续跟踪"
+    assert not redactor.history
+
+
+def test_new_detection_restores_following_after_a_lost_frame():
+    rng = np.random.default_rng(72)
+    background = rng.integers(150, 210, (100, 200, 3), dtype=np.uint8)
+    texture = rng.integers(30, 130, (30, 30, 3), dtype=np.uint8)
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    first = background.copy()
+    first[30:60, 20:50] = texture
+    detector.boxes = [(20, 30, 50, 60)]
+    redactor.apply(first, 0)
+    detector.boxes = []
+    redactor.apply(background, 0.05)
+    detector.boxes = [(20, 30, 50, 60)]
+    redactor.apply(first, 0.1)
+    moved = background.copy()
+    moved[30:60, 60:90] = texture
+    detector.boxes = []
+    output = redactor.apply(moved, 0.15)
+    assert (output[30:60, 60:90] == 64).all(), "实际检测重新命中后，应继续跟随移动目标而非永久禁用跟踪"
+
+
+def test_briefly_occluded_face_can_resume_visual_tracking_without_a_new_detection():
+    rng = np.random.default_rng(73)
+    background = rng.integers(150, 210, (100, 200, 3), dtype=np.uint8)
+    texture = rng.integers(30, 130, (30, 30, 3), dtype=np.uint8)
+    first = background.copy()
+    first[30:60, 20:50] = texture
+    detector = Detections()
+    redactor = FrameRedactor(detector)
+    detector.boxes = [(20, 30, 50, 60)]
+    redactor.apply(first, 0)
+    detector.boxes = []
+    redactor.apply(background, 0.05)
+    redactor.apply(first, 0.1)
+    moved = background.copy()
+    moved[30:60, 60:90] = texture
+    for moment in (0.15, 0.2, 0.25, 0.3):
+        output = redactor.apply(moved, moment)
+        assert (output[30:60, 60:90] == 64).all(), "短暂遮挡后仍应通过原目标纹理重获移动人脸"
+        assert np.array_equal(output[:, :54], moved[:, :54]), "恢复移动跟踪后旧位置不能留下余框"

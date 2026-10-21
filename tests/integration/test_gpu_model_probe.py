@@ -13,7 +13,7 @@ from PIL import Image
 from vision_shield.config import Settings
 from vision_shield.detection import load_detector
 from vision_shield.detection.preflight import run_preflight
-from vision_shield.redaction import redact
+from vision_shield.redaction import FrameRedactor, redact
 
 
 @pytest.mark.integration
@@ -116,3 +116,33 @@ def test_yolo_quality_keeps_reviewed_regions_and_all_face_nodes_on_cuda(monkeypa
         events = json.loads(Path(session.end_profiling()).read_text("utf-8"))
         providers.update(event["args"]["provider"] for event in events if "provider" in event.get("args", {}))
     assert providers == {"CUDAExecutionProvider"}, "主人脸网络也必须实际全CUDA执行"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
+def test_moving_heads_stay_masked_without_lost_tracks_covering_door_and_torso():
+    import av
+
+    source = Path("tests/test_assets/report/人脸视频1.mp4")
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == "353b197db4262615cf44691ddf827daeb9682e8c4c9f879aa3c9529c9d79a299"
+    config = Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo")
+    redactor = FrameRedactor(load_detector(config.model_dump()))
+    checked = False
+    with av.open(str(source)) as reader:
+        stream = reader.streams.video[0]
+        reader.seek(int(79.5 / stream.time_base), stream=stream)
+        for frame in reader.decode(video=0):
+            moment = frame.pts * frame.time_base
+            if moment < 79.5:
+                continue
+            if moment > 80:
+                break
+            pixels = frame.to_ndarray(format="rgb24")
+            masked = redactor.apply(pixels, float(moment))
+            if moment == 80:
+                for x, y, right, bottom in [(1658, 217, 1676, 239), (1610, 234, 1625, 252), (1778, 244, 1793, 260)]:
+                    assert (masked[y:bottom, x:right] == 64).all(), "三个人物头部仍须遮挡"
+                for x, y, right, bottom in [(1556, 210, 1587, 245), (1612, 299, 1640, 338)]:
+                    assert np.array_equal(masked[y:bottom, x:right], pixels[y:bottom, x:right]), "旧轨迹不能重跟背景或衣服"
+                checked = True
+    assert checked, "必须实际处理到原视频80秒画面"

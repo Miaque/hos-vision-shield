@@ -184,7 +184,7 @@ def test_failed_motion_match_rechecks_current_position(monkeypatch):
     redactor = FrameRedactor(Once())
     pixels = np.full((100, 100, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
-    monkeypatch.setattr(redactor, "_follow", lambda gray, box: None)
+    monkeypatch.setattr(redactor, "_follow", lambda gray, box, reference=None: None)
     monkeypatch.setattr(redactor, "_recheck", lambda pixels, box: (30, 20, 50, 40))
     actual = redactor.apply(pixels, 0.05)
     assert (actual[20:40, 30:50] == 64).all()

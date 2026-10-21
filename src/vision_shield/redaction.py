@@ -40,6 +40,7 @@ class _Track(NamedTuple):
     checked: float
     box: tuple[float, float, float, float]
     kind: str
+    reference: np.ndarray | None = None
 
 
 class FrameRedactor:
@@ -82,10 +83,10 @@ class FrameRedactor:
             matched_old.add(old)
             matched_new.add(new)
             boxes[new] = self._smooth(self.history[old].box, boxes[new], elapsed)
-        for old, (seen, checked, box, kind) in enumerate(self.history):
+        for old, (seen, checked, box, kind, reference) in enumerate(self.history):
             if moment - seen > 0.5 or old in matched_old:
                 continue
-            predicted = self._follow(gray, box)
+            predicted = self._follow(gray, box, reference)
             if predicted is None:
                 confirmed = self._recheck(pixels, box, kind) if kind else self._recheck(pixels, box)
                 if confirmed is not None:
@@ -94,7 +95,8 @@ class FrameRedactor:
                     continue
                 if moment - seen <= 0.2:
                     retained.append(box)
-                    history.append(_Track(seen, checked, box, kind))
+                    # A failed match must keep the last target template, not learn the background.
+                    history.append(_Track(seen, checked, box, kind, self.gray if reference is None else reference))
                 continue
             matches = [(self._overlap(predicted, detection.box), new)
                        for new, detection in enumerate(detections)
@@ -162,8 +164,9 @@ class FrameRedactor:
         union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - intersection
         return intersection / union if union > 0 else 0
 
-    def _follow(self, gray, box):
-        if self.gray is None:
+    def _follow(self, gray, box, reference=None):
+        previous = self.gray if reference is None else reference
+        if previous is None:
             return None
         height, width = gray.shape
         x1, y1, x2, y2 = box
@@ -173,7 +176,7 @@ class FrameRedactor:
         inset_x, inset_y = (right - left) // 5, (bottom - top) // 5
         left, right = left + inset_x, right - inset_x
         top, bottom = top + inset_y, bottom - inset_y
-        patch = self.gray[top:bottom, left:right]
+        patch = previous[top:bottom, left:right]
         if min(patch.shape) < 3 or patch.std() < 2:
             return None
         # Small faces can move farther than their own width between adjacent frames.
@@ -186,7 +189,7 @@ class FrameRedactor:
             return None
         matched = search[location[1]:location[1] + patch.shape[0],
                          location[0]:location[0] + patch.shape[1]]
-        previous_search = self.gray[sy:sy + search.shape[0], sx:sx + search.shape[1]]
+        previous_search = previous[sy:sy + search.shape[0], sx:sx + search.shape[1]]
         _, reverse_score, _, reverse = cv2.minMaxLoc(
             cv2.matchTemplate(previous_search, matched, cv2.TM_CCOEFF_NORMED))
         # Repeated background textures must return to the same source patch.
