@@ -46,6 +46,8 @@ sudo tar -xzf ../vision-shield-models.tar.gz -C /data/hos-vision-shield/models
 
 模型目录和文件须允许运行用户读取；运行时只读挂载，不让应用修改模型或补下载。镜像可联网构建或获取，权重包不传入构建上下文。
 
+第七轮起 GPU Compose 的两个 worker 池使用 `quality_yolo`，轻量人脸权重随应用 wheel/镜像交付；EgoBlur 车牌与两份补充模型仍从上述只读目录加载。CPU 模式保持 `quality`；原 `face.jit` 留作回退。新模型的 GPL-3.0 许可和固定哈希见[组件清单](../../src/vision_shield/detection/assets/README.md)，启动预检会同时核验包内模型与离线模型。
+
 ## 2. 填写配置并选择模式
 
 在服务器仓库根目录：

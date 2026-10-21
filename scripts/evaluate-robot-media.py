@@ -29,15 +29,17 @@ def evaluate(source: Path, output: Path) -> None:
                                   max_side=detector.max_side, box_padding=detector.box_padding,
                                   hold_seconds=0.2),
                   review="No human labels; detection counts are not accuracy")
-    if config.detection_backend in {"cpu", "quality"}:
+    if config.detection_backend in {"cpu", "quality", "quality_yolo"}:
         from vision_shield.detection.cpu import FACE_THRESHOLD, PLATE_THRESHOLD
-        report["parameters"].update(face_threshold=0.6 if config.detection_backend == "quality" else FACE_THRESHOLD,
+        report["parameters"].update(face_threshold=0.6 if config.detection_backend != "cpu" else FACE_THRESHOLD,
                                     plate_threshold=PLATE_THRESHOLD)
-        if config.detection_backend == "quality":
+        if config.detection_backend in {"quality", "quality_yolo"}:
             report["parameters"].update(primary_face_threshold=0.3, primary_plate_threshold=0.1)
             report["parameters"]["confirmation"] = dict(primary_trusted_score=0.7, iou=0.2,
                                                        primary_face_support=0.1, detail_face_support=0.3,
                                                        context_factor=3, minimum_context=96, input_max_side=320)
+            if config.detection_backend == "quality_yolo":
+                report["parameters"]["confirmation"]["primary_face_input_max_side"] = 160
 
     def compare(pixels, name, temporal=None, moment=None):
         start = time.perf_counter()

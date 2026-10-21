@@ -76,3 +76,43 @@ def test_detail_model_nodes_execute_on_cuda(monkeypatch, tmp_path):
         events = json.loads(Path(session.end_profiling()).read_text("utf-8"))
         providers = {event["args"]["provider"] for event in events if "provider" in event.get("args", {})}
         assert providers == {"CUDAExecutionProvider"}, "不能仅检查已安装 provider，必须核对实际算子"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
+@pytest.mark.parametrize("case_id", ["image-7", "face-video2-10s", "video-04-frame-24"])
+def test_yolo_quality_keeps_reviewed_regions_and_all_face_nodes_on_cuda(monkeypatch, tmp_path, case_id):
+    import onnxruntime as ort
+
+    create, sessions = ort.InferenceSession, []
+    def profiled(path, *args, **kwargs):
+        if str(path).endswith("yolov8n_face.onnx"):
+            options = kwargs["sess_options"]
+            options.enable_profiling = True
+            options.profile_file_prefix = str(tmp_path / f"face-{len(sessions)}")
+        session = create(path, *args, **kwargs)
+        if str(path).endswith("yolov8n_face.onnx"):
+            sessions.append(session)
+        return session
+
+    monkeypatch.setattr(ort, "InferenceSession", profiled)
+    config = Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo")
+    report = run_preflight(config.model_dump(mode="json"))
+    assert len(report["models"]) == 4 and report["primary_face_providers"] == ["CUDAExecutionProvider"]
+    detector = load_detector(config.model_dump())
+    assert detector.primary.models[0] is None and next(detector.primary.models[1].parameters()).is_cuda
+    manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
+    case = next(c for c in manifest["cases"] if c["id"] == case_id)
+    path = Path(manifest["local_source"]) / case["file"]
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == case["sha256"]
+    pixels = np.array(Image.open(path).convert("RGB"))
+    masked = redact(pixels, detector.detect(pixels))
+    for x, y, right, bottom in case["masked_regions"]:
+        assert (masked[y:bottom, x:right] == 64).all()
+    for x, y, right, bottom in case["preserved_regions"]:
+        assert np.array_equal(masked[y:bottom, x:right], pixels[y:bottom, x:right])
+    providers = set()
+    for session in sessions:
+        events = json.loads(Path(session.end_profiling()).read_text("utf-8"))
+        providers.update(event["args"]["provider"] for event in events if "provider" in event.get("args", {}))
+    assert providers == {"CUDAExecutionProvider"}, "主人脸网络也必须实际全CUDA执行"

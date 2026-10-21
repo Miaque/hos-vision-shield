@@ -30,6 +30,26 @@ def test_only_selected_roles_are_verified(model_config, backend, count):
     assert len(preflight.verify_models(model_config)) == count
 
 
+def test_yolo_quality_checks_packaged_face_and_retained_plate(model_config, monkeypatch, tmp_path):
+    from pathlib import Path
+    from vision_shield.detection import yolo
+
+    model_config["detection_backend"] = "quality_yolo"
+    path = tmp_path / "packaged" / "yolov8n_face.onnx"
+    path.parent.mkdir()
+    path.write_bytes(b"face")
+    (path.parent / "manifest.json").write_text(json.dumps({"models": [
+        dict(path=path.name, sha256=hashlib.sha256(b"face").hexdigest())]}), encoding="utf-8")
+    monkeypatch.setattr(yolo, "MODEL_PATH", path)
+    Path(model_config["egoblur_face_model_path"]).unlink()
+    models = preflight.verify_models(model_config)
+    assert len(models) == 4 and {m["file"] for m in models} == {
+        "yolov8n_face.onnx", "license_plate.jit", "yunet_face.onnx", "hyperlpr_plate.onnx"}
+    path.write_bytes(b"corrupt")
+    with pytest.raises(preflight.PreflightError, match="yolov8n_face.onnx"):
+        preflight.verify_models(model_config)
+
+
 @pytest.mark.parametrize("fault", ["missing", "corrupt", "unreadable", "manifest"])
 def test_bad_model_never_reaches_loading(model_config, monkeypatch, fault):
     from pathlib import Path

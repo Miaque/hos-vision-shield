@@ -20,7 +20,7 @@ class Detector:
         self.max_side, self.box_padding = max_side, box_padding
         self.face_threshold = face_threshold
         # Gen1 的尺寸常量必须留在 CPU；按官方流程仅迁移参数和缓冲区。
-        self.models = [torch.jit.load(str(path), map_location="cpu").to(self.device).eval()
+        self.models = [torch.jit.load(str(path), map_location="cpu").to(self.device).eval() if path is not None else None
                        for path in (face_path, plate_path)]
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
@@ -50,7 +50,7 @@ class Detector:
         with torch.inference_mode(), torch.jit.optimized_execution(False):
             for model, model_kind, threshold in zip(self.models, ("face", "plate"), (self.face_threshold, 0.1)):
                 # 局部复核只消费一种类别，跳过另一份独立模型而不改变目标模型输入。
-                if kind is not None and kind != model_kind:
+                if model is None or kind is not None and kind != model_kind:
                     continue
                 coordinates, _, scores, _ = model(image)
                 if (coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),)

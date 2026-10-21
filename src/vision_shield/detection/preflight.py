@@ -15,18 +15,21 @@ def verify_models(config: dict) -> list[dict]:
     """按后端选择既有清单，逐个流式校验权重哈希和可读权限。"""
     backend = config["detection_backend"]
     selected = []
-    if backend in {"quality", "cpu"}:
-        selected += [("YuNet人脸", "face_model_path", "cpu-manifest.json", "yunet_face.onnx"),
-                     ("HyperLPR车牌", "plate_model_path", "cpu-manifest.json", "hyperlpr_plate.onnx")]
+    if backend in {"quality", "quality_yolo", "cpu"}:
+        selected += [("YuNet人脸", Path(config["face_model_path"]), "cpu-manifest.json", "yunet_face.onnx"),
+                     ("HyperLPR车牌", Path(config["plate_model_path"]), "cpu-manifest.json", "hyperlpr_plate.onnx")]
+    if backend == "quality_yolo":
+        from vision_shield.detection.yolo import MODEL_PATH
+        selected += [("YOLO人脸", MODEL_PATH, "manifest.json", MODEL_PATH.name),
+                     ("EgoBlur车牌", Path(config["egoblur_plate_model_path"]), "manifest.json", "license_plate.jit")]
     if backend in {"quality", "egoblur"}:
         face_key, plate_key = ("egoblur_face_model_path", "egoblur_plate_model_path") if backend == "quality" else ("face_model_path", "plate_model_path")
-        selected += [("EgoBlur人脸", face_key, "manifest.json", "face.jit"),
-                     ("EgoBlur车牌", plate_key, "manifest.json", "license_plate.jit")]
+        selected += [("EgoBlur人脸", Path(config[face_key]), "manifest.json", "face.jit"),
+                     ("EgoBlur车牌", Path(config[plate_key]), "manifest.json", "license_plate.jit")]
     if not selected:
         raise PreflightError("模型预检失败：不支持的检测后端")
     verified = []
-    for role, key, manifest_name, entry_name in selected:
-        path = Path(config[key])
+    for role, path, manifest_name, entry_name in selected:
         stage = "清单"
         try:
             manifest = json.loads((path.parent / manifest_name).read_text("utf-8"))
@@ -74,7 +77,7 @@ def run_inference(config: dict) -> dict:
     detector = load_detector(config)
     detector.detect(np.zeros((320, 320, 3), dtype=np.uint8))
     primary = getattr(detector, "primary", detector)
-    model_devices = sorted({tensor.device.type for model in getattr(primary, "models", [])
+    model_devices = sorted({tensor.device.type for model in getattr(primary, "models", []) if model is not None
                             for tensor in (*model.parameters(), *model.buffers())})
     if config["detection_backend"] != "cpu" and model_devices != [device]:
         raise PreflightError("模型预检失败：模型与请求设备不一致")
@@ -86,7 +89,11 @@ def run_inference(config: dict) -> dict:
     report = dict(backend=config["detection_backend"], device=device, model_devices=model_devices,
                   nms_device=kept.device.type, torch=torch.__version__, torchvision=torchvision.__version__,
                   cuda_build=torch.version.cuda)
-    if config["detection_backend"] == "quality":
+    if config["detection_backend"] == "quality_yolo":
+        report["primary_face_providers"] = primary.providers
+        if primary.providers != ["CUDAExecutionProvider"]:
+            raise PreflightError("模型预检失败：主模型人脸未在 CUDA 执行")
+    if config["detection_backend"] in {"quality", "quality_yolo"}:
         report["detail_providers"] = getattr(detector.detail, "providers", ["OpenCV CPU", "OpenCV CPU"])
         if device == "cuda" and report["detail_providers"] != ["CUDAExecutionProvider"] * 2:
             raise PreflightError("模型预检失败：补充模型未在 CUDA 执行")

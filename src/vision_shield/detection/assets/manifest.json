@@ -1,0 +1,28 @@
+{
+  "models": [
+    {
+      "path": "yolov8n_face.onnx",
+      "role": "face_detection_only",
+      "repository": "https://github.com/akanametov/yolo-face",
+      "weights_release": "1.0.0",
+      "weights_source": "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov8n-face.pt",
+      "weights_sha256": "d545bf1add5aa736a4febac4f4f9245a6d596cd0fe70d5d57989fe0cb9e626ca",
+      "license": "GPL-3.0",
+      "license_revision": "e9ab157330236ddcacb2421943760c5698cc2e21",
+      "bytes": 12398329,
+      "sha256": "2e7af8694e93862be6a81c13b197ef766e8ab7e10af230bc19bc94d045dedb2b",
+      "conversion": {
+        "torch": "2.14.1+cu126",
+        "ultralytics": "8.4.183",
+        "onnx": "1.23.2",
+        "opset": 17,
+        "dynamic": true,
+        "nms": false,
+        "simplify": false,
+        "imgsz": 1280,
+        "device": "cpu",
+        "note": "ONNX export only; original weights unchanged. Landmark outputs ignored; no recognition."
+      }
+    }
+  ]
+}

@@ -18,7 +18,7 @@ class Detector(Protocol):
 
 
 def load_detector(config: dict) -> Detector:
-    if config["detection_backend"] == "quality":
+    if config["detection_backend"] in {"quality", "quality_yolo"}:
         from vision_shield.detection.quality import Detector as QualityDetector
         return QualityDetector(config)
     if config["detection_backend"] == "cpu":

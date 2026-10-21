@@ -15,9 +15,12 @@ class Detector:
     def __init__(self, config: dict):
         self.max_side, self.box_padding = config["detection_max_side"], config["detection_box_padding"]
         self.inference_device = config.get("inference_device", "cpu")
-        self.primary = PrimaryDetector(config["egoblur_face_model_path"], config["egoblur_plate_model_path"],
-                                       self.max_side, self.box_padding, face_threshold=0.1,
-                                       device=self.inference_device)
+        primary_type, face_path = PrimaryDetector, config["egoblur_face_model_path"]
+        if config["detection_backend"] == "quality_yolo":
+            from vision_shield.detection.yolo import Detector as YOLODetector, MODEL_PATH
+            primary_type, face_path = YOLODetector, MODEL_PATH
+        self.primary = primary_type(face_path, config["egoblur_plate_model_path"], self.max_side, self.box_padding,
+                                    face_threshold=0.1, device=self.inference_device)
         # Lower scores may corroborate a candidate, but never start a mask by themselves.
         detail_type = DetailDetector
         if self.inference_device == "cuda":

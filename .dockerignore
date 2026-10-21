@@ -20,6 +20,7 @@ __pycache__
 *.onnx
 **/*.jit
 **/*.onnx
+!src/vision_shield/detection/assets/yolov8n_face.onnx
 models
 data
 samples

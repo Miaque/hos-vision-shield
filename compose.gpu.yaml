@@ -5,6 +5,7 @@ services:
       args:
         TORCH_BACKEND: cu126
     environment:
+      DETECTION_BACKEND: quality_yolo
       INFERENCE_DEVICE: cuda
       GPU_DEVICE_ID: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
     deploy:
@@ -22,6 +23,7 @@ services:
       args:
         TORCH_BACKEND: cu126
     environment:
+      DETECTION_BACKEND: quality_yolo
       INFERENCE_DEVICE: cuda
       GPU_DEVICE_ID: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
     deploy:

@@ -19,6 +19,8 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 解释器使用Python3.12，依赖由uv.lock锁定。Windows x64 安装 PyTorch 2.14.1 / torchvision 0.29.1 的 CUDA 12.6 构建，支持本机 GTX 1080；其他平台继续使用 CPU 构建。CUDA 构建也可执行 CPU 推理，不需要单独安装 CUDA Toolkit，但 GPU 运行需要兼容的 NVIDIA 驱动。
 默认`DETECTION_BACKEND=quality`：EgoBlur全图双类检测加YuNet/HyperLPR补充，兼顾遮挡效果和速度。最长边不超过1920的输入只做全图检测，更大输入使用1920像素重叠分块；允许极小目标漏遮。四个模型都必须可用。模型可以从已准备机器离线复制整个 `models/`（含两份 manifest 和许可证），启动及推理不下载权重；上面的下载脚本仅供联网准备模型时使用。已有.env需同步后端及四条模型路径。
 
+GPU Compose 选用 `DETECTION_BACKEND=quality_yolo`，用轻量 YOLO 人脸候选替换 EgoBlur 人脸，保留 EgoBlur 车牌、YuNet/HyperLPR、现有确认和跟踪规则。本机可在 CUDA 环境显式选择该后端。新权重随版本包交付，来源、哈希、GPL-3.0 许可与导出方法见[模型说明](src/vision_shield/detection/assets/README.md)。原 `quality` 和 CPU 默认值保留；该后端的目标服务器吞吐须单独实测，不能由本地片段速度推定双路达标。
+
 ### 本机 GTX 1080
 
 先执行 `uv sync --frozen --extra cuda`，在 `.env` 设置 `INFERENCE_DEVICE=cuda`，然后运行原有 `scripts/start-application.ps1`。EgoBlur 使用 PyTorch CUDA，YuNet/HyperLPR 使用 ONNX Runtime CUDA，四个模型均在 GPU 推理；图像预处理、后处理、编解码和遮挡仍使用 CPU。CUDA 不可用时启动失败，不静默降级。要使用 CPU，只需改为 `INFERENCE_DEVICE=cpu` 后重启应用。未设置该字段仍默认 CPU；轻量 `DETECTION_BACKEND=cpu` 不接受 cuda 设备。
@@ -38,7 +40,7 @@ GPU 模式下，两路独立的全图检测同时执行，随后按原顺序进�
 
 ## 服务器 Docker Compose
 
-目标为 Ubuntu 24.04 x86_64，沿用服务器现有 Docker 和 `docker-compose v2.29.2`；不在 Windows 本机安装 Docker。默认 CPU，GPU 模式指定一张卡供文件与流 worker 共用。GPU 失败不换卡或回退 CPU，检测策略及四份权重保持相同。GPU Compose 的文件池和流池各启动2个worker副本，每个副本同时处理1个任务，支持同池双路同时执行；副本共用所选显卡，并发吞吐须另行实测。
+目标为 Ubuntu 24.04 x86_64，沿用服务器现有 Docker 和 `docker-compose v2.29.2`；不在 Windows 本机安装 Docker。默认 CPU，GPU 模式指定一张卡供文件与流 worker 共用。GPU 失败不换卡或回退 CPU；GPU Compose 使用上述 `quality_yolo`，CPU 保留 `quality`。GPU Compose 的文件池和流池各启动2个worker副本，每个副本同时处理1个任务，支持同池双路同时执行；副本共用所选显卡，并发吞吐须另行实测。
 
 按 [服务器部署验收指南](specs/002-compose-cpu-gpu/quickstart.md)准备离线模型目录、媒体目录权限和 `.env.compose`，然后在服务器仓库根目录选择一种方式：
 

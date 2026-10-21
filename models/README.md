@@ -4,6 +4,8 @@
 
 默认 quality 的 CPU/GPU 两种部署都使用同一组 `face.jit`、`license_plate.jit`、`yunet_face.onnx`、`hyperlpr_plate.onnx`。离线包还须包含 `manifest.json`、`cpu-manifest.json`、本文件、`NOTICE.md` 与完整 `licenses/`；四份权重合计 842,516,699 字节，设备切换不更换模型或阈值。归属与许可见 [NOTICE.md](NOTICE.md)。
 
+GPU Compose 现在选择 `quality_yolo`：人脸主网络改用随应用包交付的 `yolov8n_face.onnx`，车牌 EgoBlur 及两份补充 ONNX 继续读取本目录；`face.jit` 保留供原 `quality` 回退。新权重的 GPL-3.0 许可、哈希及导出契约见[组件说明](../src/vision_shield/detection/assets/README.md)。该后端只支持 CUDA，CPU 部署保持 `quality`。
+
 在已有模型的准备机器、仓库根目录打包，无需重新下载：
 
 ```bash

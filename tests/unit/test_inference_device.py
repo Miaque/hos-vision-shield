@@ -15,18 +15,19 @@ def test_device_is_independent_and_cpu_backend_rejects_cuda():
         Settings(_env_file=None, inference_device="auto")
 
 
-@pytest.mark.parametrize("backend", ["quality", "egoblur"])
+@pytest.mark.parametrize("backend", ["quality", "quality_yolo", "egoblur"])
 def test_factory_uses_cuda_for_primary_and_quality_detail(monkeypatch, backend):
-    from vision_shield.detection import load_detector, quality, egoblur, cuda_detail
+    from vision_shield.detection import load_detector, quality, egoblur, cuda_detail, yolo
 
     primary, detail = [], []
     monkeypatch.setattr(quality, "PrimaryDetector", lambda *a, **kw: primary.append(kw))
     monkeypatch.setattr(quality, "DetailDetector", lambda *a, **kw: pytest.fail("CUDA 不得创建 CPU 补充模型"))
     monkeypatch.setattr(cuda_detail, "Detector", lambda *a, **kw: detail.append(kw))
     monkeypatch.setattr(egoblur, "Detector", lambda *a, **kw: primary.append(kw))
+    monkeypatch.setattr(yolo, "Detector", lambda *a, **kw: primary.append(kw))
     load_detector(Settings(_env_file=None, detection_backend=backend, inference_device="cuda").model_dump())
     assert primary[0]["device"] == "cuda"
-    assert len(detail) == (1 if backend == "quality" else 0)
+    assert len(detail) == (1 if backend in {"quality", "quality_yolo"} else 0)
 
 
 def test_unavailable_cuda_fails_before_loading_models(monkeypatch):
