@@ -8,28 +8,6 @@ from PIL import Image
 from vision_shield.detection import Detection
 
 
-class _MixedPrecisionModel(torch.nn.Module):
-    """Fixed Gen1 export: half backbone, float heads and ROI coordinates."""
-
-    def __init__(self, original, kind):
-        super().__init__()
-        self.model, self.kind = original.model.model, kind
-        self.model.backbone.half()
-
-    def forward(self, image):
-        height, width = image.shape[1:]
-        image_size = torch.tensor([height, width])
-        pixels = (image - self.model.pixel_mean) / self.model.pixel_std
-        pixels = torch.nn.functional.pad(pixels, (0, (-width) % 32, 0, (-height) % 32))
-        features = tuple(feature.float() for feature in self.model.backbone(pixels.unsqueeze(0).half()))
-        # 两份固定权重的导出图具有不同的重复输出，保留各自检测头的连接顺序。
-        proposals = self.model.proposal_generator(*features[:10], image_size)
-        roi_feature = features[10] if self.kind == "face" else features[3]
-        boxes, labels, scores = self.model.roi_heads(features[0], proposals, features[1], features[2],
-                                                    roi_feature, image_size)
-        return boxes, labels, scores, image_size
-
-
 class Detector:
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=0.1, device="cpu"):
         if device not in {"cpu", "cuda"}:
@@ -44,8 +22,6 @@ class Detector:
         # Gen1 的尺寸常量必须留在 CPU；按官方流程仅迁移参数和缓冲区。
         self.models = [torch.jit.load(str(path), map_location="cpu").to(self.device).eval()
                        for path in (face_path, plate_path)]
-        if device == "cuda" and torch.cuda.get_device_capability(self.device)[0] >= 8:
-            self.models = [_MixedPrecisionModel(model, kind) for model, kind in zip(self.models, ("face", "plate"))]
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         return [detection.box for detection in self.detect_regions(rgb)]

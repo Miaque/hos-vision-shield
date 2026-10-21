@@ -14,7 +14,6 @@ tar -czf vision-shield-models.tar.gz -C models face.jit license_plate.jit yunet_
 
 ## 本机策略与准备
 
-2026-10-21混合精度优化：计算能力主版本至少8的CUDA显卡将两份EgoBlur骨干转换为FP16，检测头与ROIAlign维持FP32；CPU/较旧CUDA显卡仍为FP32。磁盘权重及哈希不变，使用原Gen1导出图的预处理与特征连接；更换导出版本须重新验证。YuNet/HyperLPR保持FP32。
 
 当前默认`quality`效果优先组合使用四个检测模型：EgoBlur全图人脸/车牌，加OpenCV Zoo的YuNet人脸（MIT，约233KB）与HyperLPR3的320车牌检测ONNX（Apache-2.0，约2.34MB）作分块补充。只加载检测网络，不加载或运行OCR、车牌字符识别及人脸身份识别。
 

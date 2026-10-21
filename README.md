@@ -38,7 +38,7 @@ GPU 模式下，两路独立的全图检测同时执行，随后按原顺序进�
 
 ## 服务器 Docker Compose
 
-目标为 Ubuntu 24.04 x86_64，沿用服务器现有 Docker 和 `docker-compose v2.29.2`；不在 Windows 本机安装 Docker。默认 CPU，GPU 模式指定一张卡供文件与流 worker 共用。GPU 失败不换卡或回退 CPU，检测策略及四份权重保持相同。
+目标为 Ubuntu 24.04 x86_64，沿用服务器现有 Docker 和 `docker-compose v2.29.2`；不在 Windows 本机安装 Docker。默认 CPU，GPU 模式指定一张卡供文件与流 worker 共用。GPU 失败不换卡或回退 CPU，检测策略及四份权重保持相同。GPU Compose 的文件池和流池各启动2个worker副本，每个副本同时处理1个任务，支持同池双路同时执行；副本共用所选显卡，并发吞吐须另行实测。
 
 按 [服务器部署验收指南](specs/002-compose-cpu-gpu/quickstart.md)准备离线模型目录、媒体目录权限和 `.env.compose`，然后在服务器仓库根目录选择一种方式：
 
@@ -177,7 +177,6 @@ uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo --o
 
 ## 检测模型
 
-Ampere及更新CUDA架构（计算能力主版本至少8，包括RTX6000 Ada）使用EgoBlur混合精度：卷积骨干FP16，归一化、候选生成、检测头、ROIAlign和后处理FP32；CPU及较旧显卡维持FP32。权重文件、输入尺寸和阈值不变，但浮点分数/框会有细微变化，必须通过真实素材验收。该路径适配当前固定Gen1导出图，更换权重版本须重新验证。
 
 模型来源：OpenCV Zoo及HyperLPR作者仓库固定版本记录在 `models/cpu-manifest.json`，EgoBlur固定版本记录在 `models/manifest.json`。下载、许可和切换方法见[模型说明](models/README.md)。效果优先组合中任一模型文件缺失或推理失败都会使处理失败，不返回部分模型结果或透传原始画面。
 

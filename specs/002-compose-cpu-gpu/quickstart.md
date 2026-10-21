@@ -67,7 +67,7 @@ if [ "$MODE" = gpu ]; then dc+=(-f compose.gpu.yaml); fi
 "${dc[@]}" build
 ```
 
-两种组合都必须通过配置解析，并在本地用 `"${dc[@]}" config` 检查合并配置的镜像与构建参数：CPU 组合四个应用服务均为 `image: vision-shield:cpu`、`build.args.TORCH_BACKEND: cpu`，没有设备预留；GPU 组合两个 worker 均为 `image: vision-shield:cu126`、`build.args.TORCH_BACKEND: cu126`，且必须只有同一个 device_ids 元素，API/reconciler 保持 CPU 镜像及构建参数、不分配 GPU。不要将含凭据的完整展开配置提交或贴入日志。
+两种组合都必须通过配置解析，并在本地用 `"${dc[@]}" config` 检查合并配置的镜像与构建参数：CPU 组合四个应用服务均为 `image: vision-shield:cpu`、`build.args.TORCH_BACKEND: cpu`，没有设备预留；GPU 组合两个 worker 均为 `image: vision-shield:cu126`、`build.args.TORCH_BACKEND: cu126`，且必须只有同一个 device_ids 元素，API/reconciler 保持 CPU 镜像及构建参数、不分配 GPU。不要将含凭据的完整展开配置提交或贴入日志。GPU组合为file-worker和stream-worker各设2个副本，每个worker保留单任务限制；API/reconciler及CPU组合副本数沿用原值。检查资源接口的两个池各有2个有效worker，并确认两个同池任务实际同时进入处理状态，不能仅提交两项任务就视作双路。
 
 构建完成后，从应用容器验证 Redis 认证及数据库选择：
 

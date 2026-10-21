@@ -151,3 +151,18 @@ GTX1080预热后，对相同67帧交错执行第三/四轮，各片段独立跟�
 同一人脸骨干导出ONNX后，通过CUDA I/O Binding避免设备往返，384×1280/320×320/640×640三种尺寸FP32速度与Torch接近，没有引入额外导出及部署依赖。channels_last在GTX1080双主模型上从约0.26秒变为0.33秒，未默认启用。源码和实验输出在 `data/validation/model-acceleration-20261021/`。I/O Binding参考 https://onnxruntime.ai/docs/performance/tune-performance/iobinding.html ，内存格式参考 https://docs.pytorch.org/tutorials/intermediate/memory_format_tutorial.html 。
 
 提交前单元及视频机制246项通过（30.13秒），`git diff --check`通过。目标服务器性能尚待部署实测，当前不宣称第五轮已经提速或双路达标。
+
+
+## 第五轮目标服务器结果：撤回混合精度
+
+RTX6000 Ada服务器15张可用样例全部现行必验区域通过；任务87855ed8-777b-48fe-b27c-0663c722f3cf完整2450帧385.99秒、6.347 FPS、零丢帧，逐帧尺寸和时间戳一致。对比第四轮391.24秒、6.262 FPS，耗时仅减少1.34%，部署及负载未完全控制，不能确认有可靠收益。因此撤回混合精度适配，恢复原FP32推理，不保留未证明有效的复杂度；opt-20261021-05及其完整实验记录保留。证据：data/validation/server-8b9f836-face-video1-20261021/。
+
+## 第六轮：提供同池双路执行槽（opt-20261021-06）
+
+GPU Compose的file-worker、stream-worker各设2个副本，每个接收器仍max_async_tasks=1、max_prefetch=0；通过独立进程提供两个执行槽。两个池共用原指定GPU，CPU部署副本默认值不变；没有放宽来源白名单、发布鉴权、任务租约或队列上限，也不改变接口。文件输出按任务ID与代次隔离，Redis消费者名默认UUID可区分多个进程。
+
+这项改变解决第二个同池任务排队的问题，不能据此声称每路达到15–30 FPS。将等当前文件结束后部署，再从资源接口核对两池各有2个有效worker，并记录两个视频任务处理区间的实际重叠和各自FPS/丢帧/输出时间戳。RTSP实测还需服务器可访问且在白名单中的测试源。
+
+本地未安装Docker，已解析YAML核对副本数、唯一GPU映射，以及worker无固定container_name/宿主端口冲突；最终Compose合并校验由原授权部署脚本完成。未修改部署脚本或执行其他远程命令。
+
+第六轮提交前：恢复FP32后的单元/视频机制242项通过（28.17秒），真实CUDA探针3项通过（17.62秒）。GPU双副本配置YAML检查通过；真实部署和双路吞吐待验收。

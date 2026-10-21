@@ -76,35 +76,3 @@ def test_detail_model_nodes_execute_on_cuda(monkeypatch, tmp_path):
         events = json.loads(Path(session.end_profiling()).read_text("utf-8"))
         providers = {event["args"]["provider"] for event in events if "provider" in event.get("args", {})}
         assert providers == {"CUDAExecutionProvider"}, "不能仅检查已安装 provider，必须核对实际算子"
-
-
-@pytest.mark.integration
-@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
-@pytest.mark.parametrize("case_id", ["image-7", "face-video2-10s", "video-04-frame-24"])
-def test_half_backbone_keeps_heads_float_and_reviewed_regions(case_id):
-    from vision_shield.detection.egoblur import _MixedPrecisionModel
-
-    detector = load_detector(Settings(_env_file=None, inference_device="cuda").model_dump())
-    # 即使测试机没有Tensor Core，也显式验证混合精度路径，不能以旧路径通过冒充。
-    detector.primary.models = [model if isinstance(model, _MixedPrecisionModel) else _MixedPrecisionModel(model, kind)
-                               for model, kind in zip(detector.primary.models, ("face", "plate"))]
-    for model in detector.primary.models:
-        assert next(model.model.backbone.parameters()).dtype == torch.float16
-        assert next(model.model.roi_heads.parameters()).dtype == torch.float32
-        assert next(model.model.proposal_generator.parameters()).dtype == torch.float32
-        assert model.model.pixel_mean.dtype == torch.float32
-        with torch.inference_mode(), torch.jit.optimized_execution(False):
-            boxes, _, scores, size = model(torch.zeros((3, 319, 321), dtype=torch.uint8, device="cuda"))
-        assert boxes.dtype == scores.dtype == torch.float32
-        assert size.device.type == "cpu" and size.tolist() == [319, 321]
-        assert torch.isfinite(boxes).all() and torch.isfinite(scores).all()
-    manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
-    case = next(case for case in manifest["cases"] if case["id"] == case_id)
-    source = Path(manifest["local_source"]) / case["file"]
-    assert hashlib.sha256(source.read_bytes()).hexdigest() == case["sha256"]
-    pixels = np.array(Image.open(source).convert("RGB"))
-    masked = redact(pixels, detector.detect(pixels))
-    for left, top, right, bottom in case["masked_regions"]:
-        assert (masked[top:bottom, left:right] == 64).all()
-    for left, top, right, bottom in case["preserved_regions"]:
-        assert np.array_equal(masked[top:bottom, left:right], pixels[top:bottom, left:right])
