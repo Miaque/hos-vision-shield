@@ -21,7 +21,7 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 GPU Compose 选用 `DETECTION_BACKEND=quality_yolo`，用轻量 YOLO 人脸候选替换 EgoBlur 人脸，保留 EgoBlur 车牌、YuNet/HyperLPR、现有确认和跟踪规则。本机可在 CUDA 环境显式选择该后端。新权重随版本包交付，来源、哈希、GPL-3.0 许可与导出方法见[模型说明](src/vision_shield/detection/assets/README.md)。原 `quality` 和 CPU 默认值保留；该后端的目标服务器吞吐须单独实测，不能由本地片段速度推定双路达标。
 
-`quality_yolo`在计算能力主版本至少8的GPU上使用FP16车牌模型参数和自动混合精度，沿用原Gen1骨干、RPN和ROI子图，保留FP32归一化及FP32输出坐标/分数。RPN按分数排序后最多512个候选进入ROI头；较旧GPU及其他后端保持原路径。ONNX精度设置不变。候选裁减可能影响召回，精度变化可能改变临界分数及框，效果和吞吐均须在目标服务器验证，见[时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)。
+`quality_yolo`在计算能力主版本至少8的GPU上使用FP16车牌模型参数和自动混合精度，沿用原Gen1完整执行图，保留FP32归一化、FP32输出坐标/分数及最多1000个ROI候选，撤回服务器实测没有收益的512候选裁减；较旧GPU及其他后端保持原路径。ONNX精度设置不变。精度变化可能改变临界分数及框，效果和吞吐均须在目标服务器验证，见[时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)。
 
 CUDA补充车牌检测将最多4个原有视图合批推理，保留各自的letterbox、坐标和全部检测区域；阈值、跨模型确认与逐帧跟踪不变。单视图、NumPy局部复核及串行设置沿用原路径。批量内核的浮点差异仍需用目标服务器素材校准。
 

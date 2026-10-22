@@ -11,7 +11,7 @@ from vision_shield.detection import Detection
 
 
 class _HalfPlate(torch.nn.Module):
-    """Run the original Gen1 subgraphs with half weights and a bounded ROI workload."""
+    """Keep the original graph and float normalization while using half model weights."""
 
     def __init__(self, model):
         super().__init__()
@@ -22,17 +22,8 @@ class _HalfPlate(torch.nn.Module):
         core.pixel_mean, core.pixel_std = mean, std
 
     def forward(self, pixels):
-        core = self.model.model.model
-        height, width = pixels.shape[-2:]
-        size = torch.tensor([height, width], device="cpu")
         with torch.autocast("cuda", dtype=torch.float16):
-            normalized = (pixels - core.pixel_mean) / core.pixel_std
-            padded = torch.nn.functional.pad(normalized, (0, -width % 32, 0, -height % 32)).unsqueeze(0).contiguous()
-            # shortcut: fixed Gen1 plate export; recheck subgraph wiring when changing weights.
-            features = core.backbone(padded)
-            # RPN returns proposals in score order; avoid pooling/classifying the low-ranked tail.
-            proposals = core.proposal_generator(*features, size)[:512]
-            boxes, labels, scores = core.roi_heads(features[0], proposals, *features[1:4], size)
+            boxes, labels, scores, size = self.model(pixels)
         return boxes.float(), labels, scores.float(), size
 
 
