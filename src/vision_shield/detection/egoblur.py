@@ -10,26 +10,6 @@ from PIL import Image
 from vision_shield.detection import Detection
 
 
-class _MixedPrecisionPlate(torch.nn.Module):
-    """Fixed Gen1 plate graph: half backbone, float proposals, ROI head and coordinates."""
-
-    def __init__(self, original):
-        super().__init__()
-        self.model = original.model.model
-        self.model.backbone.half()
-
-    def forward(self, image):
-        height, width = image.shape[1:]
-        image_size = torch.tensor([height, width], device="cpu")
-        pixels = (image - self.model.pixel_mean) / self.model.pixel_std
-        pixels = torch.nn.functional.pad(pixels, (0, (-width) % 32, 0, (-height) % 32))
-        features = tuple(feature.float() for feature in self.model.backbone(pixels.unsqueeze(0).half()))
-        # Preserve the feature connections in the shipped Gen1 plate export.
-        proposals = self.model.proposal_generator(*features[:10], image_size)
-        boxes, labels, scores = self.model.roi_heads(features[0], proposals, features[1], features[2], features[3], image_size)
-        return boxes, labels, scores, image_size
-
-
 class Detector:
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=0.1, device="cpu"):
         if device not in {"cpu", "cuda"}:

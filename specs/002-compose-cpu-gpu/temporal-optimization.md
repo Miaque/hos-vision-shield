@@ -368,3 +368,19 @@ GTX1080强制执行实际产品混合精度路径，15个可用质量样例必�
 证据data/validation/mixed-plate-20261022/{selection-before.log,quality-cases.json,clips.json,targeted.log,unit-media.log}。目标每路端到端15–30FPS仍不变；服务器没有可靠收益或效果回退则撤回，不以本机测试或单算子速度宣布达标。
 
 完整显式GPU/媒体回归40项通过（92.51秒），包含两种遮罩、静音/AAC/VFR、旋转、NVDEC失败策略、实际CUDA算子以及强制混合精度运动片段；17条警告来自上游接口弃用/meshgrid提示。没有把未运行的RTSP或整片逐目标标注算作通过。
+
+### 第十七轮服务器结果：撤回无收益的车牌半精度骨干
+
+2f42f8a部署成功后，完整4K双路fe9bc80f-c1f5-443a-a411-b7a476bd1150、d4eaf8b4-a5ee-4052-9ddb-6607a018e077实际并发，各1776帧、零丢帧，分别124.962秒/14.212 FPS、125.570秒/14.143 FPS；含初始化140/141秒、12.686/12.596 FPS。与464a21a的124.031/125.050秒基本持平且略慢，没有可靠收益，因此撤回骨干适配及其专属回归，恢复原FP32整图；历史标签和数据保留。双路初始主候选91.614/91.772秒，补充63.153/63.963秒，编码1.960/2.076秒；不能用补充链局部变化代替总吞吐。
+
+两份输出33,424,724字节、SHA256均025f5c509f42351f7d226057db18cddaf7c7d6ded96d7f2ce31e1ca53e2f3c93，全部帧尺寸/有理数PTS与943个AAC包载荷/PTS/DTS一致。证据data/validation/dual-plate-2f42f8a-20261022/summary.json及observations.jsonl。因无吞吐收益未继续该候选的服务器夜间/15图检查，未将它们计为通过；上一轮夜间结果仍是当前已验证参考。
+
+## 第十八轮：验证FP32矩阵乘的TF32执行（opt-20261022-10）
+
+本机原生CUDA profiler确认车牌ROI头包含1000×12544与12544×1024的addmm，3次合计GPU33.682毫秒；同时确认矩阵乘原allow_tf32为False、卷积原allow_tf32为True。它是独立于已撤回骨干转换的计算路径；本机GTX1080无TF32 Tensor Core，不以此推断RTX6000的占比或收益。代码/形状/算子时间保存在data/validation/tf32-matmul-20261022/{roi-head-code.txt,operator-profile.json,plate-trace.json}。
+
+仅在quality_yolo构造器确认所选GPU计算能力主版本至少8后，设置torch.backends.cuda.matmul.fp32_precision="tf32"，使用[PyTorch 2.14推荐的分后端精度API](https://docs.pytorch.org/docs/2.14/notes/cuda.html#tensorfloat-32-tf32-on-ampere-and-later-devices)。模型完整FP32执行图、权重文件、输入尺寸、阈值和逐帧规则不变，卷积策略与ONNX的use_tf32=0不变。TF32内部舍入可能改变边界分数/坐标，必须在RTX6000复核样例、整片和夜间，不能用本机FP32结果冒充Tensor Core效果。
+
+硬件选择3项回归在旧实现先失败，新增检查保留所选cuda:2、旧GPU原策略与原模型对象；实际CUDA测试验证新API可设置、FP32权重及既有必验/保留区。16项定向检查通过。服务器验证必须安排在前轮任务全部成功后，未获得收益或质量回退则撤回。
+
+恢复原模型图后，318项默认单元/媒体检查通过（33.08秒），16项GPU检查默认跳过；RUN_GPU_TESTS=1下38项GPU/媒体检查通过（65.92秒）。本机仅校验API、FP32权重及既有效果，未把旧GPU的运算结果视作已验证RTX6000的TF32数值。

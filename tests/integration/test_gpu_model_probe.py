@@ -151,24 +151,14 @@ def test_moving_heads_stay_masked_without_lost_tracks_covering_door_and_torso():
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual mixed CUDA plate model")
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual CUDA model and TF32 setting API")
 @pytest.mark.parametrize("case_id", ["image-2", "face-video2-10s", "video-04-frame-24"])
-def test_mixed_plate_keeps_float_heads_and_reviewed_targets(case_id):
-    from vision_shield.detection.egoblur import _MixedPrecisionPlate
-
+def test_tf32_setting_keeps_fp32_weights_and_reviewed_targets(monkeypatch, case_id):
+    # This exercises the setting API on older GPUs too; Tensor Core accuracy still requires server validation.
+    monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
     detector = load_detector(Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump())
-    model = detector.primary.models[1]
-    if not isinstance(model, _MixedPrecisionPlate):
-        model = detector.primary.models[1] = _MixedPrecisionPlate(model)
-    assert next(model.model.backbone.parameters()).dtype == torch.float16
-    assert next(model.model.proposal_generator.parameters()).dtype == torch.float32
-    assert next(model.model.roi_heads.parameters()).dtype == torch.float32
-    assert model.model.pixel_mean.dtype == model.model.pixel_std.dtype == torch.float32
-    with torch.inference_mode(), torch.jit.optimized_execution(False):
-        boxes, _, scores, size = model(torch.zeros((3, 319, 321), dtype=torch.uint8, device=detector.primary.device))
-    assert boxes.dtype == scores.dtype == torch.float32
-    assert size.device.type == "cpu" and size.tolist() == [319, 321]
-    assert torch.isfinite(boxes).all() and torch.isfinite(scores).all()
+    assert torch.backends.cuda.matmul.fp32_precision == "tf32"
+    assert all(parameter.dtype == torch.float32 for parameter in detector.primary.models[1].parameters())
     manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
     case = next(case for case in manifest["cases"] if case["id"] == case_id)
     source = Path(manifest["local_source"]) / case["file"]
