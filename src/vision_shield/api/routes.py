@@ -1,8 +1,9 @@
 import asyncio
 from pathlib import Path
 from uuid import UUID, uuid4
+from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile
 from pydantic import ValidationError
@@ -13,6 +14,7 @@ from vision_shield.jobs.diagnostics import STALE_SECONDS
 from vision_shield.jobs.service import require_worker
 from vision_shield.media.source import SourceError, validate_source
 from vision_shield.detection.timing import STAGES
+from vision_shield.detection.device_profile import CHECKPOINTS
 
 router = APIRouter(prefix="/v1")
 
@@ -73,7 +75,9 @@ async def file_url(data: FileUrlInput, request: Request, response: Response):
                      "file": {"type": "string", "format": "binary"},
                      "redaction_mode": {"type": "string", "enum": ["solid", "mosaic"], "default": "solid"},
                  }}}}}})
-async def upload(request: Request, response: Response):
+async def upload(request: Request, response: Response,
+                 profile_detection: Literal['1'] | None = Header(default=None, alias='X-Detection-Profile',
+                     description='仅视频：显式采集三个主车牌CUDA时间线样本，会增加诊断开销')):
     settings = request.app.state.settings
     await require_worker(request.app.state.redis, "image", settings.lease_seconds)
     async with asyncio.timeout(settings.upload_timeout):
@@ -84,6 +88,8 @@ async def upload(request: Request, response: Response):
             kind, file = form["kind"], form["file"]
             if kind not in {"image", "video"} or not isinstance(file, UploadFile):
                 raise HTTPException(422, "invalid_input")
+            if profile_detection is not None and kind != 'video':
+                raise HTTPException(422, 'invalid_input')
             redaction_mode = form.get("redaction_mode", "solid")
             if redaction_mode not in ("solid", "mosaic"):
                 raise HTTPException(422, "invalid_input")
@@ -101,7 +107,8 @@ async def upload(request: Request, response: Response):
                     await asyncio.to_thread(output.write, block)
             finally:
                 await asyncio.to_thread(output.close)
-    task = await request.app.state.store.create(kind, "upload", str(target), task_id, redaction_mode=redaction_mode)
+    task = await request.app.state.store.create(kind, "upload", str(target), task_id, redaction_mode=redaction_mode,
+        **({'profile_detection': True} if profile_detection is not None else {}))
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)
 
@@ -135,6 +142,26 @@ async def get_task(task_id: UUID, request: Request, response: Response):
             for name in ("frame", "inference", "encode", "candidate-primary", "candidate-detail", *STAGES)
             if name in task["timings"])
     return public(request, task)
+
+
+@router.get('/tasks/{task_id}/diagnostics')
+async def detection_diagnostics(task_id: UUID, request: Request,
+                                sample: int | None = Query(default=None, json_schema_extra={'enum': list(CHECKPOINTS)})):
+    if sample is not None and sample not in CHECKPOINTS:
+        raise HTTPException(422, 'invalid_input')
+    task = await request.app.state.store.get(str(task_id))
+    if task is None:
+        raise HTTPException(404, 'task_not_found')
+    if task.get('device_profile') is None:
+        raise HTTPException(409, 'diagnostics_not_ready')
+    if sample is None:
+        return task['device_profile']
+    root = request.app.state.settings.media_root.resolve()
+    target = await asyncio.to_thread((root / str(task_id) / f"attempt-{task['generation']}" /
+                                     f'plate-profile-{sample}.json').resolve)
+    if not target.is_relative_to(root / str(task_id)) or not await asyncio.to_thread(target.is_file):
+        raise HTTPException(409, 'diagnostics_not_ready')
+    return FileResponse(target, media_type='application/json', filename=target.name)
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskResponse, status_code=202)

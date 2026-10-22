@@ -27,6 +27,8 @@ CUDA补充车牌检测恢复原有视图逐张推理，撤回服务器实测没�
 
 GPU离线任务查询的 `Server-Timing` 额外提供主/补预处理、人脸/车牌前向调用、后处理、局部/跟踪复核、拷贝及显式同步的累计主机耗时。计时不增加GPU同步；嵌套、并行项目不能相加，ORT的CPU输出前向调用包含内部等待与下载，不能当作纯GPU内核耗时。详见[分项测量说明](specs/002-compose-cpu-gpu/temporal-optimization.md)。
 
+主车牌设备诊断默认关闭。上传视频时可加 `X-Detection-Profile: 1`，在第64、424、768个合格全图调用采样；`GET /v1/tasks/{id}/diagnostics`读取摘要，添加`?sample=64`等固定索引可下载原始trace。每份最多32 MiB、每任务最多三份，短视频或未进入采样位置返回partial。该模式要求CUDA模型，采样会扰动耗时，其FPS不作为优化验收。
+
 ### 本机 GTX 1080
 
 先执行 `uv sync --frozen --extra cuda`，在 `.env` 设置 `INFERENCE_DEVICE=cuda`，然后运行原有 `scripts/start-application.ps1`。EgoBlur 使用 PyTorch CUDA，YuNet/HyperLPR 使用 ONNX Runtime CUDA，模型输入预处理也在GPU完成。兼容的离线H.264视频采用NVDEC解码、GPU颜色转换/遮罩及NVENC编码；跟踪仍下载灰度图，局部确认按需下载裁剪。解码格式边界及实际编解码器响应头见[诊断说明](specs/002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。CUDA 推理不可用时启动失败，不静默降级。要使用 CPU，只需改为 `INFERENCE_DEVICE=cpu` 后重启应用。未设置该字段仍默认 CPU；轻量 `DETECTION_BACKEND=cpu` 不接受 cuda 设备。

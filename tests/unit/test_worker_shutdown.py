@@ -42,6 +42,26 @@ async def test_stopping_worker_does_not_claim_another_task(monkeypatch):
     await tasks.execute("job", broker, None)
 
 
+async def test_requested_device_profile_passes_to_child_and_is_stored_without_stats(tmp_path, monkeypatch):
+    broker = SimpleNamespace(connection_pool=None, state=SimpleNamespace(), ack_message=AsyncMock())
+    record = dict(id='job', kind='video', generation=1, source_kind='upload', source_ref='local',
+                  desired_state='run', profile_detection=True)
+    store = SimpleNamespace(claim=AsyncMock(return_value=record), get=AsyncMock(return_value=record),
+                            heartbeat=AsyncMock(return_value=True), finish=AsyncMock(), update_owned=AsyncMock())
+    monkeypatch.setattr(tasks, 'Settings', lambda: Settings(_env_file=None, media_root=tmp_path))
+    monkeypatch.setattr(tasks, 'TaskStore', lambda *a: store)
+    monkeypatch.setattr(tasks, 'Redis', lambda **kw: None)
+    profile = dict(state='complete', samples=[dict(frame=64)])
+    async def run(command, payload, cancel, on_event, timeout):
+        assert payload['profile_detection'] is True and 'profile_detection' not in payload['config']
+        await on_event(dict(device_profile=profile))
+        return dict(returncode=0, result_ref=str(tmp_path / 'job/attempt-1/result.mp4'))
+    monkeypatch.setattr(tasks, 'run_process', run)
+    await tasks.execute('job', broker, SimpleNamespace(message=SimpleNamespace(task_id='message')))
+    assert store.update_owned.call_args.kwargs == dict(device_profile=profile)
+    assert store.finish.call_args.args[3] == 'succeeded'
+
+
 @pytest.mark.parametrize("mode", [None, "solid", "mosaic"])
 async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path, monkeypatch, mode):
     stop = asyncio.Event()

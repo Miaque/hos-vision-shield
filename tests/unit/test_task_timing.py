@@ -93,6 +93,30 @@ async def test_task_stage_timings_are_headers_and_do_not_change_the_json_contrac
         assert "server-timing" not in response.headers
 
 
+def test_child_attaches_requested_sampler_and_finishes_only_after_video(tmp_path, monkeypatch, capsys):
+    from vision_shield import detection
+    from vision_shield.media import video
+
+    primary = SimpleNamespace(device=SimpleNamespace(type='cuda'))
+    detector = SimpleNamespace(primary=primary)
+    source = tmp_path / 'source.mp4'
+    payload = dict(kind='video', source=str(source), directory=str(tmp_path / 'attempt'),
+                   profile_detection=True, config=Settings(_env_file=None).model_dump(mode='json'))
+    monkeypatch.setattr(child.sys, 'stdin', io.StringIO(json.dumps(payload) + '\n'))
+    monkeypatch.setattr(child.threading, 'Thread', lambda **kw: SimpleNamespace(start=lambda: None))
+    monkeypatch.setattr(detection, 'load_detector', lambda cfg: detector)
+    def process(source, target, actual, config, stop, emit):
+        from pathlib import Path
+        assert actual is detector and primary.device_samples.samples == []
+        assert not any('device_profile' in json.loads(line) for line in capsys.readouterr().out.splitlines())
+        Path(target).write_bytes(b'video')
+    monkeypatch.setattr(video, 'process_video', process)
+    child.main()
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert events[0]['device_profile'] == dict(state='partial', samples=[])
+    assert events[1]['result_ref'].endswith('result.mp4')
+
+
 def test_inference_timing_includes_local_rechecks(monkeypatch):
     import numpy as np
     from vision_shield import redaction

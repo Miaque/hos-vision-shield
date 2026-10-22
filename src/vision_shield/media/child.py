@@ -75,9 +75,19 @@ def main():
             emit({"result_ref": str(result), "stats": {"processed_frames": 1, "dropped_frames": 0,
                                                        "elapsed_seconds": time.monotonic() - started}})
         elif payload["kind"] == "video":
+            sampler = None
+            if payload.get('profile_detection'):
+                from vision_shield.detection.device_profile import DeviceSamples
+
+                primary = getattr(detector, 'primary', detector)
+                if getattr(getattr(primary, 'device', None), 'type', None) != 'cuda':
+                    raise ValueError('Detection profiling requires CUDA')
+                sampler = primary.device_samples = DeviceSamples(directory, emit)
             temporary = directory / "result.mp4.part"
             process_video(payload["source"], str(temporary), detector, cfg, stop, emit)
             if not stop.is_set():
+                if sampler is not None:
+                    sampler.finish()
                 result = directory / "result.mp4"
                 temporary.replace(result)
                 emit({"result_ref": str(result)})

@@ -93,7 +93,11 @@ class Detector:
                 if model is None or kind is not None and kind != model_kind:
                     continue
                 with measure(self, f"forward-primary-{model_kind}"):
-                    coordinates, _, scores, _ = model(image)
+                    sampler = getattr(self, "device_samples", None)
+                    if sampler is not None and model_kind == "plate":
+                        coordinates, _, scores, _ = sampler.forward(model, image, global_view=max(height, width) > self.max_side)
+                    else:
+                        coordinates, _, scores, _ = model(image)
                 with measure(self, "post-primary"):
                     if (coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),)
                             or not torch.isfinite(coordinates).all() or not torch.isfinite(scores).all()
