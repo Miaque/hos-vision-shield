@@ -113,9 +113,12 @@ def test_nvenc_preserves_all_frames_clocks_audio_and_requested_mask(generated_me
         assert all((frame.width, frame.height) == (320, 240) for frame in frames)
         actual = frames[0].to_ndarray(format="rgb24")[20, 20]
         assert all(abs(int(a) - int(b)) < 10 for a, b in zip(actual, expected))
+        if mode == "solid":
+            assert all(all(abs(int(value) - 64) < 10 for value in f.to_ndarray(format="rgb24")[20, 20]) for f in frames)
     assert events[-1]["stats"]["processed_frames"] == len(clocks)
     assert events[-1]["stats"]["dropped_frames"] == 0
     assert all(event["video_encoder"] == "h264_nvenc" for event in events)
+    assert all(event["video_decoder"] == "h264_nvdec" for event in events)
     if name == "aac.mp4":
         assert audio_payloads(source) == audio_payloads(target)
 

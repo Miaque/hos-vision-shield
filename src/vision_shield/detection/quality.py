@@ -109,6 +109,8 @@ class Detector:
         left, top = max(0, math.floor((x1 + x2 - size) / 2)), max(0, math.floor((y1 + y2 - size) / 2))
         right, bottom = min(rgb.shape[1], math.ceil((x1 + x2 + size) / 2)), min(rgb.shape[0], math.ceil((y1 + y2 + size) / 2))
         crop = rgb[top:bottom, left:right]
+        if getattr(crop, "is_cuda", False):
+            crop = crop.cpu().numpy()
         if not crop.size:
             return False
 
@@ -155,6 +157,8 @@ class Detector:
         if right <= left or bottom <= top:
             return False
         crop = rgb[top:bottom, left:right]
+        if getattr(crop, "is_cuda", False):
+            crop = crop.cpu().numpy()
         scale = 320 / max(crop.shape[:2])
         crop = cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
         xs, ys = (right - left) / crop.shape[1], (bottom - top) / crop.shape[0]

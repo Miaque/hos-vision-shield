@@ -59,9 +59,13 @@ class FrameRedactor:
         self.candidate_timings = {}
 
     def apply(self, pixels: np.ndarray, moment: float) -> np.ndarray:
+        return redact(pixels, self.regions(pixels, moment), mode=self.mode)
+
+    def regions(self, pixels, moment, *, thumbnail=None, gray=None):
         height, width = pixels.shape[:2]
-        rows, cols = np.linspace(0, height - 1, 36, dtype=int), np.linspace(0, width - 1, 64, dtype=int)
-        thumbnail = pixels[rows[:, None], cols[None, :]].astype(np.float32)
+        if thumbnail is None:
+            rows, cols = np.linspace(0, height - 1, 36, dtype=int), np.linspace(0, width - 1, 64, dtype=int)
+            thumbnail = pixels[rows[:, None], cols[None, :]].astype(np.float32)
         reset = (self.shape != pixels.shape or self.moment is None or moment <= self.moment
                  or moment - self.moment > 0.2
                  or np.abs(thumbnail - self.previous).mean() > 20)
@@ -72,7 +76,8 @@ class FrameRedactor:
         self.previous, self.shape, self.moment = thumbnail, pixels.shape, moment
         detections = self._merge_detections(self._detections(pixels))
         boxes = [detection.box for detection in detections]
-        gray = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
+        if gray is None:
+            gray = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
         retained, history = [], []
         pairs = sorted(((self._overlap(track.box, detection.box), old, new)
                         for old, track in enumerate(self.history) for new, detection in enumerate(detections)
@@ -119,7 +124,7 @@ class FrameRedactor:
         self.history = deque(history + [_Track(moment, moment, box, detection.kind)
                                        for box, detection in zip(boxes, detections, strict=True)], maxlen=128)
         self.gray = gray
-        return redact(pixels, boxes + retained, mode=self.mode)
+        return boxes + retained
 
     def _detections(self, pixels, kind=None):
         started = time.monotonic()
@@ -211,6 +216,8 @@ class FrameRedactor:
         left, top = max(0, math.floor((x1 + x2 - size) / 2)), max(0, math.floor((y1 + y2 - size) / 2))
         right, bottom = min(pixels.shape[1], math.ceil((x1 + x2 + size) / 2)), min(pixels.shape[0], math.ceil((y1 + y2 + size) / 2))
         crop = pixels[top:bottom, left:right]
+        if getattr(crop, "is_cuda", False):
+            crop = crop.cpu().numpy()
         scale = 320 / max(crop.shape[:2])
         view = cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
         xs, ys = (right - left) / view.shape[1], (bottom - top) / view.shape[0]

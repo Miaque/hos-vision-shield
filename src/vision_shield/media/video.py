@@ -1,6 +1,7 @@
 """Finite media processing: preserve source clocks and compressed AAC payloads."""
 
 from fractions import Fraction
+from contextlib import ExitStack
 import time
 from pathlib import Path
 from collections.abc import Callable
@@ -48,11 +49,21 @@ def masked_frame(frame: av.VideoFrame, detector: "Detector | FrameRedactor", ori
 
 def add_video(writer, frame, source, live=False, *, device="cpu"):
     encoder = "h264_nvenc" if device == "cuda" and not live else "libx264"
-    video = writer.add_stream(encoder, rate=source.average_rate or 25)
+    hardware = getattr(getattr(frame, "format", None), "name", None) == "cuda"
+    options = {}
+    if hardware:
+        import torch
+        from vision_shield.media.cuda_frames import hwaccel
+
+        options["hwaccel"] = hwaccel(torch.cuda.current_device())
+    video = writer.add_stream(encoder, rate=source.average_rate or 25, **options)
     video.width, video.height = frame.width, frame.height
     if frame.width % 2 or frame.height % 2:
         raise ValueError("H.264 output requires even dimensions")
-    video.pix_fmt = "yuv420p"
+    video.pix_fmt = "cuda" if hardware else "yuv420p"
+    if hardware:
+        for name in ("colorspace", "color_range", "color_trc", "color_primaries"):
+            setattr(video.codec_context, name, getattr(frame, name))
     video.time_base = frame.time_base
     video.codec_context.time_base = frame.time_base
     if live:
@@ -80,13 +91,23 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
     count, started = 0, time.monotonic()
     frame_seconds = encode_seconds = 0.0
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"))
-    with av.open(source) as reader, av.open(target, "w", format="mp4") as writer:
+    with ExitStack() as stack:
+        reader = stack.enter_context(av.open(source))
         brand = reader.metadata.get("major_brand", "").lower().strip()
         if "mp4" not in reader.format.name.split(",") or brand.startswith(("qt", "3g", "mjp", "mj2")):
             raise ValueError("MP4 container required")
         input_video = check_streams(reader, config)
         if reader.duration and reader.duration / av.time_base > config["max_video_seconds"]:
             raise ValueError("Video duration exceeds limit")
+        frames = None
+        if (config.get("inference_device") == "cuda" and input_video.codec_context.pix_fmt in {"yuv420p", "yuvj420p"}
+                and input_video.codec_context.colorspace in {0, 1, 2, 3, 5, 6}):
+            from vision_shield.media.cuda_frames import CUDAFrames, hwaccel
+
+            frames = CUDAFrames()
+            reader = stack.enter_context(av.open(source, hwaccel=hwaccel(frames.device)))
+            input_video = check_streams(reader, config)
+        writer = stack.enter_context(av.open(target, "w", format="mp4"))
         audio = writer.add_stream_from_template(reader.streams.audio[0]) if reader.streams.audio else None
         video, pending_audio, pending_bytes, previous = None, [], 0, None
         for packet in reader.demux():
@@ -113,7 +134,7 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                         first = moment
                     previous = moment
                     stage = time.monotonic()
-                    output = masked_frame(frame, redactor)
+                    output = frames.masked(frame, redactor) if frames else masked_frame(frame, redactor)
                     frame_seconds += time.monotonic() - stage
                     stage = time.monotonic()
                     if video is None:
@@ -127,7 +148,8 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                         writer.mux(encoded)
                     encode_seconds += time.monotonic() - stage
                     count += 1
-                    emit({"video_encoder": video.codec_context.name,
+                    emit({"video_decoder": "h264_nvdec" if frames else "h264",
+                          "video_encoder": video.codec_context.name,
                           "stats": {"processed_frames": count, "dropped_frames": 0,
                                     "elapsed_seconds": time.monotonic() - started},
                           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
@@ -138,7 +160,8 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
         for packet in video.encode():
             writer.mux(packet)
     encode_seconds += time.monotonic() - stage
-    emit({"video_encoder": video.codec_context.name,
+    emit({"video_decoder": "h264_nvdec" if frames else "h264",
+          "video_encoder": video.codec_context.name,
           "stats": {"processed_frames": count, "dropped_frames": 0, "elapsed_seconds": time.monotonic() - started},
           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
                           encode=encode_seconds, **redactor.candidate_timings)})

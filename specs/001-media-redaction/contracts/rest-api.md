@@ -55,6 +55,8 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
 新版视频/流任务的`GET /v1/tasks/{id}`可附带`Server-Timing`响应头，JSON和stats字段保持不变。`task-frame`、`task-inference`、`task-encode`为当前媒体会话累计毫秒，inference是frame的子集；旧任务/图片可不返回。组合后端还可提供两项重叠的候选调用计时`task-candidate-primary`/`task-candidate-detail`，同样为累计毫秒，不可相加。文件最终elapsed包括编码冲刷及关闭MP4。详细口径见[任务阶段计时](../../002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
 
 实际视频编码事件已上报的任务还可附带`X-Video-Encoder: libx264`或`h264_nvenc`；旧任务和未上报路径不返回，不改变请求参数或JSON。该头不是硬件编解码全链路的证明。
+
+文件任务还可附带`X-Video-Decoder: h264_nvdec`或`h264`，表示实际硬件帧或原软件解码路径；未开始处理及旧任务可省略，不改变请求或JSON。兼容格式的CUDA文件使用NVDEC，其他格式保留原解码方式；选中硬解后失败不重试CPU，详见[诊断说明](../../002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
 原始来源、绝对磁盘路径、worker标识和发布凭据不进入响应。没有进度百分比，避免长流或未知时长的伪进度。
 
 ```json

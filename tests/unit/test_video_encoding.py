@@ -56,3 +56,23 @@ def test_unavailable_nvenc_is_never_replaced_with_cpu_encoding():
     with pytest.raises(RuntimeError, match="NVENC unavailable"):
         add_video(writer, frame, SimpleNamespace(average_rate=Fraction(15)), device="cuda")
     writer.add_stream.assert_called_once_with("h264_nvenc", rate=Fraction(15))
+
+
+def test_cuda_frames_go_directly_to_nvenc_with_the_selected_context_and_color_metadata(monkeypatch):
+    import torch
+
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 2)
+    video = SimpleNamespace(codec_context=SimpleNamespace())
+    writer = SimpleNamespace(add_stream=Mock(return_value=video))
+    frame = SimpleNamespace(width=3840, height=1080, time_base=Fraction(1, 16000),
+                            format=SimpleNamespace(name="cuda"), colorspace=1, color_range=2,
+                            color_trc=1, color_primaries=1)
+    source = SimpleNamespace(average_rate=Fraction(15), bit_rate=2_000_000)
+    add_video(writer, frame, source, device="cuda")
+    call = writer.add_stream.call_args
+    assert call.args == ("h264_nvenc",) and call.kwargs["rate"] == Fraction(15)
+    hwaccel = call.kwargs["hwaccel"]
+    assert hwaccel.device_id == 2 and hwaccel.is_hw_owned and not hwaccel.allow_software_fallback
+    assert hwaccel.options == {"primary_ctx": "0", "current_ctx": "1"}
+    assert video.pix_fmt == "cuda" and video.options["gpu"] == "2"
+    assert video.codec_context.colorspace == 1 and video.codec_context.color_range == 2

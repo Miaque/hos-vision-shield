@@ -45,7 +45,13 @@ GPU 指标明确为 `scope=device`，并非项目进程独占用量；同一显�
 
 `GET /v1/tasks/{id}`还可返回`X-Video-Encoder`，仅允许`libx264`/`h264_nvenc`，来自实际视频编码事件并随任务所有权校验持久化。旧任务、尚未开始编码的任务及未上报编码器的媒体路径没有该头；JSON不增加字段。该头、成功任务和可完整解码的输出共同验证实际使用的编码器，不能只凭编码器列表认定NVENC工作。
 
-CUDA离线视频使用NVENC p6/hq/VBR CQ19，并保留源平均码率115%的maxrate及两秒VBV；CPU离线仍为x264 slow/CRF23，流的低延迟编码策略另行验证。CQ19与CRF23不可等同，源尺寸和时间戳不变也不表示画质无损。当前NVENC入口仍接收CPU RGB帧，颜色转换和上传仍存在，不能称作全GPU或零拷贝。GPU容器显式暴露`compute,utility,video`驱动能力，沿用原选卡范围；`video`用于Video Codec SDK，参见[NVIDIA容器文档](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html)。
+CUDA离线视频使用NVENC p6/hq/VBR CQ19，并保留源平均码率115%的maxrate及两秒VBV；CPU离线仍为x264 slow/CRF23，流的低延迟编码策略另行验证。CQ19与CRF23不可等同，源尺寸和时间戳不变也不表示画质无损。GPU容器显式暴露`compute,utility,video`驱动能力，沿用原选卡范围；`video`用于Video Codec SDK，参见[NVIDIA容器文档](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html)。
+
+兼容的CUDA文件路径使用NVDEC：初始H.264格式为8位4:2:0（yuv420p/yuvj420p）、BT.601/709或其默认/等价矩阵标记。其他像素格式和矩阵保留原软件解码及NVENC路径，不缩小已有输入格式范围；选择NVDEC后运行失败直接失败，不重试CPU。每个实际处理帧必须为CUDA NV12，颜色矩阵和范围须保持不变，不支持的中途变化明确报错，避免错误的固定输出色彩元数据。容器/编码/尺寸/时长限制仍在分配GPU帧前检查。
+
+`X-Video-Decoder`只允许`h264_nvdec`或`h264`，随实际帧处理事件记录，含义分别为硬件帧路径或原软件解码路径；旧任务和未上报的路径没有该头，JSON不增加字段。NVDEC帧通过DLPack交给Torch，整数NV12→RGB、模型预处理/推理、深灰或马赛克遮罩及送入NVENC的帧保持在GPU。输出使用独立、连续的NV12缓冲，禁止改写解码器参考帧，保留时钟、旋转后尺寸及AAC直通。原始YUV在非遮罩区保持，色彩范围/矩阵传给编码器，压缩输出不承诺与旧RGB往返编码逐字节相同。遮罩边界的4:2:0色度共享是编码格式本身的限制。
+
+跟踪继续在CPU处理灰度图，转场缩略图和局部裁剪也会下载；调度、框管理、后处理与封装保留CPU。这里减少的是完整RGB帧往返，不称作零拷贝或所有工作已迁移GPU。CUDA上下文复用当前Torch上下文，避免ORT已设置的primary context标志冲突。
 
 ## 部署
 

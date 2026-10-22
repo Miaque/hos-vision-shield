@@ -93,7 +93,7 @@ async def execute(task_id, broker, context):
                 logger.warning("task=%s media failure type=%s", task_id, event["failure_type"])
             if "stats" in event:
                 await store.update_owned(task_id, owner, generation,
-                                         **{key: event[key] for key in ("stats", "timings", "video_encoder") if key in event})
+                                         **{key: event[key] for key in ("stats", "timings", "video_encoder", "video_decoder") if key in event})
 
         result = {}
         if not cancel.is_set():

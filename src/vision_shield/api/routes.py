@@ -126,6 +126,8 @@ async def get_task(task_id: UUID, request: Request, response: Response):
         raise HTTPException(404, "task_not_found")
     if task.get("video_encoder") in {"libx264", "h264_nvenc"}:
         response.headers["X-Video-Encoder"] = task["video_encoder"]
+    if task.get("video_decoder") in {"h264", "h264_nvdec"}:
+        response.headers["X-Video-Decoder"] = task["video_decoder"]
     if task.get("timings"):
         response.headers["Server-Timing"] = ", ".join(
             f"task-{name};dur={task['timings'][name] * 1000:.3f}"
