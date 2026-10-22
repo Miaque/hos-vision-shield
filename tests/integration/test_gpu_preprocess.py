@@ -51,7 +51,8 @@ def test_gpu_preprocessing_binds_matching_pixels_without_cpu_image_operations(mo
 
     def capture(session, tensor, stream):
         assert tensor.is_cuda and tensor.dtype == torch.float32 and tensor.is_contiguous()
-        reference, tolerance = expected[session].pop(0)
+        reference_session = detail.face if session in detail.face_sessions.values() else session
+        reference, tolerance = expected[reference_session].pop(0)
         np.testing.assert_allclose(tensor.cpu().numpy(), reference, rtol=0, atol=tolerance)
         return run(session, tensor, stream)
 

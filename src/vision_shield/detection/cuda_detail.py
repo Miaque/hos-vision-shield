@@ -62,7 +62,8 @@ class Detector(CPUDetector):
         model.graph.ClearField("value_info")
         for output in model.graph.output:
             output.type.tensor_type.shape.dim[1].dim_param = output.name + "_anchors"
-        self.face = ort.InferenceSession(model.SerializeToString(), sess_options=options, providers=providers)
+        self.face_model, self.face_sessions = model.SerializeToString(), {}
+        self.face = ort.InferenceSession(self.face_model, sess_options=options, providers=providers)
         self.plate = ort.InferenceSession(str(plate_path), sess_options=options, providers=providers)
         for session in (self.face, self.plate):
             session.disable_fallback()
@@ -71,6 +72,28 @@ class Detector(CPUDetector):
         self.providers = [self.face.get_providers()[0], self.plate.get_providers()[0]]
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.view_stream, self.face_stream, self.plate_stream = [torch.cuda.Stream(device=self.device) for _ in range(3)]
+
+    def _face_session(self, height, width):
+        import onnxruntime as ort
+
+        key = (height, width)
+        if key not in self.face_sessions:
+            options = ort.SessionOptions()
+            options.intra_op_num_threads = 1
+            options.add_free_dimension_override_by_name("height", height)
+            options.add_free_dimension_override_by_name("width", width)
+            options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
+            session = ort.InferenceSession(self.face_model, sess_options=options,
+                providers=[("CUDAExecutionProvider", {"device_id": self.device.index, "use_tf32": 0,
+                                                       "cudnn_conv_algo_search": "HEURISTIC"})])
+            session.disable_fallback()
+            if session.get_providers()[0] != "CUDAExecutionProvider":
+                raise RuntimeError("Face CUDA provider was not activated")
+            # Fixed shapes let ORT fold metadata work; changing source sizes cannot grow sessions forever.
+            if len(self.face_sessions) == 4:
+                self.face_sessions.pop(next(iter(self.face_sessions)))
+            self.face_sessions[key] = session
+        return self.face_sessions[key]
 
     def candidates(self, rgb, *, kind=None):
         if isinstance(rgb, torch.Tensor):
@@ -102,8 +125,9 @@ class Detector(CPUDetector):
             with torch.cuda.stream(self.face_stream):
                 pixels.record_stream(self.face_stream)
                 padded = pad(pixels, 0, (-width) % 32, 0, (-height) % 32)
-                outputs = run(self.face, blob(padded), self.face_stream)
-            return decode_faces(dict(zip((o.name for o in self.face.get_outputs()), outputs)),
+                session = self._face_session(*padded.shape[:2])
+                outputs = run(session, blob(padded), self.face_stream)
+            return decode_faces(dict(zip((o.name for o in session.get_outputs()), outputs)),
                                 padded.shape[1], padded.shape[0], self.face_threshold)
         padded = cv2.copyMakeBorder(pixels, 0, (-height) % 32, 0, (-width) % 32, cv2.BORDER_CONSTANT)
         outputs = self.face.run(None, {self.face.get_inputs()[0].name: cv2.dnn.blobFromImage(padded)})
