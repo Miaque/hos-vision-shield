@@ -1,8 +1,6 @@
 """Actual CUDA inputs must preserve the existing four model pixel contracts."""
 
 import os
-import json
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -71,11 +69,8 @@ def test_gpu_preprocessing_binds_matching_pixels_without_cpu_image_operations(mo
 
     def capture(session, tensor, stream):
         assert tensor.is_cuda and tensor.dtype == torch.float32 and tensor.is_contiguous()
-        reference_session = (detail.face if session in detail.face_sessions.values() else
-                             detail.plate if session in detail.plate_sessions.values() else session)
-        references = [expected[reference_session].pop(0) for _ in range(tensor.shape[0])]
-        reference = np.concatenate([pixels for pixels, _ in references])
-        tolerance = max(value for _, value in references)
+        reference_session = detail.face if session in detail.face_sessions.values() else session
+        reference, tolerance = expected[reference_session].pop(0)
         np.testing.assert_allclose(tensor.cpu().numpy(), reference, rtol=0, atol=tolerance)
         return run(session, tensor, stream)
 
@@ -101,37 +96,3 @@ def test_gpu_preprocessing_binds_matching_pixels_without_cpu_image_operations(mo
     detail.candidates(tensor)
     assert all(not remaining for remaining in expected.values()) and len(images) == 1
     np.testing.assert_array_equal(tensor.cpu().numpy(), pixels)
-
-
-@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual batched CUDA model")
-def test_plate_batches_match_individual_inference_and_use_only_cuda(monkeypatch, tmp_path):
-    import onnxruntime as ort
-    from vision_shield.detection.cuda_detail import Detector
-
-    create, sessions = ort.InferenceSession, []
-
-    def profiled(model, *args, **kwargs):
-        options = kwargs["sess_options"]
-        options.enable_profiling = True
-        options.profile_file_prefix = str(tmp_path / f"plate-{len(sessions)}")
-        session = create(model, *args, **kwargs)
-        sessions.append(session)
-        return session
-
-    monkeypatch.setattr(ort, "InferenceSession", profiled)
-    config = Settings(_env_file=None)
-    detector = Detector(config.face_model_path, config.plate_model_path)
-    values = np.random.default_rng(27).random((4, 3, 320, 320), dtype=np.float32)
-    expected = np.concatenate([detector.plate.run(None, {detector.plate.get_inputs()[0].name: value[None]})[0]
-                               for value in values])
-    with torch.cuda.stream(detector.plate_stream):
-        tensor = torch.from_numpy(values).to(detector.device)
-        for batch in (2, 3, 4):
-            actual = detector._plate_forward(tensor[:batch])
-            assert actual.shape == (batch, 6300, 15)
-            np.testing.assert_allclose(actual, expected[:batch], rtol=1e-4, atol=1e-3)
-    assert len(detector.plate_sessions) == 3
-    for session in (detector.plate, *detector.plate_sessions.values()):
-        events = json.loads(Path(session.end_profiling()).read_text("utf-8"))
-        providers = {event["args"]["provider"] for event in events if "provider" in event.get("args", {})}
-        assert providers == {"CUDAExecutionProvider"}, "每个批量都须验证实际算子，不能回退CPU"

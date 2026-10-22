@@ -1,37 +1,10 @@
 """CUDA inference for the same YuNet/HyperLPR weights and CPU view/postprocessing contract."""
 
-from concurrent.futures import ThreadPoolExecutor
-from itertools import batched
-
 import cv2
 import numpy as np
 import torch
 
-from vision_shield.detection.cpu import Detector as CPUDetector, decode_plates
-
-
-def _batch_plate_model(model):
-    import onnx
-
-    model.graph.ClearField("value_info")
-    model.graph.input[0].type.tensor_type.shape.dim[0].dim_param = "batch"
-    for output in model.graph.output:
-        output.type.tensor_type.shape.dim[0].dim_param = "batch"
-    shapes = {node.input[1] for node in model.graph.node if node.op_type == "Reshape"}
-    patched = set()
-    # shortcut: fixed HyperLPR export; recheck reshape contracts when changing weights.
-    for tensor in model.graph.initializer:
-        if tensor.name in shapes:
-            shape = onnx.numpy_helper.to_array(tensor).copy()
-            if shape.ndim != 1 or not len(shape) or shape[0] != 1:
-                raise ValueError("Unsupported plate batch export")
-            # Reshape zero copies the input batch dimension; all learned weights stay unchanged.
-            shape[0] = 0
-            tensor.CopyFrom(onnx.numpy_helper.from_array(shape, name=tensor.name))
-            patched.add(tensor.name)
-    if patched != shapes:
-        raise ValueError("Unsupported plate batch export")
-    return model.SerializeToString()
+from vision_shield.detection.cpu import Detector as CPUDetector
 
 
 def decode_faces(outputs, width, height, threshold):
@@ -90,7 +63,6 @@ class Detector(CPUDetector):
         for output in model.graph.output:
             output.type.tensor_type.shape.dim[1].dim_param = output.name + "_anchors"
         self.face_model, self.face_sessions = model.SerializeToString(), {}
-        self.plate_model, self.plate_sessions = _batch_plate_model(onnx.load(str(plate_path))), {}
         self.face = ort.InferenceSession(self.face_model, sess_options=options, providers=providers)
         self.plate = ort.InferenceSession(str(plate_path), sess_options=options, providers=providers)
         for session in (self.face, self.plate):
@@ -130,53 +102,6 @@ class Detector(CPUDetector):
             return self._candidates(upload(rgb, self.device), kind=kind)
         return super().candidates(rgb, kind=kind)
 
-    def _plate_session(self, batch):
-        import onnxruntime as ort
-
-        if batch == 1:
-            return self.plate
-        if batch not in self.plate_sessions:
-            options = ort.SessionOptions()
-            options.intra_op_num_threads = 1
-            options.add_free_dimension_override_by_name("batch", batch)
-            options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
-            session = ort.InferenceSession(self.plate_model, sess_options=options,
-                providers=[("CUDAExecutionProvider", {"device_id": self.device.index, "use_tf32": 0,
-                                                       "cudnn_conv_algo_search": "HEURISTIC"})])
-            session.disable_fallback()
-            if session.get_providers()[0] != "CUDAExecutionProvider":
-                raise RuntimeError("Plate CUDA provider was not activated")
-            self.plate_sessions[batch] = session
-        return self.plate_sessions[batch]
-
-    def _view_detections(self, rgb, *, kind=None):
-        if not isinstance(rgb, torch.Tensor) or not self.parallel or kind == "face" or max(rgb.shape[:2]) <= self.tile_side:
-            yield from super()._view_detections(rgb, kind=kind)
-            return
-        height, width = rgb.shape[:2]
-        for bounds in batched(self._views(width, height, self.tile_side), 4):
-            prepared = []
-            for left, top, right, bottom in bounds:
-                source = rgb[top:bottom, left:right]
-                prepared.append((left, top, source.shape[:2], self._view(source)))
-            if len(prepared) == 1:
-                left, top, shape, view = prepared[0]
-                yield left, top, shape, view.shape[:2], self._detect_view(view, kind=kind)
-                continue
-            views = [item[3] for item in prepared]
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                pending = pool.submit(lambda: [self._detect_view(view, kind="face") for view in views]) if kind != "plate" else None
-                inputs = [self._plate_input(view) for view in views]
-                with torch.cuda.stream(self.plate_stream):
-                    predictions = self._plate_forward(torch.cat([value[0] for value in inputs]))
-                if predictions.shape != (len(views), 6300, 15):
-                    raise ValueError("Invalid plate detector output")
-                plates = [decode_plates(predictions[i:i + 1], view.shape[1], view.shape[0], *inputs[i][1:])
-                          for i, view in enumerate(views)]
-                faces = pending.result() if pending else [[] for _ in views]
-            for (left, top, shape, view), face, plate in zip(prepared, faces, plates, strict=True):
-                yield left, top, shape, view.shape[:2], face + plate
-
     def _view(self, rgb):
         if not isinstance(rgb, torch.Tensor):
             return super()._view(rgb)
@@ -213,7 +138,7 @@ class Detector(CPUDetector):
         if isinstance(blob, torch.Tensor):
             from vision_shield.detection.cuda_pixels import run
 
-            return run(self._plate_session(blob.shape[0]), blob, self.plate_stream)[0]
+            return run(self.plate, blob, self.plate_stream)[0]
         return self.plate.run(None, {self.plate.get_inputs()[0].name: blob})[0]
 
     def _plate_input(self, bgr):

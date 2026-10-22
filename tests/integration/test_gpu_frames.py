@@ -71,27 +71,6 @@ def test_supported_frames_never_use_cpu_rgb_conversion_or_masking(generated_medi
     assert events[-1]["video_decoder"] == "h264_nvdec" and events[-1]["video_encoder"] == "h264_nvenc"
 
 
-@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual CUDA models and NVDEC/NVENC")
-def test_batch_sessions_start_inside_first_nvdec_video_and_keep_frame_clocks(generated_media, tmp_path):
-    from vision_shield.detection import load_detector
-
-    config = Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump()
-    detector = load_detector(config)
-    detector.detail.tile_side = 160
-    assert detector.detail.plate_sessions == {}
-    target, events = tmp_path / "batch-cold.mp4", []
-    process_video(generated_media / "silent.mp4", target, detector, config, threading.Event(), events.append)
-    assert set(detector.detail.plate_sessions) == {3, 4}, "实际在解码首个视频期间创建完整批量与尾批会话"
-    with av.open(generated_media / "silent.mp4") as reader:
-        expected = [frame.pts * frame.time_base for frame in reader.decode(video=0)]
-    with av.open(target) as reader:
-        frames = list(reader.decode(video=0))
-    assert len(frames) == len(expected) == 24
-    assert [frame.pts * frame.time_base for frame in frames] == expected
-    assert all((frame.width, frame.height) == (320, 240) for frame in frames)
-    assert events[-1]["video_decoder"] == "h264_nvdec" and events[-1]["video_encoder"] == "h264_nvenc"
-
-
 def test_nvdec_runtime_failure_is_not_retried_with_cpu(generated_media, tmp_path, monkeypatch):
     from types import SimpleNamespace
     from vision_shield.media import cuda_frames, video
