@@ -10,6 +10,23 @@ from PIL import Image
 from vision_shield.detection import Detection
 
 
+class _HalfPlate(torch.nn.Module):
+    """Keep the original graph and float normalization while using half model weights."""
+
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+        core = model.model.model
+        mean, std = core.pixel_mean.clone(), core.pixel_std.clone()
+        model.half()
+        core.pixel_mean, core.pixel_std = mean, std
+
+    def forward(self, pixels):
+        with torch.autocast("cuda", dtype=torch.float16):
+            boxes, labels, scores, size = self.model(pixels)
+        return boxes.float(), labels, scores.float(), size
+
+
 class Detector:
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=0.1, device="cpu"):
         if device not in {"cpu", "cuda"}:

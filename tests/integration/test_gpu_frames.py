@@ -92,14 +92,18 @@ def test_nvdec_runtime_failure_is_not_retried_with_cpu(generated_media, tmp_path
 
 
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual CUDA models and NVDEC")
+@pytest.mark.parametrize("precision", ["automatic", "half"])
 @pytest.mark.parametrize("filename,start,end", [("人脸视频1.mp4", 79.5, 80.5), ("人脸视频2.mp4", 9.8, 10.5)])
-def test_nvdec_keeps_real_moving_tracks_and_gray_references(filename, start, end):
+def test_nvdec_keeps_real_moving_tracks_and_gray_references(filename, start, end, precision):
     from pathlib import Path
     from vision_shield.detection import load_detector
+    from vision_shield.detection.egoblur import _HalfPlate
     from vision_shield.media.cuda_frames import CUDAFrames, hwaccel, rgb_pixels
     from vision_shield.redaction import FrameRedactor
 
     detector = load_detector(Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump())
+    if precision == "half" and not isinstance(detector.primary.models[1], _HalfPlate):
+        detector.primary.models[1] = _HalfPlate(detector.primary.models[1])
     frames = CUDAFrames()
     old, new = FrameRedactor(detector), FrameRedactor(detector)
     source = Path("tests/test_assets/report") / filename

@@ -15,13 +15,12 @@ def test_yolo_quality_requires_cuda():
     assert Settings(_env_file=None, detection_backend="quality_yolo", inference_device="cuda").detection_backend == "quality_yolo"
 
 
-@pytest.mark.parametrize("capability,precision", [((6, 1), "ieee"), ((8, 0), "tf32"), ((8, 9), "tf32")])
-def test_matmul_policy_uses_selected_gpu_without_casting_models(monkeypatch, capability, precision):
+@pytest.mark.parametrize("capability,half", [((6, 1), False), ((8, 0), True), ((8, 9), True)])
+def test_half_plate_uses_selected_supported_gpu(monkeypatch, capability, half):
     import torch
     from vision_shield.detection import egoblur, yolo
 
-    original, devices = object(), []
-    backend = SimpleNamespace(fp32_precision="ieee")
+    original, replacement, devices, wrapped = object(), object(), [], []
 
     def initialize(self, *args, **kwargs):
         self.device, self.models = torch.device("cuda", 2), [None, original]
@@ -29,11 +28,11 @@ def test_matmul_policy_uses_selected_gpu_without_casting_models(monkeypatch, cap
     monkeypatch.setattr(egoblur.Detector, "__init__", initialize)
     monkeypatch.setattr(yolo.Detector, "_session", lambda *a: SimpleNamespace(get_providers=lambda: ["CUDAExecutionProvider"]))
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: devices.append(device) or capability)
-    monkeypatch.setattr(torch.backends.cuda, "matmul", backend)
+    monkeypatch.setattr(yolo, "_HalfPlate", lambda model: wrapped.append(model) or replacement)
     detector = yolo.Detector("face", "plate")
     assert devices == [torch.device("cuda", 2)]
-    assert backend.fp32_precision == precision
-    assert detector.models == [None, original]
+    assert wrapped == ([original] if half else [])
+    assert detector.models == [None, replacement if half else original]
 
 
 def detector(monkeypatch, output):

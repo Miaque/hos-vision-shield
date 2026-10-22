@@ -151,14 +151,26 @@ def test_moving_heads_stay_masked_without_lost_tracks_covering_door_and_torso():
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual CUDA model and TF32 setting API")
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual half CUDA model")
 @pytest.mark.parametrize("case_id", ["image-2", "face-video2-10s", "video-04-frame-24"])
-def test_tf32_setting_keeps_fp32_weights_and_reviewed_targets(monkeypatch, case_id):
-    # This exercises the setting API on older GPUs too; Tensor Core accuracy still requires server validation.
-    monkeypatch.setattr(torch.backends.cuda.matmul, "fp32_precision", "tf32")
+def test_half_plate_keeps_float_normalization_outputs_and_reviewed_targets(case_id):
+    from vision_shield.detection.egoblur import _HalfPlate
+
     detector = load_detector(Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump())
-    assert torch.backends.cuda.matmul.fp32_precision == "tf32"
-    assert all(parameter.dtype == torch.float32 for parameter in detector.primary.models[1].parameters())
+    model = detector.primary.models[1]
+    if not isinstance(model, _HalfPlate):
+        core = model.model.model
+        mean, std = core.pixel_mean.clone(), core.pixel_std.clone()
+        model = detector.primary.models[1] = _HalfPlate(model)
+        torch.testing.assert_close(model.model.model.model.pixel_mean, mean, rtol=0, atol=0)
+        torch.testing.assert_close(model.model.model.model.pixel_std, std, rtol=0, atol=0)
+    assert all(parameter.dtype == torch.float16 for parameter in model.parameters())
+    assert model.model.model.model.pixel_mean.dtype == model.model.model.model.pixel_std.dtype == torch.float32
+    with torch.inference_mode(), torch.jit.optimized_execution(False):
+        boxes, _, scores, size = model(torch.zeros((3, 319, 321), dtype=torch.uint8, device=detector.primary.device))
+    assert boxes.dtype == scores.dtype == torch.float32
+    assert size.device.type == "cpu" and size.tolist() == [319, 321]
+    assert torch.isfinite(boxes).all() and torch.isfinite(scores).all()
     manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
     case = next(case for case in manifest["cases"] if case["id"] == case_id)
     source = Path(manifest["local_source"]) / case["file"]

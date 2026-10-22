@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from vision_shield.detection import Detection
-from vision_shield.detection.egoblur import Detector as EgoBlurDetector
+from vision_shield.detection.egoblur import Detector as EgoBlurDetector, _HalfPlate
 
 MODEL_PATH = Path(__file__).with_name("assets") / "yolov8n_face.onnx"
 
@@ -18,7 +18,7 @@ class Detector(EgoBlurDetector):
             raise ValueError("quality_yolo requires CUDA inference")
         super().__init__(None, plate_path, max_side, box_padding, face_threshold=face_threshold, device=device)
         if torch.cuda.get_device_capability(self.device)[0] >= 8:
-            torch.backends.cuda.matmul.fp32_precision = "tf32"
+            self.models[1] = _HalfPlate(self.models[1])
         self.face_path, self.sessions = Path(face_path), {}
         self.providers = [self._session(160, 160).get_providers()[0]]
 

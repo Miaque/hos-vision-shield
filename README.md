@@ -21,7 +21,7 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 GPU Compose 选用 `DETECTION_BACKEND=quality_yolo`，用轻量 YOLO 人脸候选替换 EgoBlur 人脸，保留 EgoBlur 车牌、YuNet/HyperLPR、现有确认和跟踪规则。本机可在 CUDA 环境显式选择该后端。新权重随版本包交付，来源、哈希、GPL-3.0 许可与导出方法见[模型说明](src/vision_shield/detection/assets/README.md)。原 `quality` 和 CPU 默认值保留；该后端的目标服务器吞吐须单独实测，不能由本地片段速度推定双路达标。
 
-`quality_yolo`在计算能力主版本至少8的GPU上允许PyTorch CUDA矩阵乘使用TF32，模型权重和输入/输出张量继续为FP32；ONNX精度设置及较旧GPU路径不变。该选择可能改变临界分数及框，效果和吞吐均须在目标服务器验证，见[时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)。
+`quality_yolo`在计算能力主版本至少8的GPU上使用FP16车牌模型参数和自动混合精度，保留原完整执行图、FP32归一化及FP32输出坐标/分数；较旧GPU及其他后端保持原路径。ONNX精度设置不变。该选择可能改变临界分数及框，效果和吞吐均须在目标服务器验证，见[时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)。
 
 ### 本机 GTX 1080
 

@@ -6,7 +6,7 @@
 
 GPU Compose 选择 `quality_yolo`：人脸主网络使用随应用包交付的 `yolov8n_face.onnx`，车牌 EgoBlur 及两份补充 ONNX 读取本目录；`face.jit` 保留供显式选择原 `quality` 时使用，不自动回退。新权重的 GPL-3.0 许可、哈希及导出契约见[组件说明](../src/vision_shield/detection/assets/README.md)。该后端只支持 CUDA，CPU 部署保持 `quality`。
 
-`quality_yolo`沿用原FP32 Gen1完整执行图，所选GPU计算能力主版本至少8时允许PyTorch CUDA矩阵乘使用TF32；源模型文件、清单和离线包不变。TF32缩减矩阵乘内部尾数精度、以FP32累加，权重及输出dtype仍为FP32；可能改变边界分数/坐标，必须用服务器样例校准。ONNX仍沿用其独立的精度设置。
+`quality_yolo`所选GPU计算能力主版本至少8时，将加载后的Gen1车牌参数转为FP16并在自动混合精度上下文运行原完整图，保留原FP32归一化常量，坐标和分数转回FP32后执行原验证。源模型文件、清单和离线包不变，其他后端与较旧GPU保持原精度。内部计算精度变化可能改变边界分数/坐标，须用服务器样例校准；输出FP32不代表内部全精度。ONNX仍沿用其独立的精度设置。
 
 在已有模型的准备机器、仓库根目录打包，无需重新下载：
 
