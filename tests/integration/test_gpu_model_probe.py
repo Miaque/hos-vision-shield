@@ -148,3 +148,34 @@ def test_moving_heads_stay_masked_without_lost_tracks_covering_door_and_torso():
                     assert np.array_equal(masked[y:bottom, x:right], pixels[y:bottom, x:right]), "旧轨迹不能重跟背景或衣服"
                 checked = True
     assert checked, "必须实际处理到原视频80秒画面"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual mixed CUDA plate model")
+@pytest.mark.parametrize("case_id", ["image-2", "face-video2-10s", "video-04-frame-24"])
+def test_mixed_plate_keeps_float_heads_and_reviewed_targets(case_id):
+    from vision_shield.detection.egoblur import _MixedPrecisionPlate
+
+    detector = load_detector(Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump())
+    model = detector.primary.models[1]
+    if not isinstance(model, _MixedPrecisionPlate):
+        model = detector.primary.models[1] = _MixedPrecisionPlate(model)
+    assert next(model.model.backbone.parameters()).dtype == torch.float16
+    assert next(model.model.proposal_generator.parameters()).dtype == torch.float32
+    assert next(model.model.roi_heads.parameters()).dtype == torch.float32
+    assert model.model.pixel_mean.dtype == model.model.pixel_std.dtype == torch.float32
+    with torch.inference_mode(), torch.jit.optimized_execution(False):
+        boxes, _, scores, size = model(torch.zeros((3, 319, 321), dtype=torch.uint8, device=detector.primary.device))
+    assert boxes.dtype == scores.dtype == torch.float32
+    assert size.device.type == "cpu" and size.tolist() == [319, 321]
+    assert torch.isfinite(boxes).all() and torch.isfinite(scores).all()
+    manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
+    case = next(case for case in manifest["cases"] if case["id"] == case_id)
+    source = Path(manifest["local_source"]) / case["file"]
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == case["sha256"]
+    pixels = np.array(Image.open(source).convert("RGB"))
+    actual = redact(pixels, detector.detect(pixels))
+    for x, y, a, b in case["masked_regions"]:
+        assert (actual[y:b, x:a] == 64).all(), (case_id, "required")
+    for x, y, a, b in case["preserved_regions"]:
+        np.testing.assert_array_equal(actual[y:b, x:a], pixels[y:b, x:a], err_msg=case_id)

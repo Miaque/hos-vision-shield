@@ -15,6 +15,26 @@ def test_yolo_quality_requires_cuda():
     assert Settings(_env_file=None, detection_backend="quality_yolo", inference_device="cuda").detection_backend == "quality_yolo"
 
 
+@pytest.mark.parametrize("capability,mixed", [((6, 1), False), ((8, 0), True), ((8, 9), True)])
+def test_only_supported_selected_gpu_uses_mixed_plate_backbone(monkeypatch, capability, mixed):
+    import torch
+    from vision_shield.detection import egoblur, yolo
+
+    original, replacement, wrapped, devices = object(), object(), [], []
+
+    def initialize(self, *args, **kwargs):
+        self.device, self.models = torch.device("cuda", 2), [None, original]
+
+    monkeypatch.setattr(egoblur.Detector, "__init__", initialize)
+    monkeypatch.setattr(yolo.Detector, "_session", lambda *a: SimpleNamespace(get_providers=lambda: ["CUDAExecutionProvider"]))
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: devices.append(device) or capability)
+    monkeypatch.setattr(yolo, "_MixedPrecisionPlate", lambda model: wrapped.append(model) or replacement)
+    detector = yolo.Detector("face", "plate")
+    assert devices == [torch.device("cuda", 2)]
+    assert detector.models == [None, replacement if mixed else original]
+    assert wrapped == ([original] if mixed else [])
+
+
 def detector(monkeypatch, output):
     from vision_shield.detection import egoblur, yolo
 
