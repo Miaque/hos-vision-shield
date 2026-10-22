@@ -1,13 +1,13 @@
 # 部署契约：CPU 与指定单卡 GPU
 
-本文件定义已实现的部署交付接口；Compose 与 Dockerfile 已生成，镜像构建和服务器运行尚未验收。目标为 Ubuntu 24.04.4 x86_64、RTX 6000 Ada、驱动 595.84，沿用用户现有独立入口 `docker-compose v2.29.2`，不在 Windows 本机安装 Docker。
+本文件定义已实现的部署交付接口；初次验证边界见[实施记录](../validation/gates.md)，后续服务器分阶段实测见[时序优化记录](../temporal-optimization.md)，完整部署验收仍须按[验收指南](../quickstart.md)执行。目标为 Ubuntu 24.04.4 x86_64、RTX 6000 Ada，沿用既有独立入口 `docker-compose v2.29.2`，不在 Windows 本机安装 Docker。
 
 ## 交付与调用方式
 
 | 文件 | 职责 |
 | --- | --- |
 | `compose.yaml` | 五服务 CPU 部署，复用现有带密码 Redis，不预留 GPU |
-| `compose.gpu.yaml` | 仅覆盖两类 worker 的镜像、构建参数、设备设置和同一张 GPU 预留 |
+| `compose.gpu.yaml` | 覆盖两类 worker 的镜像、构建参数、检测后端、设备设置、每池两个副本及同一张 GPU 预留 |
 | `deploy/Dockerfile` | 一个构建定义，生成 CPU 与 cu126 两种应用镜像 |
 | `deploy/requirements-cu126.txt` | 从根声明与原锁共同版本约束生成的带哈希 GPU 锁，不改变本机默认依赖 |
 | `deploy/compose.env.example` | 服务器配置示例，复制为根目录 `.env.compose` |
@@ -55,7 +55,7 @@ CPU 基础配置对应用角色显式设置 `INFERENCE_DEVICE=cpu`；GPU 覆盖�
 
 GPU 覆盖将相同 `GPU_DEVICE_ID` 同时注入两个 worker 的环境。probe 在该部署变量存在时校验它是单个非负卡号或完整 GPU UUID，并确认仅一张 CUDA 设备可见；拒绝空值、all 与列表，不增加新的 Settings 设备选项。原生 Windows 未设置该部署变量时保留既有设备选择规则。
 
-两个 worker 各运行一个任务，共用所选卡；GPU 仅加速 EgoBlur，YuNet/HyperLPR、编解码和遮挡仍为 CPU。选择不提供独占保证，不做多卡调度，不据单任务推理成功承诺并发显存容量。无效设备、CUDA 不可用或算子失败均不得改用 CPU 或其他卡。
+GPU Compose 的文件池和流池各启动两个 worker 副本，每个副本同时处理一个任务，共用所选卡。后端为 quality_yolo：YOLO 人脸与 YuNet/HyperLPR 使用 ONNX Runtime CUDA，EgoBlur 车牌使用 PyTorch CUDA；CUDA 离线视频使用 NVENC，解码、图像预处理、后处理、跟踪和遮挡仍使用 CPU，实时流仍用 libx264。选择不提供独占保证，不做多卡调度，不据单任务推理成功承诺并发显存容量。无效设备、CUDA 不可用或算子失败均不得改用 CPU 或其他卡。
 
 ## 角色、存储和网络
 

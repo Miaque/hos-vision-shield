@@ -8,12 +8,12 @@
 
 **测试依据**：规格明确要求可独立执行的验收场景，项目宪章要求非平凡逻辑和缺陷先有针对性测试。以下测试任务须先确认失败，再完成对应实现；复用现有测试，不复制推理算法建立测试替身。
 
-**状态**：已完成 27/36 项本地实现与交付核对；T018、T019、T026、T027、T030–T033、T035 保留未完成。其中 T018/T026 仅有配置解析证据，T030 已有指南/表格，仍缺实际服务器素材哈希。用户选择在服务器执行命令，不在本机安装 Docker。详见 validation/gates.md；本机证据不作为目标容器或服务器验收。
+**状态**（初次交付；后续优化与实测见[时序优化记录](temporal-optimization.md)）：已完成 27/36 项本地实现与交付核对；T018、T019、T026、T027、T030–T033、T035 保留未完成。其中 T018/T026 仅有配置解析证据，T030 已有指南/表格，仍缺实际服务器素材哈希。用户选择在服务器执行命令，不在本机安装 Docker。详见 validation/gates.md；本机证据不作为目标容器或服务器验收。
 
 ## 格式与执行边界
 
 - 每项采用 `- [ ] T001 [P?] [USn?] 描述与文件路径`，ID 按实际顺序递增。`[P]` 仅表示在已列前置完成后可与不同文件的任务并行，不表示自动派生代理或并行跑同机性能测试。
-- 文件路径相对仓库根目录 `E:\workspace\python\hos-vision-shield`；未存在的目标文件由对应任务创建。`specs/002-compose-cpu-gpu/validation/` 中的报告只在执行对应验证时创建。
+- 文件路径相对仓库根目录；未存在的目标文件由对应任务创建。`specs/002-compose-cpu-gpu/validation/` 中的报告只在执行对应验证时创建。
 - 不新增数据库、业务 API、检测策略、阈值、模型格式、常驻模型服务或进程管理器。根 `pyproject.toml` / `uv.lock`、Windows 默认安装与运行约定保持。
 - 真实模型、Redis/MediaMTX、Docker 和服务器验证显式执行；没有相应环境时保留任务未勾选，记录缺失条件并继续不依赖它的实现，不将模拟结果视为真实通过。
 - 不默认连接或修改未提供访问方式的服务器，不自动改宿主驱动、Docker daemon 或其他业务。离线模型可独立打包，运行时不下载权重。
@@ -45,7 +45,7 @@
 
 ## 阶段 3：用户故事 1 — 使用离线模型部署 CPU 服务（P1，MVP）
 
-**目标**：无 GPU 分配也能通过完整六服务部署处理图片和视频，验证离线权重、错误就绪保护与数据保留。
+**目标**：无 GPU 分配也能通过完整五服务部署（复用外部 Redis）处理图片和视频，验证离线权重、错误就绪保护与数据保留。
 
 **独立验收**：仅使用 CPU Compose，将同一四模型包只读挂载；在禁止外部模型来源访问后启动、上传图片/视频、查询和下载结果，再重建服务确认记录和结果保留。损坏或不可读模型不得发布新 worker 心跳。
 
@@ -60,11 +60,11 @@
 - [X] T012 [US1] 在 `src/vision_shield/media/child.py` 增加仅内部 `kind=probe` 分支，复用 T011 并在成功/失败后退出；在模型校验与加载前已有 Linux EOF 保护，不创建业务任务目录、不经过 API 任务类型，也不重复加载检测器。前置：T007、T011。
 - [X] T013 [US1] 在 `src/vision_shield/jobs/worker.py` 通过现有 `media/runner.py` 监督 probe，将清单读取、哈希、加载、推理均置于子进程的 120 秒总超时内；确认成功事件、退出码与资源释放后再启动 broker/Receiver/心跳，诊断失败明确且不泄漏配置，不在常驻 worker 导入 torch。前置：T006、T010、T012。
 - [X] T014 [P] [US1] 更新 `models/README.md`、`models/NOTICE.md`，补齐 EgoBlur 来源与 Apache-2.0 归属、四份模型/两份清单/许可证的离线包说明与核验命令；复用既有许可全文，不重新选型、下载或提交模型权重。
-- [X] T015 [P] [US1] 新建 `deploy/redis.compose.conf`、`deploy/mediamtx.compose.yml`，分别使用容器网络监听与正确数据目录、AOF always/noeviction，以及 RTSP TCP、内部控制、指向 api 服务的发布鉴权回调；保留禁止发布者覆盖与禁录像，不改本机 `deploy/redis.conf`、`deploy/mediamtx.yml`。
+- [X] T015 [P] [US1] 新建 `deploy/mediamtx.compose.yml`，使用 RTSP TCP、内部控制、指向 api 服务的发布鉴权回调；Redis 复用外部实例，不生成容器专用 Redis 配置；保留禁止发布者覆盖与禁录像，不改本机 `deploy/redis.conf`、`deploy/mediamtx.yml`。
 - [X] T016 [P] [US1] 新建 `deploy/Dockerfile` 的 CPU 应用镜像构建，默认 TORCH_BACKEND=cpu，固定研究记录中的 Python/uv digest 与 linux/amd64，按根 uv.lock 非编辑安装运行依赖和项目；运行用户 10001:10001、WORKDIR=/app、四条绝对模型路径=/models，运行入口直接 Python；不含权重、开发工具、uv 缓存或本机环境文件。GPU 构建由 T024 补齐。前置：T002。
-- [X] T017 [US1] 新建 `compose.yaml`、`deploy/compose.env.example`，为四个应用服务显式设置 `image=vision-shield:cpu` 与 `build.args.TORCH_BACKEND=cpu`；实现六角色、统一 `/data` 媒体挂载、Redis 持久卷、worker 模型只读挂载且缺目录不自动创建、CPU 设备设置、来源 allowlist、可配置宿主绑定和公开播放地址；按契约设置依赖/ready、init 与 60 秒停止宽限，仅发布 API/RTSP，不因等待 API healthy 造成启动循环。前置：T005、T013、T015、T016。
+- [X] T017 [US1] 新建 `compose.yaml`、`deploy/compose.env.example`，为四个应用服务显式设置 `image=vision-shield:cpu` 与 `build.args.TORCH_BACKEND=cpu`；实现五个 Compose 服务、统一 `/data` 媒体挂载、外部 Redis 连接、worker 模型只读挂载且缺目录不自动创建、CPU 设备设置、来源 allowlist、可配置宿主绑定和公开播放地址；按契约设置依赖/ready、init 与 60 秒停止宽限，仅发布 API/RTSP，不因等待 API healthy 造成启动循环。前置：T005、T013、T015、T016。
 - [ ] T018 [US1] 使用 `docker-compose v2.29.2` 实际解析 CPU 配置并构建 CPU 镜像，检查构建内容、用户/目录权限、av/cv2/torch/torchvision 导入、CPU 构建及 H.264/AAC 能力；依据实测缺库补最小运行依赖，将镜像 digest、命令及失败原因记录到 `specs/002-compose-cpu-gpu/validation/cpu.md`。不得把 YAML 文本解析当作 Compose 或镜像验证。前置：T009–T017 对应测试与实现完成。
-- [ ] T019 [US1] 按 `specs/002-compose-cpu-gpu/quickstart.md` 在明确无 GPU 分配的容器环境执行模型无网络预检、CPU 六服务图片/视频上传下载、无外部模型下载、缺失/损坏/不可读/不可加载模型失败、停止重建后结果保留；记录到 `specs/002-compose-cpu-gpu/validation/cpu.md`，故障测试使用独立项目和模型副本，ready 考虑默认 20 秒旧心跳窗口。前置：T018；服务器运行任务。
+- [ ] T019 [US1] 按 `specs/002-compose-cpu-gpu/quickstart.md` 在明确无 GPU 分配的容器环境执行模型无网络预检、CPU 五服务图片/视频上传下载、无外部模型下载、缺失/损坏/不可读/不可加载模型失败、停止重建后结果保留；记录到 `specs/002-compose-cpu-gpu/validation/cpu.md`，故障测试使用独立项目和模型副本，ready 考虑默认 20 秒旧心跳窗口。前置：T018；服务器运行任务。
 
 **检查点**：T009–T018 形成 CPU 可部署交付；T019 通过才声明 CPU 实际验收通过。MVP 不依赖 GPU 镜像、GPU 运行时或 US3 的对比报告。
 
@@ -153,7 +153,7 @@ flowchart TD
 
 ## 实施策略与完成标准
 
-1. **MVP**：阶段 1、阶段 2、US1。先交付 CPU 六服务与离线模型验证，T019 通过后可独立试用。
+1. **MVP**：阶段 1、阶段 2、US1。先交付 CPU 五服务与离线模型验证，T019 通过后可独立试用。
 2. **单卡增量**：复用同一数据位置和模型包，完成 US2；指定 GPU、真实 NMS 与文件/流执行均通过后再报告 GPU 运行成功。
 3. **效果对比**：完成 US3，留下六组输出、人工核对、重复计时与资源恢复证据，按实测说明差异与容量限制。
 4. **交付复核**：完成阶段 6；所有代码日志、异常、注释和新增文档使用中文。真实权重/原始样本不入库，变更仅涉及本项目。

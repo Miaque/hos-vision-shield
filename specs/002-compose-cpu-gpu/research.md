@@ -2,6 +2,8 @@
 
 日期：2026-10-19。状态：Phase 0 研究完成，依赖与镜像方案已确定；源码、官方制品元数据及隔离解析验证通过，不代表容器或服务器运行通过。
 
+本文保留初次研究的决策背景。后续部署已改为五个 Compose 服务复用外部 Redis，CUDA 补充检测已迁到 GPU，GPU Compose 使用 quality_yolo；现行约定以[部署契约](contracts/deployment.md)为准，后续验证见[时序优化记录](temporal-optimization.md)。
+
 ## 1. 服务与 Compose
 
 **决定**：复用六个服务角色，CPU 基础配置加 GPU worker 覆盖。

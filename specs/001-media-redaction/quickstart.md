@@ -4,14 +4,15 @@
 
 ## 环境
 
-Python3.12、uv、Redis7.4.3、MediaMTX1.21.2和FFmpeg/ffprobe。默认quality使用四个检测模型，固定来源、revision和CPU运行方式见models/README.md；单独cpu后端使用两个ONNX。CUDA按用户要求暂缓。
-配置项、端口及本机二进制位置见仓库README和.env.example。
+Python3.12、uv、Redis7.4.3、MediaMTX1.21.2和FFmpeg/ffprobe。默认quality使用四个检测模型，固定来源、revision和运行方式见[模型说明](../../models/README.md)；单独cpu后端使用两个ONNX。CPU 为默认设备，本机 CUDA 安装及验证见[README](../../README.md#本机-gtx-1080)。
+以下命令在仓库根目录执行，要求 Redis 位于 PATH、MediaMTX 位于 `.tools/mediamtx/`；其他位置按实际安装情况传入参数。配置项与端口见仓库README和.env.example。
 
 ```powershell
 uv sync --frozen
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-.\scripts\start-infrastructure.ps1 -RedisExecutable 'H:\software\Redis-7.4.3\redis-server.exe' -MediaMtxExecutable 'H:\workspace\python\vision-shield\.tools\mediamtx\mediamtx.exe' -Check
-$env:TEST_REDIS_SERVER='H:\software\Redis-7.4.3\redis-server.exe'
+.\scripts\start-infrastructure.ps1 -RedisExecutable (Get-Command redis-server.exe).Source -MediaMtxExecutable '.tools/mediamtx/mediamtx.exe' -Check
+$env:TEST_REDIS_SERVER=(Get-Command redis-server.exe).Source
+$env:TEST_MEDIAMTX_BIN=(Resolve-Path .tools/mediamtx/mediamtx.exe).Path
 uv run pytest -q
 ```
 

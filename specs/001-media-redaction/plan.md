@@ -1,13 +1,13 @@
 # Implementation Plan: 媒体人脸与车牌脱敏
 
-**Branch**: `feature/cpu-detection`（当前CPU优化；主干为`main`） | **Date**: 2026-10-18 | **Spec**: [spec.md](spec.md)
+**主干分支**: `main` | **Date**: 2026-10-18 | **Spec**: [spec.md](spec.md)
 
 **Input**: `specs/001-media-redaction/spec.md`
 
 ## Summary
 
 FastAPI 负责接入、状态和文件结果；Taskiq 文件与流两个 worker 池执行处理；Redis 同时承担队列、任务状态和运行意图持久化。
-受控媒体子进程使用人脸/车牌检测模型和 PyAV 完成逐帧检测、实心遮挡及音视频输出；MediaMTX 提供 RTSP 播放。当前按用户效果优先要求，默认quality组合EgoBlur全图与YuNet/HyperLPR分块补充；上一轮cpu轻量方案保留对照。
+受控媒体子进程使用人脸/车牌检测模型和 PyAV 完成逐帧检测、深灰色遮挡或马赛克及音视频输出；MediaMTX 提供 RTSP 播放。默认quality组合EgoBlur全图与YuNet/HyperLPR补充；cpu轻量方案保留对照，GPU Compose 使用 quality_yolo。当前模型与设备设置见[README](../../README.md)。
 首版内部使用，无调用方鉴权，无自动文件删除，不额外录像。流恢复由持久运行意图驱动，不依赖永久未确认消息。
 
 ## Technical Context
@@ -20,13 +20,13 @@ FastAPI 负责接入、状态和文件结果；Taskiq 文件与流两个 worker 
 
 **Testing**: pytest、pytest-asyncio、HTTPX ASGI 测试；真实 Redis/MediaMTX 集成测试；已授权样本及 ffprobe 验证。
 
-**Target Platform**: Windows本机原生进程（用户已明确要求），直接使用Python3.12、Redis和MediaMTX可执行程序；Docker/WSL2不再是实现或验收前提。
+**Target Platform**: Windows本机原生进程，直接使用Python3.12、Redis和MediaMTX可执行程序；服务器另提供 Ubuntu x86_64 CPU/单卡 GPU Compose 部署，见[部署计划](../002-compose-cpu-gpu/plan.md)。
 
 **Project Type**: Python REST 服务与后台 worker，无前端。
 
 **Performance Goals**: 按 SC-006/007 出具可复现实测报告，不设并发或准确率保证；默认每个 worker 进程一个活动媒体任务，扩进程增加槽位。
 
-**Constraints**: 仅 JPEG/PNG、MP4/H.264/AAC 或无音轨、RTSP/H.264/AAC；两个模型必须同时可用；任何失败不得旁路原始画面；同步媒体操作不得运行在 API/Taskiq 事件循环上。
+**Constraints**: 仅 JPEG/PNG、MP4/H.264/AAC 或无音轨、RTSP/H.264/AAC；所选后端的全部模型必须可用（quality/quality_yolo 各四个，cpu/egoblur 各两个）；任何失败不得旁路原始画面；同步媒体操作不得运行在 API/Taskiq 事件循环上。
 
 **Scale/Scope**: 文件和流隔离容量；每池最多100个未结束业务任务，物理消息队列各100条，流帧队列2帧，音频最多16秒且最多4MiB，文件单帧顺序处理。机器人高分辨率检测在本机CPU更慢，因此从640基线的4秒缓存调整为16秒；仍超限重建，不承诺实时帧率或固定延迟。
 
@@ -59,21 +59,21 @@ specs/001-media-redaction/
 
 ### Source Code (repository root)
 
-以下是计划结构，尚未创建源码：
+现有源码的主要入口（省略辅助模块）：
 
 ```text
 src/vision_shield/
 ├── main.py                  # FastAPI lifecycle
 ├── config.py
-├── api/{routes,schemas}.py
-├── jobs/{service,store,broker,tasks,reconcile}.py
-├── media/{runner,images,video,streams,source,publisher}.py
-├── detection/egoblur.py
+├── api/{routes,schemas,internal}.py
+├── jobs/{service,store,broker,tasks,reconcile,worker,diagnostics}.py
+├── media/{runner,child,images,video,streams,source,publisher}.py
+├── detection/{quality,egoblur,cpu,cuda_detail,yolo,preflight}.py
 └── redaction.py
 tests/{unit,integration,e2e}/
 ```
 
-**Structure Decision**: 保持现有 src 包布局；jobs.store 直接封装项目所需 Redis 原子操作，不建通用仓储框架；media.source 统一外部地址校验和下载；redaction 共享矩形裁剪与实心遮挡。
+**Structure Decision**: 保持现有 src 包布局；jobs.store 直接封装项目所需 Redis 原子操作，不建通用仓储框架；media.source 统一外部地址校验和下载；redaction 共享矩形裁剪与遮挡样式。
 
 ## Execution Design
 
@@ -88,16 +88,13 @@ tests/{unit,integration,e2e}/
 
 ### 媒体处理与时间线
 
-JPEG/PNG 使用 Pillow 解码、应用方向、裁剪检测框后填黑；不复制输入 EXIF/缩略图以免旁路保留原始敏感图像。
-两类检测模型在子进程初始化时加载，不增加公共模型选择接口。原EgoBlur Gen1为首版CPU基线；2026-10-18按用户CPU优化要求，默认改为YuNet人脸与HyperLPR3的320车牌检测ONNX，通过OpenCV DNN显式选择CPU。仅使用检测网络，不运行OCR或身份识别；后端由本机配置选择，无自动模型回退。来源、许可、固定版本和哈希见models/cpu-manifest.json。
+JPEG/PNG 使用 Pillow 解码、应用方向，按任务的 `redaction_mode` 执行深灰色矩形遮挡或马赛克；不复制输入 EXIF/缩略图，以免保留原始敏感图像。
 
-后续同日按效果优先补充，默认quality使用EgoBlur1280全图，再追加YuNet/HyperLPR补充候选。人脸种子阈值分别0.3/0.6，车牌0.1/0.25；EgoBlur得分至少0.7保留，其他候选需要另一模型同类框IoU至少0.2佐证，或在候选周边局部复核。局部取3倍最长边且至少96像素，调整到最长边320；佐证人脸门槛为EgoBlur0.1、YuNet0.3，不单独产生低分遮挡。保留被确认的重叠遮挡，不跨模型NMS丢弃边缘；任一模型异常整个处理失败。单独egoblur/cpu后端保留对照，四个模型路径、异步进程边界和REST接口不变。不扩展CUDA或下载新模型，效果/代价见validation/quality-optimization.md。
+检测后端由配置显式选择，模型在受控子进程初始化时加载，失败不自动回退。默认 `quality` 使用 EgoBlur 全图与 YuNet/HyperLPR 补充确认；GPU Compose 使用 `quality_yolo`，以 YOLO 替换主人脸模型。模型来源、许可、设备及分块约定见[模型说明](../../models/README.md)，历史 CPU 方案与效果代价见[CPU 验证](validation/cpu-optimization.md)和[效果优先验证](validation/quality-optimization.md)。
 
-CPU实现使用全图与约640源像素重叠分块，每轴至多8个位置，大图扩大分块以保持区域覆盖，每次顺序处理一个视图。人脸阈值0.3、车牌0.25；人脸每侧扩框15%，车牌水平每侧30%/垂直15%，保留重叠遮挡。该策略增加误遮，不能补偿从未检出的目标；实际效果和性能另见validation/cpu-optimization.md。其余任务、音视频时间线、缓存和异步边界保持原实现。
+视频/流每会话使用一个 FrameRedactor，最多保留128个历史目标。运动匹配最多补偿500毫秒；匹配失败时尝试局部复核，仍未确认则旧框最多保留200毫秒。只有真实检测能刷新有效期；场景、尺寸或时间异常时清空历史。没有检测历史的目标不能凭空补出，具体边界见[修复记录](../002-compose-cpu-gpu/known-video-issues.md)。
 
-机器人补充：默认检测最长边1280、Lanczos缩小、不上采样，每侧外扩15%，原图像素不作锐化/重建。按样本比较而非盲目降低0.1阈值。视频/流每会话一个FrameRedactor，仅缓存两组实际框与一张36×64 RGB缩略图，补偿200毫秒源时间内的短暂漏检；明显缩略图差异、尺寸或时间异常清空，永不以保留框刷新历史。快速运动不保证可补偿，当前CPU流跳帧较长时通常不会沿用旧框。
-
-视频与流使用一个输入容器 demux 音视频，视频解码后检测和填黑，再编码 H.264；AAC 包 remux，不做音频解码或修改内容。
+视频与流使用一个输入容器 demux 音视频，视频解码后检测和遮挡，再编码 H.264；CPU 文件用 libx264，CUDA 文件用 h264_nvenc，实时流保持 libx264 低延迟配置；AAC 包 remux，不做音频解码或修改内容。
 保留源 PTS/time_base 并统一音视频时间原点，按 muxer 时基换算，不以处理帧序号重造固定 FPS 时间线。
 实时流的解码线程只向最多 2 帧的队列放最新帧，推理不阻塞源读取；编码/mux 由单一所有者串行执行。
 音频缓存达到时长或字节上限时结束当前发布并重连，不能无限积压，也不把未经脱敏的视频作为同步补偿。
@@ -129,4 +126,4 @@ MediaMTX 内部 HTTP publish 回调校验 task_id、generation、owner 和有效
 
 ## 本机运行修订
 
-用户在2026-10-18明确要求原生本地运行，由代理直接下载官方模型。已移除Docker专用文件，基础服务由scripts/start-infrastructure.ps1管理，仅回收自己创建的进程。T002以本地持久化和健康自检验收；流worker扩容采用增加本机进程，不要求容器。
+本机基础服务由 scripts/start-infrastructure.ps1 管理，仅回收自己创建的进程。T002以本地持久化和健康自检验收；流worker扩容采用增加本机进程，不要求容器。服务器另有 Compose 部署，参见[部署计划](../002-compose-cpu-gpu/plan.md)。

@@ -79,7 +79,7 @@ description: "媒体人脸与车牌脱敏的可执行任务清单"
 - [X] T024 [US1] 在 src/vision_shield/api/routes.py 接通文件创建、上传、查询、取消和结果下载端点并在 src/vision_shield/main.py 注册，运行 T017；API只暴露业务ID和相对结果URL，先完整接收上传再返回202，不加入列表或删除接口。
 - [X] T025 [US1] 在 tests/e2e/test_images.py 用真实模型与队列执行两种输入方式及无目标/损坏/取消路径，记录结果、原文件保留及负载期间查询响应到 specs/001-media-redaction/validation/images.md，明确未检测到不等于零漏检。
 
-**Checkpoint**: US1 可独立演示，是建议的最小可交付版本；尚未实现的视频/流不得对外宣称可用。
+**Checkpoint**: US1 可独立演示，是建议的最小可交付版本；视频/流的实现与验收见后续阶段，不以图片验收代替。
 
 ---
 

@@ -4,7 +4,7 @@
 
 **创建日期**：2026-10-19
 
-**状态**：CPU/指定单卡 GPU Compose、离线模型预检与配套实现已生成，本地回归已执行；镜像构建和目标服务器效果验收待部署人员执行。2026-10-19 用户确认沿用线上已有 Docker/Compose，不在本机安装 Docker，由用户执行服务器命令。本机实现记录见 [local-gpu.md](local-gpu.md)，本次证据见 [实施记录](validation/gates.md)。
+**状态**：CPU/指定单卡 GPU Compose、离线模型预检与配套实现已生成，本地回归已执行；后续服务器分阶段实测见[时序优化记录](temporal-optimization.md)，完整部署与效果验收仍待部署人员完成。2026-10-19 用户确认沿用线上已有 Docker/Compose，不在本机安装 Docker，由用户执行服务器命令。本机实现记录见 [local-gpu.md](local-gpu.md)，本次证据见 [实施记录](validation/gates.md)。
 
 **输入**：GPU 版本已经开发完成，现在通过 Docker Compose 部署到服务器环境，可选择 CPU 或 GPU 运行并查看效果；依赖模型必须离线提供。沿用此前已确认的图片、视频和 RTSP 效果及性能验证、保留本机运行方式、镜像允许联网获取、GPU 不可用不得静默回退 CPU 等约定。
 

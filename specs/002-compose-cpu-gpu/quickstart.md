@@ -1,6 +1,6 @@
 # 服务器部署验收指南
 
-Compose、Dockerfile 和预检实现已经提供；以下构建和运行命令由部署人员在服务器执行，尚未取得镜像或服务器验收证据。不在 Windows 本机安装 Docker，沿用目标服务器现有版本。交付文件与配置含义见 [部署契约](contracts/deployment.md)，记录字段见 [数据与生命周期](data-model.md)，本地验证边界见 [实施记录](validation/gates.md)。
+Compose、Dockerfile 和预检实现已经提供；以下构建和运行命令由部署人员在服务器执行；后续分阶段实测见[时序优化记录](temporal-optimization.md)，完整部署验收仍需逐项执行并留存证据。不在 Windows 本机安装 Docker，沿用目标服务器现有版本。交付文件与配置含义见 [部署契约](contracts/deployment.md)，记录字段见 [数据与生命周期](data-model.md)，本地验证边界见 [实施记录](validation/gates.md)。
 
 ## 1. 准备服务器与离线模型
 
@@ -36,12 +36,14 @@ docker info --format '{{json .Runtimes}}'
 tar -czf vision-shield-models.tar.gz -C models face.jit license_plate.jit yunet_face.onnx hyperlpr_plate.onnx manifest.json cpu-manifest.json README.md NOTICE.md licenses
 ```
 
-将仓库和模型包传至服务器；解包到独立目录 `/data/hos-vision-shield/models`，确认模型与清单位于该目录第一层。准备媒体目录：
+将仓库和模型包传至服务器。以下在仓库根目录准备模型与媒体目录；也可将两个变量设为已准备的实际目录。确认模型与清单位于模型目录第一层：
 
 ```bash
-sudo install -d -m 755 /data/hos-vision-shield/models
-sudo install -d -o 10001 -g 10001 -m 750 /data/hos-vision-shield/data
-sudo tar -xzf ../vision-shield-models.tar.gz -C /data/hos-vision-shield/models
+MODEL_DIR="$(pwd)/models"
+MEDIA_DIR="$(pwd)/data"
+sudo install -d -m 755 "$MODEL_DIR"
+sudo install -d -o 10001 -g 10001 -m 750 "$MEDIA_DIR"
+sudo tar -xzf ../vision-shield-models.tar.gz -C "$MODEL_DIR"
 ```
 
 模型目录和文件须允许运行用户读取；运行时只读挂载，不让应用修改模型或补下载。镜像可联网构建或获取，权重包不传入构建上下文。
@@ -57,7 +59,7 @@ cp deploy/compose.env.example .env.compose
 mkdir -p acceptance/cpu acceptance/gpu
 ```
 
-部署示例已设置 `MODEL_DIR=/data/hos-vision-shield/models`、`MEDIA_DIR=/data/hos-vision-shield/data`、`BIND_ADDRESS=192.168.1.104` 和 `RTSP_PUBLIC_BASE_URL=rtsp://192.168.1.104:8554`。`REDIS_URL` 必填现有带密码 Redis 的地址，例如 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`；使用 6 号数据库，文件权限设为 `600`。宿主发布端口须允许 Docker 网络访问，现有 Redis 的持久化及淘汰策略另行核对，不由本项目修改。远程来源须填写 `SOURCE_ALLOWLIST`；授权主机名时也授权实际解析 IP/CIDR，空列表仅允许本地上传。GPU 模式使用已核对的第 6 号卡 UUID，换卡时修改 `GPU_DEVICE_ID`。
+将 `.env.compose` 的 `MODEL_DIR`、`MEDIA_DIR` 改为上一步准备的目录，按实际部署填写 `BIND_ADDRESS`、`API_PORT`、`RTSP_PORT` 和 `RTSP_PUBLIC_BASE_URL`。`REDIS_URL` 必填现有带密码 Redis 的可达地址，密码须做 URL 编码；下方验证命令按 6 号数据库编写，使用其他编号时同步修改断言。文件权限设为 `600`。宿主 Redis 端口须允许 Docker 网络访问，持久化及淘汰策略另行核对，不由本项目修改。远程来源须填写 `SOURCE_ALLOWLIST`；授权主机名时也授权实际解析 IP/CIDR，空列表仅允许本地上传。GPU 模式按实际选卡填写 `GPU_DEVICE_ID`，推荐完整 UUID。
 
 以下 Bash 数组统一保存当前模式的命令，避免后续启动与停止使用不同文件组合：
 
@@ -100,14 +102,14 @@ GPU 模式随后使用当前 GPU 文件组合验证唯一设备和非空 NMS；�
 另外用无网络的独立容器执行模型预检。将下面目录与卡标识设为实际值；预检入口与 worker 内部 probe 复用同一验证函数：
 
 ```bash
-MODEL_DIR=/data/hos-vision-shield/models
+# MODEL_DIR 与 .env.compose 中的模型目录保持一致
 docker run --rm --network none --mount type=bind,source="$MODEL_DIR",target=/models,readonly -e INFERENCE_DEVICE=cpu vision-shield:cpu python -m vision_shield.detection.preflight
 # 仅 GPU 模式：填写实际所选 UUID
 GPU_DEVICE_ID=GPU-替换为所选卡UUID
-docker run --rm --network none --gpus "device=$GPU_DEVICE_ID" --mount type=bind,source="$MODEL_DIR",target=/models,readonly -e INFERENCE_DEVICE=cuda vision-shield:cu126 python -m vision_shield.detection.preflight
+docker run --rm --network none --gpus "device=$GPU_DEVICE_ID" --mount type=bind,source="$MODEL_DIR",target=/models,readonly -e DETECTION_BACKEND=quality_yolo -e INFERENCE_DEVICE=cuda vision-shield:cu126 python -m vision_shield.detection.preflight
 ```
 
-预期四份模型哈希、加载、实际推理和目标 NMS 均通过，退出码 0；该步骤仅证明检测可在无网络条件下运行。整套媒体验收另须限制外部模型来源，保留容器内部网络与授权媒体源，确认启动及处理均无模型下载尝试。
+预期所选后端的四份模型哈希、加载、实际推理和目标 NMS 均通过，退出码 0；quality_yolo 的 YOLO 权重来自应用包，其余三份来自模型目录。该步骤仅证明检测可在无网络条件下运行。整套媒体验收另须限制外部模型来源，保留容器内部网络与授权媒体源，确认启动及处理均无模型下载尝试。
 
 ## 4. 启动与就绪
 

@@ -10,7 +10,7 @@ Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP 流�
 ## 安装 Python 依赖
 
 ```powershell
-Set-Location H:\workspace\python\vision-shield
+# 在仓库根目录执行
 uv sync --frozen
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 .\scripts\download-cpu-models.ps1
@@ -36,7 +36,7 @@ Remove-Item Env:RUN_GPU_TESTS
 验证使用本地四个模型和 `samples/robot-quality` 中已标注样例，检查模型校验和、真实 GPU 推理和遮挡区域。GPU 不可用或推理失败会报错，不回退 CPU。更新依赖后须重启已有进程；本机 GPU 验证不代表服务器 x86_64 Compose 部署已通过。
 
 本机已完成真实模型、图片/视频子进程及同图 CPU/GPU 对比，边界与结果见 [GTX 1080 验证记录](specs/002-compose-cpu-gpu/local-gpu.md)。
-GPU 模式下，两路独立的全图检测同时执行，随后按原顺序进行局部复核。此前 CPU 补充检测的调度基线见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)，本轮四模型 CUDA 迁移与部署见 [CUDA 补充检测](specs/002-compose-cpu-gpu/cuda-detail.md)。
+GPU 模式下，两路独立的全图检测同时执行，随后按原顺序进行局部复核。此前 CPU 补充检测的调度基线见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)，四模型 CUDA 迁移与部署见 [CUDA 补充检测](specs/002-compose-cpu-gpu/cuda-detail.md)。
 
 ## 服务器 Docker Compose
 
@@ -63,23 +63,22 @@ bash scripts/deploy-server.sh
 
 `compose.yaml` 包含 MediaMTX、API、reconciler 和两个 worker，共五个服务，直接复用现有带密码 Redis。在 `.env.compose` 设置 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`，并将文件权限设为 `600`；四个应用服务统一读取该地址。宿主发布端口须能从 Docker 网络访问。现有 Redis 的持久化及淘汰策略由部署方核对，不修改共享实例配置。
 
-仅 API/RTSP 端口按配置发布；部署示例设置 `BIND_ADDRESS=192.168.1.104`、`RTSP_PUBLIC_BASE_URL=rtsp://192.168.1.104:8554`，API 文档地址为 `http://192.168.1.104:8000/docs`。模型及媒体目录分别为 `/data/hos-vision-shield/models`、`/data/hos-vision-shield/data`。容器内部推流与控制沿用服务名，远程输入还须配置来源允许列表。媒体目录保留在宿主机，切换前按原文件组合执行 `down`，不使用 `down -v`。
+仅 API/RTSP 端口按配置发布；部署地址和端口由 `.env.compose` 的 `BIND_ADDRESS`、`API_PORT`、`RTSP_PORT`、`RTSP_PUBLIC_BASE_URL` 指定，模型及媒体目录由 `MODEL_DIR`、`MEDIA_DIR` 指定。容器内部推流与控制沿用服务名，远程输入还须配置来源允许列表。媒体目录保留在宿主机，切换前按原文件组合执行 `down`，不使用 `down -v`。
 
-镜像构建可以联网安装依赖，模型必须事先离线提供并只读挂载；不随镜像下载或打包。worker 先在有 120 秒总超时的子进程中核验清单/哈希、实际推理及 NMS，成功后才接单并发布心跳；故障后的旧心跳最多有默认 20 秒租约窗口。`RTSP_PUBLISH_BASE_URL` 仅控制容器内部推流，对外仍返回公开播放地址。
+镜像构建可以联网安装依赖，`models/` 中的模型必须事先离线提供并只读挂载；quality_yolo 的 YOLO 权重随应用包交付，启动及推理不下载模型。worker 先在有 120 秒总超时的子进程中核验清单/哈希、实际推理及 NMS，成功后才接单并发布心跳；故障后的旧心跳最多有默认 20 秒租约窗口。`RTSP_PUBLISH_BASE_URL` 仅控制容器内部推流，对外仍返回公开播放地址。
 
-GPU 镜像按 [研究记录中的生成命令](specs/002-compose-cpu-gpu/research.md)使用 `deploy/requirements-cu126.txt`，共同依赖沿用根锁版本；根声明变更时重新生成，禁止手工改 pin。CPU 使用根 uv.lock，Windows 安装方式保持不变。镜像和目标服务器尚未验收，证据与未运行项见 [实施记录](specs/002-compose-cpu-gpu/validation/gates.md)。
+GPU 镜像按 [研究记录中的生成命令](specs/002-compose-cpu-gpu/research.md)使用 `deploy/requirements-cu126.txt`，共同依赖沿用根锁版本；根声明变更时重新生成，禁止手工改 pin。CPU 使用根 uv.lock，Windows 安装方式保持不变。初次交付证据与未运行项见 [实施记录](specs/002-compose-cpu-gpu/validation/gates.md)，后续服务器分阶段实测见 [时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)；这些记录不代表完整部署验收已通过。
 
 ## 本地 Redis / MediaMTX
 
-如果.env已指向运行中的Redis和MediaMTX，直接启动应用即可，不必再运行基础服务脚本。当前用户环境的持久化检查与服务端配置步骤见[环境核对](specs/001-media-redaction/validation/environment.md)。
+如果.env已指向运行中的Redis和MediaMTX，直接启动应用即可，不必再运行基础服务脚本。持久化检查与服务端配置步骤见[环境核对](specs/001-media-redaction/validation/environment.md)。
 
-本机已有 Redis7.4.3；MediaMTX1.21.2官方可执行程序位于被Git忽略的 `.tools/mediamtx/`。
-在项目根目录运行，保持这个终端打开：
+准备 Redis7.4.3 和 MediaMTX1.21.2。以下示例要求 `redis-server.exe` 位于 PATH，MediaMTX 位于被 Git 忽略的 `.tools/mediamtx/`；其他位置可直接传给脚本参数。在项目根目录运行，保持这个终端打开：
 
 ```powershell
 .\scripts\start-infrastructure.ps1 `
-  -RedisExecutable 'H:\software\Redis-7.4.3\redis-server.exe' `
-  -MediaMtxExecutable 'H:\workspace\python\vision-shield\.tools\mediamtx\mediamtx.exe'
+  -RedisExecutable (Get-Command redis-server.exe).Source `
+  -MediaMtxExecutable '.tools/mediamtx/mediamtx.exe'
 ```
 
 退出时Ctrl+C只关闭该脚本创建的两个进程，不操作其他已存在的服务。
@@ -88,8 +87,8 @@ Redis数据保存在 `data/redis/`，日志与媒体服务运行文件位于 `da
 
 ```powershell
 .\scripts\start-infrastructure.ps1 `
-  -RedisExecutable 'H:\software\Redis-7.4.3\redis-server.exe' `
-  -MediaMtxExecutable 'H:\workspace\python\vision-shield\.tools\mediamtx\mediamtx.exe' -Check
+  -RedisExecutable (Get-Command redis-server.exe).Source `
+  -MediaMtxExecutable '.tools/mediamtx/mediamtx.exe' -Check
 ```
 
 Redis端口16379、RTSP端口8554、媒体控制端口9997，当前仅监听127.0.0.1。
@@ -157,21 +156,21 @@ $tasks.queued
 
 ## 巡逻机器人素材
 
-面向运动模糊和超宽视角，默认组合在最长边 `DETECTION_MAX_SIDE=1280`（320–1920）的全图运行EgoBlur，再以YuNet/HyperLPR做全图补充。2026-10-21按用户接受极小目标漏遮的要求，补充分块由640改为1920源像素：最长边不超过1920时只运行一个全图视图，3840×1080使用全图加3个重叠分块，每个视图仍按`DETECTION_MAX_SIDE`缩放。第四轮停止对短边不足20源像素的低分人脸（EgoBlur低于0.3、YuNet低于0.6）放大复核；较高分人脸和车牌仍按原规则处理。不保证20源像素以下目标的覆盖，也不承诺所有更大目标都检出。人脸候选门槛分别为0.3/0.6，车牌为0.1/0.25；EgoBlur得分至少0.7的结果保留，其余候选须得到另一模型同类重叠框支持，或通过局部复核。复核取候选周边3倍最长边、至少96像素区域，调整到最长边320后交给另一模型；同类框IoU至少0.2。全图人脸佐证至少0.3，否则转局部复核。短边至少128源像素的大人脸候选需至少一路高分结果：弱EgoBlur须有YuNet至少0.9佐证，低于0.9的YuNet须有EgoBlur至少0.7佐证；全图与局部采用相同分数要求。YuNet自身至少0.9时允许EgoBlur全图0.3或局部0.1佐证。短边20至128源像素的人脸保留原有低阈值局部复核，以保护侧脸；不会单独从低分人脸新增遮挡。该策略减少单模型误遮，也可能丢失无法确认的弱目标。车牌网络按其320输入约定做letterbox。`DETECTION_BOX_PADDING=0.15` 表示EgoBlur每侧15%、YuNet人脸每侧15%，HyperLPR车牌水平每侧30%、垂直15%。不做OCR、锐化或生成式修复。
+面向运动模糊和超宽视角，默认组合在最长边 `DETECTION_MAX_SIDE=1280`（320–1920）的全图运行EgoBlur，再以YuNet/HyperLPR做全图补充。2026-10-21按用户接受极小目标漏遮的要求，补充分块由640改为1920源像素：最长边不超过1920时只运行一个全图视图，3840×1080使用全图加3个重叠分块，每个视图仍按`DETECTION_MAX_SIDE`缩放。第四轮停止对短边不足20源像素的低分人脸（EgoBlur低于0.3、YuNet低于0.6）放大复核；较高分人脸和车牌仍按原规则处理。不保证20源像素以下目标的覆盖，也不承诺所有更大目标都检出。人脸候选门槛分别为0.3/0.6，车牌为0.1/0.25；EgoBlur得分至少0.7的结果保留，其余候选须得到另一模型同类重叠框支持，或通过局部复核；弱车牌须有另一模型得分至少0.7的全图结果佐证，否则转局部复核。复核取候选周边3倍最长边、至少96像素区域，调整到最长边320后交给另一模型；同类框IoU至少0.2。全图人脸佐证至少0.3，否则转局部复核。短边至少128源像素的大人脸候选需至少一路高分结果：弱EgoBlur须有YuNet至少0.9佐证，低于0.9的YuNet须有EgoBlur至少0.7佐证；全图与局部采用相同分数要求。YuNet自身至少0.9时允许EgoBlur全图0.3或局部0.1佐证。短边20至128源像素的人脸保留原有低阈值局部复核，以保护侧脸；不会单独从低分人脸新增遮挡。该策略减少单模型误遮，也可能丢失无法确认的弱目标。车牌网络按其320输入约定做letterbox。`DETECTION_BOX_PADDING=0.15` 表示EgoBlur每侧15%、YuNet人脸每侧15%，HyperLPR车牌水平每侧30%、垂直15%。不做OCR、锐化或生成式修复。
 
 `DETECTION_BACKEND=cpu`保留上一轮轻量方案（YuNet阈值0.3），无需加载EgoBlur；它在固定样本中有远处车牌漏遮，不作为当前效果验收结论。当前组合在CPU上更慢，接口仍由媒体子进程异步执行，不承诺实时帧率。新效果对照见[效果优先验证](specs/001-media-redaction/validation/quality-optimization.md)。 局部复核只运行待确认类别，Torch每个媒体子进程采用4线程，OpenCV仍为2线程；不改变检测范围、阈值或视频逐帧处理。分项计时与效果一致性验证见[同效果CPU推理优化](specs/001-media-redaction/validation/inference-performance.md)。
 
 视频和流对已确认目标进行短时运动匹配，最多保留128个历史目标；匹配成功可补偿500毫秒内的漏检，匹配失败会尝试当前帧局部复核，仍未确认则只保留200毫秒旧框。只有真实检测能刷新有效期。尺寸变化、时钟倒退、较长跳帧或缩略图明显变化会清空历史，每次流重连重新建立状态。没有检测历史的目标不能凭空补出，快速转向或大幅变形仍可能漏遮。
 
-文件视频使用 H.264 slow / CRF 23；源视频码率可用时，以其115%设置两秒VBV缓冲，尽量控制体积。这不是文件大小硬上限，也不保证无画质损失；直播编码设置保持不变。修复范围和验证边界见[已知视频问题修复记录](specs/002-compose-cpu-gpu/known-video-issues.md)。
+CPU 文件视频使用 libx264 slow / CRF 23，CUDA 文件视频使用 h264_nvenc p6/hq/VBR CQ19；源视频码率可用时，以其115%设置两秒VBV缓冲，尽量控制体积。这不是文件大小硬上限，也不保证无画质损失；直播编码设置保持不变。修复范围和验证边界见[编码说明](specs/002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
 
 检测仍可能漏检和误遮，需要按实际机器人素材复核，不承诺模糊素材零漏检。降低DETECTION_MAX_SIDE会影响人脸细节，车牌网络输入及分块数也会影响耗时。与原EgoBlur 1280基线的对照入口：
 
 ```powershell
-uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo --output data/validation/cpu-evaluated
+uv run python scripts/evaluate-robot-media.py samples/demo --output data/validation/cpu-evaluated
 ```
 
-结果包括每张图片、每段视频的前三个连续帧的对照图、脱敏图、耗时和源文件哈希。比较工具还需要本机保留的两个EgoBlur模型。它不是完整视频或准确率验收，原始素材不覆盖、不向外部服务上传。CPU优化与限制见[验证记录](specs/001-media-redaction/validation/cpu-optimization.md)。
+将授权素材放在 `samples/demo/`，或将命令中的该参数替换为实际素材目录。结果包括每张图片、每段视频的前三个连续帧的对照图、脱敏图、耗时和源文件哈希。比较工具还需要本机保留的两个EgoBlur模型。它不是完整视频或准确率验收，原始素材不覆盖、不向外部服务上传。CPU优化与限制见[验证记录](specs/001-media-redaction/validation/cpu-optimization.md)。
 
 调整.env后重启API、协调器和worker；现有任务接口保持不变。
 
@@ -185,13 +184,13 @@ uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo --o
 ## 运行验证
 
 ```powershell
-$env:TEST_REDIS_SERVER='H:\software\Redis-7.4.3\redis-server.exe'
+$env:TEST_REDIS_SERVER=(Get-Command redis-server.exe).Source
 $env:TEST_MEDIAMTX_BIN=(Resolve-Path .tools/mediamtx/mediamtx.exe).Path
 uv run pytest -q
 ```
 
-测试启动独立临时端口和数据目录，不清空现有Redis。FFmpeg与ffprobe需在PATH中，本机已经具备。
-真实媒体样本和权重不提交Git；自动生成的图片和视频仅用于媒体机制验证。效果回归另需本机`samples/robot-quality/`十四张授权样本，其哈希和已核对的小区域记录在`tests/fixtures/quality-cases.json`；缺失时明确失败，不跳过。原始demo中的image-2、7、13、17、19按该清单命名保留，rtsp-green.png来自已保存的source-first截图；另三张PNG是demo视频9第0帧、视频10第42帧和视频11第17帧。video-04-frame-24.png来自`tests/test_assets/22-25-32违规占道.mp4`开头一秒连续片段的第24帧（从0计数），另加入同片段的第09、10、16、19帧，覆盖五张夜间轮胎误检帧与同帧车牌保护回归。
+测试启动独立临时端口和数据目录，不清空现有Redis。Redis、FFmpeg与ffprobe需在PATH中，或按测试配置指定可执行文件。
+真实媒体样本和权重不提交Git；自动生成的图片和视频仅用于媒体机制验证。效果回归另需本机`samples/robot-quality/`中清单对应的授权样本，其哈希和已核对的小区域记录在`tests/fixtures/quality-cases.json`；缺失时明确失败，不跳过。原始demo中的image-2、7、13、17、19按该清单命名保留，rtsp-green.png来自已保存的source-first截图；另三张PNG是demo视频9第0帧、视频10第42帧和视频11第17帧。video-04-frame-24.png来自`tests/test_assets/22-25-32违规占道.mp4`开头一秒连续片段的第24帧（从0计数），另加入同片段的第09、10、16、19帧，覆盖五张夜间轮胎误检帧与同帧车牌保护回归。
 实际摄像头接入时在 `.env` 中将 `SOURCE_ALLOWLIST` 设置为授权主机/IP/CIDR的JSON数组；默认空数组拒绝远程来源。
 
 当前没有用户鉴权或自动文件删除，原音频不脱敏；检测效果、完整故障恢复与容量以各阶段实测为准。
@@ -208,6 +207,6 @@ uv run pytest -q
 
 ### 优化轮次与回退
 
-从2026-10-21开始，每轮优化完成验证后必须提交，并创建不可覆盖的 Git 附注标签 `opt-YYYYMMDD-NN`（当日序号从01递增）。标签说明记录改动、验证和未完成的验收；这些是优化检查点，不代表生产性能认证或正式语义版本发布。不得移动已有标签。用户已授权本轮及后续每轮优化默认将提交和对应标签推送到`origin`，供服务器部署；代码推送不代表服务器已完成部署或性能验收。
+从2026-10-21开始，每轮优化完成验证后必须提交，并创建不可覆盖的 Git 附注标签 `opt-YYYYMMDD-NN`（当日序号从01递增）。标签说明记录改动、验证和未完成的验收；这些是优化检查点，不代表生产性能认证或正式语义版本发布。不得移动已有标签。服务器部署需先将对应提交和标签推送到 `origin`；代码推送不代表服务器已完成部署或性能验收。
 
-本轮之前的基线为 `opt-20261021-00`，本轮完成点为 `opt-20261021-01`。效果不理想时，可先用 `git worktree add --detach ../hos-vision-shield-baseline opt-20261021-00` 检查基线，保留当前工作区；正式回退使用经确认的 revert 或按标签重新部署，不默认使用 `reset --hard`。源码标签不包含模型、环境配置、Redis任务和忽略的样例文件，重新部署需保留对应运行资料。
+各轮检查点与验证边界见 [变更记录](CHANGELOG.md)。效果不理想时，可用 `git worktree add --detach ../hos-vision-shield-baseline <目标标签>` 检查指定基线，保留当前工作区；正式回退使用经确认的 revert 或按标签重新部署，不默认使用 `reset --hard`。源码标签不包含模型、环境配置、Redis任务和忽略的样例文件，重新部署需保留对应运行资料。

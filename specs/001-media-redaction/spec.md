@@ -1,10 +1,10 @@
 # Feature Specification: 图片、视频与视频流人脸车牌脱敏
 
-**Feature Branch**: 未创建功能分支；当前分支为 `master`
+**主干分支**: `main`
 
 **Created**: 2026-10-18
 
-**Status**: Ready for Planning — Q1–Q12 已确认，规格质量检查通过
+**Status**: 图片、视频和 RTSP 链路已实现；完成范围与未完成验收见[任务清单](tasks.md)和[验证记录](validation/gates.md)。后续 CPU/GPU 部署见[部署规格](../002-compose-cpu-gpu/spec.md)。
 
 **Input**: User description: "使用 Python、FastAPI，通过 RESTful API 对图片、视频和视频流中的人脸、车牌脱敏；使用 Taskiq 队列，流处理放在 worker 中并可扩展。"
 
@@ -150,4 +150,4 @@
 
 - 用户确认效果优先，上一轮CPU方案复核存在远处车牌漏遮和大范围误遮，要求继续优化；本机CPU允许变慢，不以速度优先替代脱敏覆盖要求。
 - 使用现有检测模型互补，保留原方案供对照；对已确认目标及误遮区域建立带源哈希的小范围回归，区分固定样本改善与完整质量验收。
-- 用户明确暂缓NVIDIA CUDA部分，服务器信息确定且需要时再开始；本轮不安装CUDA、不实现GPU调度。
+- 本阶段仅覆盖 CPU 效果优化；后续本机 CUDA 与服务器单卡部署见[部署规格](../002-compose-cpu-gpu/spec.md)。

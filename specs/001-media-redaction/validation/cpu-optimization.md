@@ -75,8 +75,10 @@
 
 复现固定样本：
 
+将授权素材放在 `samples/demo/`，或替换为实际素材目录；命令在仓库根目录执行。
+
 ```powershell
-uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo --output data/validation/cpu-evaluated
+uv run python scripts/evaluate-robot-media.py samples/demo --output data/validation/cpu-evaluated
 ```
 
 复现需要两个CPU ONNX和保留的EgoBlur模型，最终以新生成JSON为准。原图、视频、模型和验证截图仅留本机，不上传到外部服务。

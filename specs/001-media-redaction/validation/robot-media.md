@@ -15,8 +15,10 @@
 
 ## 可复现对照
 
+将授权素材放在 `samples/demo/`，或替换为实际素材目录；命令在仓库根目录执行。
+
 ```powershell
-uv run python scripts/evaluate-robot-media.py C:\Users\zhanjh\Downloads\demo
+uv run python scripts/evaluate-robot-media.py samples/demo
 ```
 
 输出data/validation/robot/evaluated/evaluation.json、每张compare.jpg及redacted.jpg。
