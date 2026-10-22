@@ -42,13 +42,15 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
 | state | queued / processing / succeeded / failed / cancelled（文件）；queued / connecting / running / recovering / stopped / failed（流） |
 | desired_state | run / cancelled / stopped |
 | ready | boolean |
-| created_at / updated_at | UTC ISO 8601 string |
+| created_at / updated_at | UTC+8 字符串，格式 `%Y-%m-%d %H:%M:%S`，例如 `2026-10-22 09:00:00` |
 | result_url | string或null；仅成功文件任务非空 |
 | playback_url | rtsp URL或null；流为稳定播放地址，ready=false时不可承诺可播放 |
 | error | null或{code: string, message: string} |
 | stats | {processed_frames: nonnegative integer, dropped_frames: nonnegative integer, elapsed_seconds: nonnegative number} |
 
 流stats描述当前媒体会话，重连后重置，不代表跨故障累计的所有源帧；elapsed_seconds不含模型加载及排队。
+
+所有任务创建、详情、列表及停止接口的日期字符串均使用上述 UTC+8 格式，不含 `T`、时区后缀或小数秒。历史 UTC 记录在响应时转换，内部存储仍为 UTC。诊断接口顶层及 worker 快照的 `sampled_at_unix` 保持 Unix 秒数；耗时、年龄、采样窗口等数值字段保持秒数语义。当前接口没有日期时间入参。
 
 新版视频/流任务的`GET /v1/tasks/{id}`可附带`Server-Timing`响应头，JSON和stats字段保持不变。`task-frame`、`task-inference`、`task-encode`为当前媒体会话累计毫秒，inference是frame的子集；旧任务/图片可不返回。文件最终elapsed包括编码冲刷及关闭MP4。详细口径见[任务阶段计时](../../002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
 原始来源、绝对磁盘路径、worker标识和发布凭据不进入响应。没有进度百分比，避免长流或未知时长的伪进度。
@@ -60,8 +62,8 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
   "state": "queued",
   "desired_state": "run",
   "ready": false,
-  "created_at": "2026-10-18T08:00:00Z",
-  "updated_at": "2026-10-18T08:00:00Z",
+  "created_at": "2026-10-18 16:00:00",
+  "updated_at": "2026-10-18 16:00:00",
   "result_url": null,
   "playback_url": "rtsp://media.internal:8554/redacted/e5176342-68c1-4c5c-a43e-39c5d220cc8a",
   "error": null,

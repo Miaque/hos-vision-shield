@@ -26,7 +26,7 @@ async def test_publisher_uses_internal_address_and_response_stays_public(interna
     publisher.close = AsyncMock(return_value=True)
     publisher._change = AsyncMock(return_value=True)
     record = dict(id="job", kind="stream", state="running", desired_state="run", ready=True,
-                  created_at="now", updated_at="now", error=None, stats={})
+                  created_at="2026-10-22T00:00:00Z", updated_at="2026-10-22T00:00:00Z", error=None, stats={})
     address = urlsplit(await publisher.prepare(record, "owner", 2))
     assert address.hostname == expected and address.username == "job.2"
     assert address.password == "owner"

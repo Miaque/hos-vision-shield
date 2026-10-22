@@ -1,6 +1,18 @@
+from datetime import timedelta, timezone
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer, WithJsonSchema
+
+
+UTC8 = timezone(timedelta(hours=8))
+ResponseDatetime = Annotated[
+    AwareDatetime,
+    PlainSerializer(lambda value: value.astimezone(UTC8).strftime("%Y-%m-%d %H:%M:%S"),
+                    return_type=str, when_used="json"),
+    WithJsonSchema({"type": "string", "pattern": r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$",
+                    "description": "UTC+8，格式为 %Y-%m-%d %H:%M:%S",
+                    "examples": ["2026-10-22 09:00:00"]}, mode="serialization"),
+]
 
 
 class FileUrlInput(BaseModel):
@@ -90,8 +102,8 @@ class TaskResponse(BaseModel):
     state: Literal["queued", "processing", "succeeded", "failed", "cancelled", "connecting", "running", "recovering", "stopped"]
     desired_state: Literal["run", "cancelled", "stopped"]
     ready: bool
-    created_at: str
-    updated_at: str
+    created_at: ResponseDatetime
+    updated_at: ResponseDatetime
     result_url: str | None
     playback_url: str | None
     error: TaskError | None

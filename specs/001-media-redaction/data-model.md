@@ -8,7 +8,7 @@
 | kind | image / video / stream | 决定处理池及状态集合 |
 | state | 下述状态枚举 | 当前已确认状态 |
 | desired_state | run / cancelled / stopped | 持久用户意图；文件不能设 stopped，流不能设 cancelled |
-| created_at / updated_at | UTC ISO 8601 | 可追溯时间 |
+| created_at / updated_at | 内部 UTC ISO 8601；API 输出 UTC+8 `%Y-%m-%d %H:%M:%S` | 可追溯时间 |
 | source_kind | upload / url / rtsp | 输入方式 |
 | source_ref | 内部路径或地址，不返回客户端 | URL凭据仅保留内部，日志必须脱敏 |
 | result_ref | 可空，任务内相对路径 | 仅成功文件可下载 |

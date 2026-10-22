@@ -84,7 +84,9 @@ async def test_resource_api_returns_worker_samples_with_age_and_stale_status():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
         response = await client.get('/v1/diagnostics/resources')
     assert response.status_code == 200
+    assert response.json()['sampled_at_unix'] == 100
     workers = response.json()['workers']
+    assert workers[0]['snapshot']['sampled_at_unix'] == 93
     assert workers[0]['pool'] == 'files' and workers[0]['age_seconds'] == 7
     assert workers[0]['stale'] is True
     assert workers[1]['snapshot'] is None and workers[1]['unavailable_reason'] == 'no_sample'
