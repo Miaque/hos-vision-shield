@@ -36,3 +36,26 @@ def test_unavailable_cuda_fails_before_loading_models(monkeypatch):
     monkeypatch.setattr(egoblur.torch.cuda, "is_available", lambda: False)
     with pytest.raises(RuntimeError, match="CUDA"):
         egoblur.Detector("absent-face", "absent-plate", device="cuda")
+
+
+def test_primary_captures_selected_cuda_ordinal_before_starting_model_threads(monkeypatch):
+    from vision_shield.detection import egoblur
+
+    devices, streams = [], []
+
+    class Model:
+        def to(self, device):
+            devices.append(device)
+            return self
+
+        def eval(self):
+            return self
+
+    monkeypatch.setattr(egoblur.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(egoblur.torch.cuda, "current_device", lambda: 2)
+    monkeypatch.setattr(egoblur.torch.cuda, "Stream", lambda *, device: streams.append(device))
+    monkeypatch.setattr(egoblur.torch.jit, "load", lambda *a, **kw: Model())
+    monkeypatch.setattr(egoblur.torch, "set_num_threads", lambda value: None)
+    detector = egoblur.Detector("face", "plate", device="cuda")
+    assert detector.device == egoblur.torch.device("cuda", 2)
+    assert devices == [detector.device, detector.device] and streams == [detector.device]

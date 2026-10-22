@@ -46,15 +46,15 @@ class Detector:
         """Keep type and score until the quality backend has confirmed uncertain masks."""
         if rgb.ndim != 3 or rgb.shape[2] != 3 or rgb.dtype != np.uint8 or not rgb.size:
             raise ValueError("Expected nonempty RGB uint8 pixels")
+        return self._candidates(rgb, kind=kind)
+
+    def _candidates(self, rgb, *, kind=None):
         height, width = rgb.shape[:2]
         boxes = []
         for left, top, right, bottom in self._views(width, height, self.tile_side):
-            view = cv2.cvtColor(rgb[top:bottom, left:right], cv2.COLOR_RGB2BGR)
-            view_height, view_width = view.shape[:2]
-            scale = min(1, self.max_side / max(view_width, view_height))
-            if scale < 1:
-                view = cv2.resize(view, (max(1, round(view_width * scale)), max(1, round(view_height * scale))),
-                                  interpolation=cv2.INTER_AREA)
+            source = rgb[top:bottom, left:right]
+            view_height, view_width = source.shape[:2]
+            view = self._view(source)
             x_scale, y_scale = view_width / view.shape[1], view_height / view.shape[0]
             for detection in self._detect_view(view, kind=kind):
                 x1, y1, x2, y2 = detection.box
@@ -70,6 +70,15 @@ class Detector:
                 y1, y2 = top + y1 * y_scale, top + y2 * y_scale
                 boxes.append(Detection(detection.kind, (x1, y1, x2, y2), detection.score))
         return boxes
+
+    def _view(self, rgb):
+        view = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        height, width = view.shape[:2]
+        scale = min(1, self.max_side / max(width, height))
+        if scale < 1:
+            view = cv2.resize(view, (max(1, round(width * scale)), max(1, round(height * scale))),
+                              interpolation=cv2.INTER_AREA)
+        return view
 
     @staticmethod
     def _views(width, height, tile_side=640):
@@ -99,8 +108,8 @@ class Detector:
         # 局部复核不运行无关类别；全图默认仍执行两类检测。
         if kind != "plate":
             # YuNet requires a minimum spatial extent; padding never invents image details.
-            face_input = cv2.copyMakeBorder(bgr, 0, max(0, 32 - height), 0, max(0, 32 - width),
-                                           cv2.BORDER_CONSTANT)
+            face_input = bgr if getattr(bgr, "is_cuda", False) else cv2.copyMakeBorder(
+                bgr, 0, max(0, 32 - height), 0, max(0, 32 - width), cv2.BORDER_CONSTANT)
             faces = self._faces(face_input)
             if faces is not None:
                 if faces.ndim != 2 or faces.shape[1] != 15 or not np.isfinite(faces).all():
@@ -111,12 +120,8 @@ class Detector:
             return detections
 
         # HyperLPR's detection-only 320 model expects letterboxed RGB / 255, not OCR tensors.
-        scale = min(320 / width, 320 / height)
-        resized_width, resized_height = max(1, round(width * scale)), max(1, round(height * scale))
-        left, top = (320 - resized_width) // 2, (320 - resized_height) // 2
-        canvas = np.zeros((320, 320, 3), dtype=np.uint8)
-        canvas[top:top + resized_height, left:left + resized_width] = cv2.resize(bgr, (resized_width, resized_height))
-        predictions = self._plate_forward(cv2.dnn.blobFromImage(canvas, 1 / 255, (320, 320), swapRB=True))
+        blob, resized_width, resized_height, left, top = self._plate_input(bgr)
+        predictions = self._plate_forward(blob)
         if predictions.shape != (1, 6300, 15) or not np.isfinite(predictions).all():
             raise ValueError("Invalid plate detector output")
         rows = predictions[0]
@@ -134,6 +139,15 @@ class Detector:
                                                   (float(y + h) - top) * height / resized_height),
                                         float(scores[selected[index]])))
         return detections
+
+    def _plate_input(self, bgr):
+        height, width = bgr.shape[:2]
+        scale = min(320 / width, 320 / height)
+        resized_width, resized_height = max(1, round(width * scale)), max(1, round(height * scale))
+        left, top = (320 - resized_width) // 2, (320 - resized_height) // 2
+        canvas = np.zeros((320, 320, 3), dtype=np.uint8)
+        canvas[top:top + resized_height, left:left + resized_width] = cv2.resize(bgr, (resized_width, resized_height))
+        return cv2.dnn.blobFromImage(canvas, 1 / 255, (320, 320), swapRB=True), resized_width, resized_height, left, top
 
     def _faces(self, pixels):
         self.face.setInputSize((pixels.shape[1], pixels.shape[0]))

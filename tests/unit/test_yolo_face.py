@@ -84,6 +84,7 @@ def test_session_cache_is_bounded_and_rejects_cpu_fallback(monkeypatch, tmp_path
     class Session:
         def __init__(self, *args, **kwargs):
             created.append(self)
+            self.provider_device = kwargs["providers"][0][1]["device_id"]
 
         def disable_fallback(self):
             self.fallback_disabled = True
@@ -101,6 +102,7 @@ def test_session_cache_is_bounded_and_rejects_cpu_fallback(monkeypatch, tmp_path
     monkeypatch.setitem(sys.modules, "onnxruntime", SimpleNamespace(InferenceSession=Session, SessionOptions=Options))
     monkeypatch.setattr(yolo.torch.cuda, "current_device", lambda: 0)
     instance = yolo.Detector.__new__(yolo.Detector)
+    instance.device = yolo.torch.device("cuda", 2)
     instance.face_path, instance.sessions = tmp_path / "face.onnx", {}
     if provider == "CPUExecutionProvider":
         with pytest.raises(RuntimeError, match="CUDA provider"):
@@ -113,6 +115,7 @@ def test_session_cache_is_bounded_and_rejects_cpu_fallback(monkeypatch, tmp_path
         instance._session(side, side)
     assert len(instance.sessions) == 4 and (160, 160) not in instance.sessions
     assert all(s.fallback_disabled for s in created)
+    assert all(s.provider_device == 2 for s in created), "新线程的默认卡不能覆盖已选GPU"
 
 
 def test_empty_faces_and_outside_boxes_never_mask_unrelated_pixels(monkeypatch):

@@ -1,5 +1,7 @@
 """EgoBlur Gen1 dual detector; intentionally provides no recognition output."""
 
+from contextlib import nullcontext
+
 import numpy as np
 import torch
 import torchvision
@@ -14,7 +16,8 @@ class Detector:
             raise ValueError("推理设备仅支持 cpu 或 cuda")
         if device == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("CUDA 不可用，请检查显卡驱动及 PyTorch CUDA 构建")
-        self.device = torch.device(device)
+        self.device = torch.device("cuda", torch.cuda.current_device()) if device == "cuda" else torch.device("cpu")
+        self.stream = torch.cuda.Stream(device=self.device) if device == "cuda" else None
         # 本机交错实测4线程显著快于2线程，避免继续加线程挤占其他媒体进程。
         torch.set_num_threads(4)
         self.max_side, self.box_padding = max_side, box_padding
@@ -26,6 +29,11 @@ class Detector:
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         return [detection.box for detection in self.detect_regions(rgb)]
 
+    def prepare(self, rgb):
+        from vision_shield.detection.cuda_pixels import upload
+
+        return upload(rgb, self.device) if self.device.type == "cuda" else rgb
+
     def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Return padded xyxy boxes in source RGB coordinates without altering the pixels."""
         # Mobile-camera blur can extend beyond the predicted rectangle.
@@ -35,19 +43,31 @@ class Detector:
 
     def candidates(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Return unpadded source boxes with type and score for cross-model confirmation."""
+        if isinstance(rgb, torch.Tensor):
+            rgb = self.prepare(rgb)
         height, width = rgb.shape[:2]
         scale = min(1.0, self.max_side / max(height, width))
         detection_pixels = rgb
-        if scale < 1:
-            detection_pixels = np.asarray(Image.fromarray(rgb).resize(
-                (max(1, round(width * scale)), max(1, round(height * scale))), Image.Resampling.LANCZOS))
+        if isinstance(rgb, torch.Tensor):
+            from vision_shield.detection.cuda_pixels import resize
+
+            with torch.cuda.stream(self.stream):
+                rgb.record_stream(self.stream)
+                if scale < 1:
+                    detection_pixels = resize(rgb, (max(1, round(width * scale)), max(1, round(height * scale))), "lanczos")
+                image = detection_pixels.flip(2).permute(2, 0, 1).contiguous()
+        else:
+            if scale < 1:
+                detection_pixels = np.asarray(Image.fromarray(rgb).resize(
+                    (max(1, round(width * scale)), max(1, round(height * scale))), Image.Resampling.LANCZOS))
+            image = torch.from_numpy(detection_pixels[:, :, ::-1].transpose(2, 0, 1).copy()).to(self.device)
         # The released Gen1 model expects BGR uint8 CHW, without normalization.
         # 模型和输入必须在同一设备；后处理继续返回普通坐标。
-        image = torch.from_numpy(detection_pixels[:, :, ::-1].transpose(2, 0, 1).copy()).to(self.device)
         x_scale, y_scale = width / detection_pixels.shape[1], height / detection_pixels.shape[0]
         boxes = []
         # Gen1 JIT profiling adds seconds to cold frames without improving this CPU's steady rate.
-        with torch.inference_mode(), torch.jit.optimized_execution(False):
+        stream_context = torch.cuda.stream(self.stream) if isinstance(rgb, torch.Tensor) else nullcontext()
+        with torch.inference_mode(), torch.jit.optimized_execution(False), stream_context:
             for model, model_kind, threshold in zip(self.models, ("face", "plate"), (self.face_threshold, 0.1)):
                 # 局部复核只消费一种类别，跳过另一份独立模型而不改变目标模型输入。
                 if model is None or kind is not None and kind != model_kind:

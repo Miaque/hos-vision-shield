@@ -44,10 +44,12 @@ class Detector:
     def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Retain strong primary detections and confirmed complementary masks."""
         if self.inference_device == "cuda":
+            prepare = getattr(self.primary, "prepare", None)
+            pixels = prepare(rgb) if prepare else rgb
             # 两路全图检测互不依赖；等待两路结束后再复核，异常不返回部分结果。
             with ThreadPoolExecutor(max_workers=1) as pool:
-                pending = pool.submit(_timed_candidates, self.primary, rgb, kind=kind)
-                detail, detail_seconds = _timed_candidates(self.detail, rgb, kind=kind)
+                pending = pool.submit(_timed_candidates, self.primary, pixels, kind=kind)
+                detail, detail_seconds = _timed_candidates(self.detail, pixels, kind=kind)
                 primary, primary_seconds = pending.result()
         else:
             primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind)

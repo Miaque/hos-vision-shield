@@ -2,6 +2,7 @@
 
 import cv2
 import numpy as np
+import torch
 
 from vision_shield.detection.cpu import Detector as CPUDetector
 
@@ -68,13 +69,66 @@ class Detector(CPUDetector):
             if session.get_providers()[0] != "CUDAExecutionProvider":
                 raise RuntimeError("YuNet/HyperLPR CUDA provider was not activated")
         self.providers = [self.face.get_providers()[0], self.plate.get_providers()[0]]
+        self.device = torch.device("cuda", torch.cuda.current_device())
+        self.view_stream, self.face_stream, self.plate_stream = [torch.cuda.Stream(device=self.device) for _ in range(3)]
+
+    def candidates(self, rgb, *, kind=None):
+        if isinstance(rgb, torch.Tensor):
+            from vision_shield.detection.cuda_pixels import upload
+
+            return self._candidates(upload(rgb, self.device), kind=kind)
+        return super().candidates(rgb, kind=kind)
+
+    def _view(self, rgb):
+        if not isinstance(rgb, torch.Tensor):
+            return super()._view(rgb)
+        from vision_shield.detection.cuda_pixels import resize
+
+        with torch.cuda.stream(self.view_stream):
+            rgb.record_stream(self.view_stream)
+            view = rgb.flip(2)
+            height, width = view.shape[:2]
+            scale = min(1, self.max_side / max(width, height))
+            if scale < 1:
+                view = resize(view, (max(1, round(width * scale)), max(1, round(height * scale))), "area")
+        self.view_stream.synchronize()
+        return view
 
     def _faces(self, pixels):
         height, width = pixels.shape[:2]
+        if isinstance(pixels, torch.Tensor):
+            from vision_shield.detection.cuda_pixels import pad, blob, run
+
+            with torch.cuda.stream(self.face_stream):
+                pixels.record_stream(self.face_stream)
+                padded = pad(pixels, 0, (-width) % 32, 0, (-height) % 32)
+                outputs = run(self.face, blob(padded), self.face_stream)
+            return decode_faces(dict(zip((o.name for o in self.face.get_outputs()), outputs)),
+                                padded.shape[1], padded.shape[0], self.face_threshold)
         padded = cv2.copyMakeBorder(pixels, 0, (-height) % 32, 0, (-width) % 32, cv2.BORDER_CONSTANT)
         outputs = self.face.run(None, {self.face.get_inputs()[0].name: cv2.dnn.blobFromImage(padded)})
         return decode_faces(dict(zip((o.name for o in self.face.get_outputs()), outputs)),
                             padded.shape[1], padded.shape[0], self.face_threshold)
 
     def _plate_forward(self, blob):
+        if isinstance(blob, torch.Tensor):
+            from vision_shield.detection.cuda_pixels import run
+
+            return run(self.plate, blob, self.plate_stream)[0]
         return self.plate.run(None, {self.plate.get_inputs()[0].name: blob})[0]
+
+    def _plate_input(self, bgr):
+        if not isinstance(bgr, torch.Tensor):
+            return super()._plate_input(bgr)
+        from vision_shield.detection.cuda_pixels import resize, pad, blob
+
+        height, width = bgr.shape[:2]
+        scale = min(320 / width, 320 / height)
+        resized_width, resized_height = max(1, round(width * scale)), max(1, round(height * scale))
+        left, top = (320 - resized_width) // 2, (320 - resized_height) // 2
+        with torch.cuda.stream(self.plate_stream):
+            bgr.record_stream(self.plate_stream)
+            view = resize(bgr, (resized_width, resized_height), "linear")
+            canvas = pad(view, left, 320 - resized_width - left, top, 320 - resized_height - top)
+            tensor = blob(canvas.flip(2), 1 / 255)
+        return tensor, resized_width, resized_height, left, top

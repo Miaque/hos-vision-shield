@@ -29,6 +29,32 @@ def test_candidate_timings_keep_each_model_span_without_changing_masks(monkeypat
     assert (pixels == 180).all()
 
 
+def test_cuda_candidates_share_one_prepared_frame():
+    from types import SimpleNamespace
+    from vision_shield.detection.quality import Detector
+
+    source = np.full((12, 12, 3), 180, np.uint8)
+    prepared = source.copy()
+    preparations, received = [], []
+
+    def prepare(pixels):
+        assert pixels is source
+        preparations.append(pixels)
+        return prepared
+
+    def candidates(pixels, *, kind=None):
+        received.append(pixels)
+        assert pixels is prepared
+        return []
+
+    detector = Detector.__new__(Detector)
+    detector.inference_device, detector.box_padding = "cuda", 0
+    detector.primary = SimpleNamespace(prepare=prepare, candidates=candidates)
+    detector.detail = SimpleNamespace(candidates=candidates)
+    assert detector.detect_regions(source) == []
+    assert len(preparations) == 1 and len(received) == 2
+
+
 def test_quality_is_default_and_requires_both_primary_and_detail_models(monkeypatch):
     from vision_shield.detection import load_detector, quality
 

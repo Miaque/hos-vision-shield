@@ -120,9 +120,11 @@ def test_nvenc_preserves_all_frames_clocks_audio_and_requested_mask(generated_me
         assert audio_payloads(source) == audio_payloads(target)
 
 
-def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(generated_media, tmp_path):
+def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(generated_media, tmp_path, monkeypatch):
     import time
 
+    # Windows GetTickCount64's 15.6ms ticks cannot measure these 1ms stages reliably.
+    monkeypatch.setattr(time, "monotonic", time.perf_counter)
     target = tmp_path / "timed.mp4"
     events = []
     class SlowDetector:
