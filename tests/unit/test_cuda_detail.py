@@ -83,3 +83,129 @@ def test_fixed_face_sessions_keep_dimensions_device_and_bounded_lifetime(monkeyp
         detector._face_session(height, 1280)
     assert len(detector.face_sessions) == 4 and (384, 1280) not in detector.face_sessions
     assert len(created) == 5 and all(session.disabled for session in created)
+
+
+@pytest.mark.parametrize("count,fault,parallel,kind", [(5, False, True, None), (6, False, True, None),
+    (5, True, True, None), (5, False, False, None), (5, False, True, "face"),
+    (5, False, True, "plate"), (5, False, True, "other")])
+def test_batched_views_keep_source_mapping_tail_and_fail_on_invalid_member(monkeypatch, count, fault, parallel, kind):
+    from contextlib import nullcontext
+    import torch
+    from vision_shield.detection import Detection
+    from vision_shield.detection.cuda_detail import Detector
+
+    detector = Detector.__new__(Detector)
+    detector.tile_side, detector.plate_stream, detector.parallel = 4, object(), parallel
+    bounds = [(4 * i, 0, 4 * i + 4, 4) for i in range(count)]
+    detector._views = lambda *args: iter(bounds)
+    detector._view = lambda pixels: pixels[::2, ::2]
+    detector._plate_input = lambda view: (torch.ones((1, 3, 320, 320)), 320, 320, 0, 0)
+    batches = []
+
+    def forward(tensor):
+        batches.append(len(tensor))
+        predictions = np.zeros((len(tensor), 6300, 15), np.float32)
+        predictions[:, 0, :5] = [160, 160, 160, 160, .9]
+        predictions[:, 0, 13] = 1
+        if fault:
+            predictions[2, 0, 0] = np.nan
+        return predictions
+
+    detector._plate_forward = forward
+    face = Detection("face", (0, 0, 1, 1), .9)
+    plate = Detection("plate", (.5, .5, 1.5, 1.5), .9)
+    detector._detect_view = lambda view, kind=None: ([face] if kind == "face" else [plate] if kind == "plate" else [face, plate])
+    monkeypatch.setattr(torch.cuda, "stream", lambda stream: nullcontext())
+    pixels = torch.ones((4, count * 4, 3), dtype=torch.uint8)
+    if fault:
+        with pytest.raises(ValueError, match="Invalid plate"):
+            detector._candidates(pixels, kind=kind)
+        return
+    detections = detector._candidates(pixels, kind=kind)
+    assert batches == ([] if not parallel or kind == "face" else [4] if count == 5 else [4, 2])
+    kinds = [kind] if kind in {"face", "plate"} else ["face", "plate"]
+    assert [d.kind for d in detections] == kinds * count
+    expected = [(left, 0, left + 2, 2) if target == "face" else (left + 1, 1, left + 3, 3)
+                for left, _, _, _ in bounds for target in kinds]
+    np.testing.assert_allclose([d.box for d in detections], expected)
+
+
+@pytest.mark.parametrize("provider", ["CUDAExecutionProvider", "CPUExecutionProvider"])
+def test_plate_sessions_keep_selected_device_fixed_batch_and_original_singleton(monkeypatch, provider):
+    import sys
+    from types import SimpleNamespace
+    import torch
+    from vision_shield.detection.cuda_detail import Detector
+
+    created = []
+
+    class Options:
+        def __init__(self):
+            self.dimensions, self.entries = {}, {}
+
+        def add_free_dimension_override_by_name(self, name, value):
+            self.dimensions[name] = value
+
+        def add_session_config_entry(self, name, value):
+            self.entries[name] = value
+
+    class Session:
+        def __init__(self, model, *, sess_options, providers):
+            assert model == b"batch-weights"
+            assert providers[0][1]["device_id"] == 2
+            assert sess_options.entries["session.disable_cpu_ep_fallback"] == "1"
+            self.batch, self.disabled = sess_options.dimensions["batch"], False
+            created.append(self)
+
+        def disable_fallback(self):
+            self.disabled = True
+
+        def get_providers(self):
+            return [provider]
+
+    monkeypatch.setitem(sys.modules, "onnxruntime", SimpleNamespace(SessionOptions=Options, InferenceSession=Session))
+    detector = Detector.__new__(Detector)
+    detector.device = torch.device("cuda", 2)
+    detector.plate, detector.plate_model, detector.plate_sessions = object(), b"batch-weights", {}
+    assert detector._plate_session(1) is detector.plate
+    if provider != "CUDAExecutionProvider":
+        with pytest.raises(RuntimeError, match="Plate CUDA provider"):
+            detector._plate_session(4)
+        assert not detector.plate_sessions
+        return
+    first = detector._plate_session(4)
+    for batch in (2, 3, 4):
+        assert detector._plate_session(batch).batch == batch
+    assert detector._plate_session(4) is first and len(detector.plate_sessions) == 3
+    assert len(created) == 3 and all(session.disabled for session in created)
+
+
+@pytest.mark.parametrize("fault", [None, "missing", "wrong_batch"])
+def test_batch_export_changes_shared_shape_metadata_and_preserves_learned_weights(fault):
+    onnx = pytest.importorskip("onnx")
+    from vision_shield.detection.cuda_detail import _batch_plate_model
+
+    shape = onnx.numpy_helper.from_array(np.array([1, -1, 1], np.int64), "shape")
+    weight = onnx.numpy_helper.from_array(np.array([1.25, -2.5], np.float32), "learned")
+    nodes = [onnx.helper.make_node("Reshape", ["input", "shape"], ["first"]),
+             onnx.helper.make_node("Reshape", ["first", "shape"], ["output"])]
+    graph = onnx.helper.make_graph(nodes, "shared-shape",
+        [onnx.helper.make_tensor_value_info("input", onnx.TensorProto.FLOAT, [1, 3, 2, 2])],
+        [onnx.helper.make_tensor_value_info("output", onnx.TensorProto.FLOAT, [1, 12, 1])], [shape, weight],
+        value_info=[onnx.helper.make_tensor_value_info("first", onnx.TensorProto.FLOAT, [1, 12, 1])])
+    model = onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 12)])
+    if fault == "missing":
+        model.graph.node[0].input[1] = "missing-shape"
+    elif fault == "wrong_batch":
+        model.graph.initializer[0].CopyFrom(onnx.numpy_helper.from_array(np.array([2, -1, 1], np.int64), "shape"))
+    if fault:
+        with pytest.raises(ValueError, match="Unsupported plate batch export"):
+            _batch_plate_model(model)
+        return
+    result = onnx.load_from_string(_batch_plate_model(model))
+    onnx.checker.check_model(result)
+    assert result.graph.input[0].type.tensor_type.shape.dim[0].dim_param == "batch"
+    assert result.graph.output[0].type.tensor_type.shape.dim[0].dim_param == "batch"
+    assert not result.graph.value_info
+    np.testing.assert_array_equal(onnx.numpy_helper.to_array(result.graph.initializer[0]), [0, -1, 1])
+    np.testing.assert_array_equal(onnx.numpy_helper.to_array(result.graph.initializer[1]), [1.25, -2.5])

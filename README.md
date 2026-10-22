@@ -23,6 +23,8 @@ GPU Compose 选用 `DETECTION_BACKEND=quality_yolo`，用轻量 YOLO 人脸候�
 
 `quality_yolo`在计算能力主版本至少8的GPU上使用FP16车牌模型参数和自动混合精度，沿用原Gen1骨干、RPN和ROI子图，保留FP32归一化及FP32输出坐标/分数。RPN按分数排序后最多512个候选进入ROI头；较旧GPU及其他后端保持原路径。ONNX精度设置不变。候选裁减可能影响召回，精度变化可能改变临界分数及框，效果和吞吐均须在目标服务器验证，见[时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)。
 
+CUDA补充车牌检测将最多4个原有视图合批推理，保留各自的letterbox、坐标和全部检测区域；阈值、跨模型确认与逐帧跟踪不变。单视图、NumPy局部复核及串行设置沿用原路径。批量内核的浮点差异仍需用目标服务器素材校准。
+
 ### 本机 GTX 1080
 
 先执行 `uv sync --frozen --extra cuda`，在 `.env` 设置 `INFERENCE_DEVICE=cuda`，然后运行原有 `scripts/start-application.ps1`。EgoBlur 使用 PyTorch CUDA，YuNet/HyperLPR 使用 ONNX Runtime CUDA，模型输入预处理也在GPU完成。兼容的离线H.264视频采用NVDEC解码、GPU颜色转换/遮罩及NVENC编码；跟踪仍下载灰度图，局部确认按需下载裁剪。解码格式边界及实际编解码器响应头见[诊断说明](specs/002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。CUDA 推理不可用时启动失败，不静默降级。要使用 CPU，只需改为 `INFERENCE_DEVICE=cpu` 后重启应用。未设置该字段仍默认 CPU；轻量 `DETECTION_BACKEND=cpu` 不接受 cuda 设备。

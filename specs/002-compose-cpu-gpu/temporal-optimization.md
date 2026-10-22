@@ -424,3 +424,19 @@ FP32与强制FP16原型均通过15个可用样例全部必验/保留区域，rts
 完整显式GPU/媒体回归40项通过（131.38秒），含真实CUDA模型/预处理、自动及强制半精度NVDEC连续轨迹、两种遮罩、静音/AAC/VFR、旋转和硬解失败策略；17条警告来自上游TorchScript弃用/meshgrid提示。现有GPU帧路径仍需全幅灰度下载以做CPU模板跟踪，ONNX密集输出也仍传CPU后处理；本轮减少ROI运算量，未宣称全部后处理已搬到GPU。
 
 测试完成后对实际产品_HalfPlate再做同52帧、反转顺序的两轮独占GPU对照：21.960979→20.827071秒、21.907037→21.114182秒，分别减少5.16%/3.62%。记录product-benchmark.json，包含GPU帧处理但不含编码/初始化，不外推为目标服务器端到端提升。
+
+## 第二十一轮：合批CUDA补充车牌视图（opt-20261022-13）
+
+继续本地优化，未访问服务器API或重新部署。上一轮a52eb83与opt-20261022-12已经推送，并核对远端分支及标签剥离提交一致，main仍debf404。本轮位于feature/plate-view-batching，基于a52eb83，供环境恢复后逐轮验收，不混淆原车牌半精度、ROI裁减和本轮合批收益。
+
+原4K补充检测含全图和3个分块，每个视图分别调用HyperLPR并等待CPU输出。现将连续最多4个视图的原320×320 letterbox输入合批，仍执行每个原视图，各自解码/NMS并映射到原位置。原浮点权重/磁盘哈希、opset 12、阈值、确认、每帧跟踪和编解码均不变；无新依赖、配置或接口参数。单视图、NumPy局部复核、仅人脸或parallel=False沿用原串行迭代。CPU只抽出原解码与坐标映射供复用，仍逐视图准备与检测，避免为合批复制一份验证规则。
+
+HyperLPR固定导出的10个共享形状initializer首项从1改为0，按[ONNX Reshape语义](https://onnx.ai/onnx/operators/onnx__Reshape.html)继承输入batch，清理旧batch=1的中间形状元数据；保留原文件，内存副本以固定batch 2/3/4复用最多3个额外会话。选择已配置的GPU，禁止CPU回退。实际模型验证不同内容输入的2/3/4批量逐张匹配原单张结果；最大原始坐标差约0.000161，不能宣称数学逐位无损。每个批量实际算子提供方均为CUDA。共享initializer、尾批、源坐标、批内NaN失败和所选cuda:2均有回归，新增测试在原代码6项先失败。
+
+本机GTX1080独立交错测量中，4个原车牌输入由23.423毫秒减至6.186毫秒；YuNet 3张合批仅减少约4毫秒。完整帧原型对照：只重排两类检测没有稳定收益，加入HyperLPR合批为16.279→15.572、15.912→15.497秒；再合批YuNet没有稳定额外收益，未采用。实际产品对同52帧4K GPU路径（NVDEC、GPU颜色转换/预处理、全部检测/确认、CPU跟踪、GPU遮罩）逐帧交错、次轮反转顺序：14.893581→14.563685秒、14.930097→14.548922秒，减少2.22%/2.55%。未包含编码、任务初始化或双路并发，不外推RTX6000端到端FPS。
+
+实际产品15个可用质量样例所有必验/保留区域通过，包含真实3840×1080的image-7；最终遮挡像素均与a52eb83一致，rtsp-green缺素材仍未验。151帧连续片段也全部一致，保留三处头部、门/衣服、侧脸/手提包、夜间17秒主脸检查；52帧实际NVDEC回放另逐平面对比新旧GPU输出Y/UV，全部一致。证据data/validation/batched-yunet-20261022/{probe.json,plate-probe.json,variants-quality.json,variants-benchmark.json,product-quality.json,product-clips.json,product-benchmark.json,batch-before.log,preprocess.log,unit-media.log}。已知夜间招牌误遮不在本轮修复范围，目标服务器恢复后仍须质量、完整双路及夜间验收；无稳定服务器收益或质量回退则撤回。
+
+强制原RTX半精度路径另测：15图、151帧连续片段及实际GPU输出平面对照同样一致；52帧两轮21.944845→21.703290、22.100787→21.777589秒，仅减少1.10%/1.46%，如实保留较小收益，不以FP32数据代替。GTX1080没有Tensor Core，结果仍不能证明RTX6000收益。记录half/{product-quality.json,product-clips.json,product-benchmark.json}。
+
+最终默认单元/媒体330项通过（31.49秒），20项显式GPU默认跳过；完整显式GPU/媒体42项同次执行通过（105.40秒），包含真实模型冷启动：首次NVDEC处理期间创建batch=4及尾批batch=3会话，实际完成NVENC编码，24帧及所有帧时钟/尺寸一致。覆盖实际CUDA算子、两种遮罩、静音/AAC/VFR、旋转及失败策略，上游18条弃用提示不计为应用失败；类别选择与原有语义的兼容性也有回归。未触发服务器或RTSP。源模型形状guard反转实验使2项测试失败后，已逐字节恢复原文件，证明导出契约回归确实拦截错误。最终证据unit-media-final.log、gpu-media-final.log；专项记录cold-gpu.log、cold-default.log、mutation.log。

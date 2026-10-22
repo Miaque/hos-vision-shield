@@ -12,6 +12,27 @@ FACE_THRESHOLD = 0.3
 PLATE_THRESHOLD = 0.25
 
 
+def decode_plates(predictions, width, height, resized_width, resized_height, left, top):
+    if predictions.shape != (1, 6300, 15) or not np.isfinite(predictions).all():
+        raise ValueError("Invalid plate detector output")
+    rows = predictions[0]
+    scores = rows[:, 4] * rows[:, 13:15].max(axis=1)
+    selected = np.flatnonzero(scores > PLATE_THRESHOLD)
+    boxes = rows[selected, :4].copy()
+    boxes[:, :2] -= boxes[:, 2:] / 2
+    if np.any(boxes[:, 2:] <= 0):
+        raise ValueError("Invalid plate dimensions")
+    detections = []
+    for index in np.asarray(cv2.dnn.NMSBoxes(boxes.tolist(), scores[selected].tolist(), PLATE_THRESHOLD, 0.3)).reshape(-1):
+        x, y, w, h = boxes[index]
+        detections.append(Detection("plate", ((float(x) - left) * width / resized_width,
+                                              (float(y) - top) * height / resized_height,
+                                              (float(x + w) - left) * width / resized_width,
+                                              (float(y + h) - top) * height / resized_height),
+                                    float(scores[selected[index]])))
+    return detections
+
+
 class Detector:
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=FACE_THRESHOLD,
                  parallel=False, tile_side=640):
@@ -49,27 +70,30 @@ class Detector:
         return self._candidates(rgb, kind=kind)
 
     def _candidates(self, rgb, *, kind=None):
-        height, width = rgb.shape[:2]
         boxes = []
-        for left, top, right, bottom in self._views(width, height, self.tile_side):
-            source = rgb[top:bottom, left:right]
-            view_height, view_width = source.shape[:2]
-            view = self._view(source)
-            x_scale, y_scale = view_width / view.shape[1], view_height / view.shape[0]
-            for detection in self._detect_view(view, kind=kind):
+        for left, top, source_shape, view_shape, detections in self._view_detections(rgb, kind=kind):
+            x_scale, y_scale = source_shape[1] / view_shape[1], source_shape[0] / view_shape[0]
+            for detection in detections:
                 x1, y1, x2, y2 = detection.box
                 if (detection.kind not in {"face", "plate"}
                         or not all(math.isfinite(v) for v in (*detection.box, detection.score))
                         or not 0 <= detection.score <= 1 or x2 <= x1 or y2 <= y1):
                     raise ValueError("Invalid detector output")
-                x1, x2 = max(0, x1), min(view.shape[1], x2)
-                y1, y2 = max(0, y1), min(view.shape[0], y2)
+                x1, x2 = max(0, x1), min(view_shape[1], x2)
+                y1, y2 = max(0, y1), min(view_shape[0], y2)
                 if x2 <= x1 or y2 <= y1:
                     continue
                 x1, x2 = left + x1 * x_scale, left + x2 * x_scale
                 y1, y2 = top + y1 * y_scale, top + y2 * y_scale
                 boxes.append(Detection(detection.kind, (x1, y1, x2, y2), detection.score))
         return boxes
+
+    def _view_detections(self, rgb, *, kind=None):
+        height, width = rgb.shape[:2]
+        for left, top, right, bottom in self._views(width, height, self.tile_side):
+            source = rgb[top:bottom, left:right]
+            view = self._view(source)
+            yield left, top, source.shape[:2], view.shape[:2], self._detect_view(view, kind=kind)
 
     def _view(self, rgb):
         view = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
@@ -122,23 +146,7 @@ class Detector:
         # HyperLPR's detection-only 320 model expects letterboxed RGB / 255, not OCR tensors.
         blob, resized_width, resized_height, left, top = self._plate_input(bgr)
         predictions = self._plate_forward(blob)
-        if predictions.shape != (1, 6300, 15) or not np.isfinite(predictions).all():
-            raise ValueError("Invalid plate detector output")
-        rows = predictions[0]
-        scores = rows[:, 4] * rows[:, 13:15].max(axis=1)
-        selected = np.flatnonzero(scores > PLATE_THRESHOLD)
-        boxes = rows[selected, :4].copy()
-        boxes[:, :2] -= boxes[:, 2:] / 2
-        if np.any(boxes[:, 2:] <= 0):
-            raise ValueError("Invalid plate dimensions")
-        for index in np.asarray(cv2.dnn.NMSBoxes(boxes.tolist(), scores[selected].tolist(), PLATE_THRESHOLD, 0.3)).reshape(-1):
-            x, y, w, h = boxes[index]
-            detections.append(Detection("plate", ((float(x) - left) * width / resized_width,
-                                                  (float(y) - top) * height / resized_height,
-                                                  (float(x + w) - left) * width / resized_width,
-                                                  (float(y + h) - top) * height / resized_height),
-                                        float(scores[selected[index]])))
-        return detections
+        return detections + decode_plates(predictions, width, height, resized_width, resized_height, left, top)
 
     def _plate_input(self, bgr):
         height, width = bgr.shape[:2]
