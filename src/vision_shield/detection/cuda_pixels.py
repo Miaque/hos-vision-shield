@@ -58,12 +58,15 @@ def resize(pixels, size, mode):
     result = pixels
     if pixels.shape[1] != width:
         indices, weights = _weights(pixels.shape[1], width, mode, str(pixels.device))
-        result = (pixels[:, indices, :].float() * weights[None, :, :, None]).sum(2)
+        # Reduce weighted samples without materializing every tap for every source row.
+        result = F.embedding_bag(indices, pixels.permute(1, 0, 2).reshape(pixels.shape[1], -1).float(),
+                                 mode="sum", per_sample_weights=weights).reshape(width, pixels.shape[0], 3).permute(1, 0, 2)
         if mode == "lanczos":
             result = (result + 0.5).floor().clamp(0, 255).byte()
     if pixels.shape[0] != height:
         indices, weights = _weights(pixels.shape[0], height, mode, str(pixels.device))
-        result = (result[indices, :, :].float() * weights[:, :, None, None]).sum(1)
+        result = F.embedding_bag(indices, result.reshape(result.shape[0], -1).float(),
+                                 mode="sum", per_sample_weights=weights).reshape(height, width, 3)
     return ((result + 0.5).floor() if mode == "lanczos" else result.round()).clamp(0, 255).byte()
 
 

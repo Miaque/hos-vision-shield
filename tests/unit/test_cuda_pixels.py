@@ -25,6 +25,23 @@ def test_model_resize_keeps_reference_interpolation(shape, size, mode):
     np.testing.assert_array_equal(pixels, original)
 
 
+@pytest.mark.parametrize("mode,size", [(mode, size) for mode in ("lanczos", "area")
+                                     for size in ((7, 11), (15, 7), (15, 11), (5, 3), (27, 31))
+                                     if mode != "area" or size[0] <= 15 and size[1] <= 11])
+def test_strided_resize_keeps_axis_order_and_source(mode, size):
+    from vision_shield.detection.cuda_pixels import resize
+
+    source = np.random.default_rng(31).integers(0, 256, (21, 31, 3), dtype=np.uint8)
+    original = source.copy()
+    pixels = source[::2, 1::2]
+    expected = (np.array(Image.fromarray(pixels).resize(size, Image.Resampling.LANCZOS)) if mode == "lanczos"
+                else cv2.resize(pixels, size, interpolation=cv2.INTER_AREA))
+    actual = resize(torch.from_numpy(pixels), size, mode).numpy()
+    assert actual.shape == expected.shape and actual.dtype == np.uint8
+    assert np.abs(actual.astype(np.int16) - expected).max() <= 1
+    np.testing.assert_array_equal(source, original)
+
+
 @pytest.mark.parametrize("pixels", [np.zeros((0, 3, 3), np.uint8), np.zeros((2, 2, 4), np.uint8),
                                     np.zeros((2, 2, 3), np.float32), torch.zeros((2, 2, 3), dtype=torch.uint8)])
 def test_invalid_cuda_pixels_fail_before_copy_or_inference(pixels):

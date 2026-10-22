@@ -12,6 +12,24 @@ from vision_shield.config import Settings
 from vision_shield.detection import load_detector, cuda_pixels
 
 
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual CUDA resize")
+@pytest.mark.parametrize("mode", ["lanczos", "area"])
+def test_4k_resize_has_bounded_temporary_memory_and_matching_pixels(mode):
+    pixels = np.random.default_rng(31).integers(0, 256, (1080, 3840, 3), dtype=np.uint8)
+    tensor = torch.from_numpy(pixels).cuda()
+    expected = (np.array(Image.fromarray(pixels).resize((1280, 360), Image.Resampling.LANCZOS)) if mode == "lanczos"
+                else cv2.resize(pixels, (1280, 360), interpolation=cv2.INTER_AREA))
+    torch.cuda.synchronize()
+    torch.cuda.reset_peak_memory_stats()
+    initial = torch.cuda.memory_allocated()
+    actual = cuda_pixels.resize(tensor, (1280, 360), mode)
+    torch.cuda.synchronize()
+    # Bound per-view working memory while multiple detectors share the GPU.
+    assert torch.cuda.max_memory_allocated() - initial < 96 * 1024**2
+    assert np.abs(actual.cpu().numpy().astype(np.int16) - expected).max() <= 1
+    np.testing.assert_array_equal(tensor.cpu().numpy(), pixels)
+
+
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual CUDA models")
 @pytest.mark.parametrize("height,width", [(321, 319), (1080, 3840)])
 def test_gpu_preprocessing_binds_matching_pixels_without_cpu_image_operations(monkeypatch, height, width):
