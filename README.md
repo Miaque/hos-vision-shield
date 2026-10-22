@@ -23,7 +23,7 @@ GPU Compose 选用 `DETECTION_BACKEND=quality_yolo`，用轻量 YOLO 人脸候�
 
 `quality_yolo`在计算能力主版本至少8的GPU上使用FP16车牌模型参数和自动混合精度，沿用原Gen1完整执行图，保留FP32归一化、FP32输出坐标/分数及最多1000个ROI候选，撤回服务器实测没有收益的512候选裁减；较旧GPU及其他后端保持原路径。ONNX精度设置不变。精度变化可能改变临界分数及框，效果和吞吐均须在目标服务器验证，见[时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)。
 
-CUDA补充车牌检测恢复原有视图逐张推理，撤回服务器实测没有收益的视图合批。保留全部检测区域、letterbox、阈值、跨模型确认与逐帧跟踪；NVDEC、GPU预处理/推理/遮罩和NVENC路径保持。当前完整4K双路含初始化13.45/13.56 FPS，尚未达到每路15 FPS。
+CUDA补充车牌检测恢复原有视图逐张推理，撤回服务器实测没有收益的视图合批。保留全部检测区域、letterbox、阈值、跨模型确认与逐帧跟踪；NVDEC、GPU预处理/推理/遮罩和NVENC路径保持。完整4K双路两次基线验收含初始化约13.0–13.6 FPS，尚未达到每路15 FPS。
 
 ### 本机 GTX 1080
 
