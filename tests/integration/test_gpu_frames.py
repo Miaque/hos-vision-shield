@@ -14,6 +14,32 @@ from tests.integration.test_video_pipeline import FixedDetector
 
 
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
+def test_every_third_gpu_detection_preserves_all_frames_clocks_and_audio(generated_media, tmp_path):
+    from tests.integration.test_media_probe import audio_payloads
+
+    class NoTargets:
+        calls = 0
+
+        def detect(self, pixels):
+            assert pixels.is_cuda
+            self.calls += 1
+            return []
+
+    source, target = generated_media / 'aac.mp4', tmp_path / 'cadence.mp4'
+    detector, events = NoTargets(), []
+    config = {**Settings(_env_file=None, inference_device='cuda').model_dump(), 'detection_interval': 3}
+    process_video(source, target, detector, config, threading.Event(), events.append)
+    with av.open(source) as reader:
+        expected = [f.pts * f.time_base for f in reader.decode(video=0)]
+    with av.open(target) as reader:
+        assert [f.pts * f.time_base for f in reader.decode(video=0)] == expected
+    assert detector.calls == 8 and len(expected) == 24
+    assert events[-1]['detection_stats'] == dict(full_frames=8, skipped_frames=16, local_rechecks=0)
+    assert events[-1]['video_decoder'] == 'h264_nvdec' and events[-1]['video_encoder'] == 'h264_nvenc'
+    assert audio_payloads(source) == audio_payloads(target)
+
+
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
 @pytest.mark.parametrize("angle", [90, 180, 270])
 def test_nvdec_rotation_keeps_clocks_and_masks(generated_media, tmp_path, angle):
     source, target = tmp_path / "rotated.mp4", tmp_path / "result.mp4"

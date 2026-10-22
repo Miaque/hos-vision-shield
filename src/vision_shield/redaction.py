@@ -48,10 +48,14 @@ class _Track(NamedTuple):
 class FrameRedactor:
     """Follow confirmed masks briefly; only actual detections may renew their lifetime."""
 
-    def __init__(self, detector, *, mode="solid"):
+    def __init__(self, detector, *, mode="solid", detection_interval=1):
         if mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
+        if type(detection_interval) is not int or detection_interval not in (1, 3):
+            raise ValueError("Unsupported detection interval")
         self.mode = mode
+        self.detection_interval, self.frame_index = detection_interval, 0
+        self.detection_stats = dict(full_frames=0, skipped_frames=0, local_rechecks=0)
         self.detector = detector
         self.stage_times = getattr(detector, "stage_times", None)
         self.history = deque(maxlen=128)
@@ -76,7 +80,11 @@ class FrameRedactor:
             self.gray = None
         elapsed = moment - self.moment if not reset else 0
         self.previous, self.shape, self.moment = thumbnail, pixels.shape, moment
-        detections = self._merge_detections(self._detections(pixels))
+        # shortcut: new entries can wait two frames; keep interval 1 unless offline quality review passes.
+        detect = self.frame_index % self.detection_interval == 0
+        self.frame_index += 1
+        detections = self._merge_detections(self._detections(pixels)) if detect else []
+        self.detection_stats["full_frames" if detect else "skipped_frames"] += 1
         boxes = [detection.box for detection in detections]
         if gray is None:
             gray = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
@@ -178,6 +186,7 @@ class FrameRedactor:
         union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - intersection
         return intersection / union if union > 0 else 0
 
+    @timed("track-update")
     def _follow(self, gray, box, reference=None):
         previous = self.gray if reference is None else reference
         if previous is None:
@@ -214,6 +223,7 @@ class FrameRedactor:
 
     @timed("track-confirm")
     def _recheck(self, pixels, box, kind=""):
+        self.detection_stats["local_rechecks"] += 1
         x1, y1, x2, y2 = box
         size = max(96, 3 * max(x2 - x1, y2 - y1))
         left, top = max(0, math.floor((x1 + x2 - size) / 2)), max(0, math.floor((y1 + y2 - size) / 2))

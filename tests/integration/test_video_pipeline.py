@@ -17,9 +17,12 @@ class FixedDetector:
 
 
 @pytest.mark.parametrize("name", ["silent.mp4", "aac.mp4", "vfr.mp4"])
-def test_video_preserves_frames_clocks_and_audio(generated_media, tmp_path, name):
+@pytest.mark.parametrize("interval", [1, 3])
+def test_video_preserves_frames_clocks_and_audio(generated_media, tmp_path, name, interval):
     source, target = generated_media / name, tmp_path / name
-    process_video(str(source), str(target), FixedDetector(), Settings(_env_file=None).model_dump(), threading.Event(), lambda event: None)
+    events = []
+    config = {**Settings(_env_file=None).model_dump(), 'detection_interval': interval}
+    process_video(str(source), str(target), FixedDetector(), config, threading.Event(), events.append)
     with av.open(str(source)) as a:
         expected = [frame.pts * frame.time_base for frame in a.decode(video=0)]
     with av.open(str(target)) as b:
@@ -28,6 +31,8 @@ def test_video_preserves_frames_clocks_and_audio(generated_media, tmp_path, name
         assert all(abs(int(v) - 64) < 10 for v in frames[0].to_ndarray(format="rgb24")[20, 20])
     if name == "aac.mp4":
         assert audio_payloads(source) == audio_payloads(target)
+    assert events[-1]['detection_stats']['full_frames'] == (len(expected) + interval - 1) // interval
+    assert events[-1]['detection_stats']['skipped_frames'] == len(expected) - events[-1]['detection_stats']['full_frames']
 
 
 def test_rotation_is_applied_and_cancellation_stops_processing(generated_media, tmp_path):
