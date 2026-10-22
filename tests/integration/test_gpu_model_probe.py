@@ -80,7 +80,7 @@ def test_detail_model_nodes_execute_on_cuda(monkeypatch, tmp_path):
 
 @pytest.mark.integration
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
-@pytest.mark.parametrize("case_id", ["image-7", "face-video2-10s", "video-04-frame-24"])
+@pytest.mark.parametrize("case_id", ["image-7", "face-video2-10s", "video-04-frame-24", "image-2"])
 def test_yolo_quality_keeps_reviewed_regions_and_all_face_nodes_on_cuda(monkeypatch, tmp_path, case_id):
     import onnxruntime as ort
 
