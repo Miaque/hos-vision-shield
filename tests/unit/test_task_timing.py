@@ -69,6 +69,13 @@ async def test_task_stage_timings_are_headers_and_do_not_change_the_json_contrac
         response = await client.get(f"/v1/tasks/{record['id']}")
         assert response.headers["server-timing"].endswith("task-candidate-primary;dur=800.000, task-candidate-detail;dur=600.000")
         assert "secret" not in str(response.headers) and "timings" not in response.json()
+        record["video_encoder"] = "h264_nvenc"
+        response = await client.get(f"/v1/tasks/{record['id']}")
+        assert response.headers["x-video-encoder"] == "h264_nvenc"
+        assert "video_encoder" not in response.json()
+        record["video_encoder"] = "private-secret"
+        response = await client.get(f"/v1/tasks/{record['id']}")
+        assert "x-video-encoder" not in response.headers
         del record["timings"]
         response = await client.get(f"/v1/tasks/{record['id']}")
         assert "server-timing" not in response.headers

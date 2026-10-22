@@ -46,8 +46,9 @@ def masked_frame(frame: av.VideoFrame, detector: "Detector | FrameRedactor", ori
     return output
 
 
-def add_video(writer, frame, source, live=False):
-    video = writer.add_stream("libx264", rate=source.average_rate or 25)
+def add_video(writer, frame, source, live=False, *, device="cpu"):
+    encoder = "h264_nvenc" if device == "cuda" and not live else "libx264"
+    video = writer.add_stream(encoder, rate=source.average_rate or 25)
     video.width, video.height = frame.width, frame.height
     if frame.width % 2 or frame.height % 2:
         raise ValueError("H.264 output requires even dimensions")
@@ -59,7 +60,13 @@ def add_video(writer, frame, source, live=False):
         # Sparse processed frames must remain immediately decodable by new readers.
         video.codec_context.gop_size = 1
     else:
-        video.options = {"preset": "slow", "crf": "23"}
+        if encoder == "h264_nvenc":
+            import torch
+            video.bit_rate = 0
+            video.options = {"preset": "p6", "tune": "hq", "rc": "vbr", "cq": "19",
+                             "gpu": str(torch.cuda.current_device()), "bf": "3"}
+        else:
+            video.options = {"preset": "slow", "crf": "23"}
         if source.bit_rate and source.bit_rate > 0:
             # 保留质量目标，以源平均码率的 115% 设两秒 VBV；不是文件大小硬上限。
             maximum = round(source.bit_rate * 1.15)
@@ -110,7 +117,7 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                     frame_seconds += time.monotonic() - stage
                     stage = time.monotonic()
                     if video is None:
-                        video = add_video(writer, output, input_video)
+                        video = add_video(writer, output, input_video, device=config.get("inference_device", "cpu"))
                         for audio_packet in pending_audio:
                             writer.mux(audio_packet)
                         pending_audio.clear()
@@ -120,7 +127,8 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                         writer.mux(encoded)
                     encode_seconds += time.monotonic() - stage
                     count += 1
-                    emit({"stats": {"processed_frames": count, "dropped_frames": 0,
+                    emit({"video_encoder": video.codec_context.name,
+                          "stats": {"processed_frames": count, "dropped_frames": 0,
                                     "elapsed_seconds": time.monotonic() - started},
                           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
                                           encode=encode_seconds, **redactor.candidate_timings)})
@@ -130,7 +138,8 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
         for packet in video.encode():
             writer.mux(packet)
     encode_seconds += time.monotonic() - stage
-    emit({"stats": {"processed_frames": count, "dropped_frames": 0, "elapsed_seconds": time.monotonic() - started},
+    emit({"video_encoder": video.codec_context.name,
+          "stats": {"processed_frames": count, "dropped_frames": 0, "elapsed_seconds": time.monotonic() - started},
           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
                           encode=encode_seconds, **redactor.candidate_timings)})
     return count

@@ -31,3 +31,28 @@ def test_live_encoding_keeps_its_low_latency_options():
     add_video(writer, frame, SimpleNamespace(average_rate=Fraction(25)), live=True)
     assert video.options == {"preset": "ultrafast", "tune": "zerolatency", "bf": "0"}
     assert video.codec_context.gop_size == 1
+
+
+def test_cuda_file_encoding_uses_nvenc_on_the_selected_device(monkeypatch):
+    import torch
+
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 2)
+    video = SimpleNamespace(codec_context=SimpleNamespace())
+    writer = SimpleNamespace(add_stream=Mock(return_value=video))
+    frame = SimpleNamespace(width=3840, height=1080, time_base=Fraction(1, 16000))
+    source = SimpleNamespace(average_rate=Fraction(15), bit_rate=2_000_000)
+    add_video(writer, frame, source, device="cuda")
+    writer.add_stream.assert_called_once_with("h264_nvenc", rate=Fraction(15))
+    assert video.options["gpu"] == "2" and video.options["rc"] == "vbr"
+    assert video.options["preset"] == "p6" and video.options["tune"] == "hq"
+    assert video.options["cq"] == "19" and "crf" not in video.options
+    assert video.options["maxrate"] == "2300000" and video.options["bufsize"] == "4600000"
+    assert video.time_base == video.codec_context.time_base == frame.time_base
+
+
+def test_unavailable_nvenc_is_never_replaced_with_cpu_encoding():
+    writer = SimpleNamespace(add_stream=Mock(side_effect=RuntimeError("NVENC unavailable")))
+    frame = SimpleNamespace(width=320, height=240, time_base=Fraction(1, 15))
+    with pytest.raises(RuntimeError, match="NVENC unavailable"):
+        add_video(writer, frame, SimpleNamespace(average_rate=Fraction(15)), device="cuda")
+    writer.add_stream.assert_called_once_with("h264_nvenc", rate=Fraction(15))

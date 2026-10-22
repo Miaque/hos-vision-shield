@@ -43,6 +43,10 @@ GPU 指标明确为 `scope=device`，并非项目进程独占用量；同一显�
 
 文件最终stats现在在MP4关闭后上报，计入此前遗漏的编码器冲刷/封装收尾，不能把计时口径变化称作处理提速。阶段数值随stats在原任务所有权/代次校验下原子更新，不返回源地址、凭据或模型路径。
 
+`GET /v1/tasks/{id}`还可返回`X-Video-Encoder`，仅允许`libx264`/`h264_nvenc`，来自实际视频编码事件并随任务所有权校验持久化。旧任务、尚未开始编码的任务及未上报编码器的媒体路径没有该头；JSON不增加字段。该头、成功任务和可完整解码的输出共同验证实际使用的编码器，不能只凭编码器列表认定NVENC工作。
+
+CUDA离线视频使用NVENC p6/hq/VBR CQ19，并保留源平均码率115%的maxrate及两秒VBV；CPU离线仍为x264 slow/CRF23，流的低延迟编码策略另行验证。CQ19与CRF23不可等同，源尺寸和时间戳不变也不表示画质无损。当前NVENC入口仍接收CPU RGB帧，颜色转换和上传仍存在，不能称作全GPU或零拷贝。GPU容器显式暴露`compute,utility,video`驱动能力，沿用原选卡范围；`video`用于Video Codec SDK，参见[NVIDIA容器文档](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html)。
+
 ## 部署
 
 在服务器仓库更新源码，等当前任务完成后，在原项目根目录执行：

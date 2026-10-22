@@ -1,3 +1,4 @@
+import os
 import threading
 import subprocess
 
@@ -90,6 +91,33 @@ def test_video_mosaic_configuration_reaches_encoded_frames(generated_media, tmp_
         actual = next(reader.decode(video=0)).to_ndarray(format='rgb24')[20, 20]
     assert all(abs(int(a) - int(b)) < 10 for a, b in zip(actual, expected))
     assert any(abs(int(v) - 64) > 10 for v in actual), '必须实际使用马赛克而非默认灰块'
+
+
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVIDIA video encoder")
+@pytest.mark.parametrize("name,mode", [("silent.mp4", "solid"), ("aac.mp4", "solid"),
+                                       ("aac.mp4", "mosaic"), ("vfr.mp4", "solid")])
+def test_nvenc_preserves_all_frames_clocks_audio_and_requested_mask(generated_media, tmp_path, name, mode):
+    from vision_shield.redaction import redact
+
+    source, target = generated_media / name, tmp_path / name
+    config = {**Settings(_env_file=None).model_dump(), "inference_device": "cuda", "redaction_mode": mode}
+    events = []
+    process_video(source, target, FixedDetector(), config, threading.Event(), events.append)
+    with av.open(str(source)) as reader:
+        frames = list(reader.decode(video=0))
+        clocks = [frame.pts * frame.time_base for frame in frames]
+        expected = redact(frames[0].to_ndarray(format="rgb24"), [(10, 10, 30, 30)], mode=mode)[20, 20]
+    with av.open(str(target)) as reader:
+        frames = list(reader.decode(video=0))
+        assert [frame.pts * frame.time_base for frame in frames] == clocks
+        assert all((frame.width, frame.height) == (320, 240) for frame in frames)
+        actual = frames[0].to_ndarray(format="rgb24")[20, 20]
+        assert all(abs(int(a) - int(b)) < 10 for a, b in zip(actual, expected))
+    assert events[-1]["stats"]["processed_frames"] == len(clocks)
+    assert events[-1]["stats"]["dropped_frames"] == 0
+    assert all(event["video_encoder"] == "h264_nvenc" for event in events)
+    if name == "aac.mp4":
+        assert audio_payloads(source) == audio_payloads(target)
 
 
 def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(generated_media, tmp_path):
