@@ -41,6 +41,10 @@ def test_quality_cuda_runs_local_models_and_preserves_reviewed_regions(case_id):
     expected = detector.detect(pixels)
     detector.detail.parallel = True
     actual = detector.detect(pixels)
+    stages = detector.stage_times.snapshot()
+    for name in ("prepare-primary", "prepare-detail", "forward-primary-plate", "forward-detail-face",
+                 "forward-detail-plate", "post-primary", "post-detail", "output-copy", "explicit-sync"):
+        assert stages[name] > 0, name
     np.testing.assert_allclose(actual, expected, rtol=0, atol=0.001,
                                err_msg="并行补充检测仅允许亚像素浮点波动，遮挡像素须完全相同")
     masked = redact(pixels, actual)

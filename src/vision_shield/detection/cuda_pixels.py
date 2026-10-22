@@ -6,20 +6,25 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from vision_shield.detection.timing import measure
 
-def upload(pixels, device):
+
+def upload(pixels, device, *, timing=None):
     if isinstance(pixels, torch.Tensor):
         if (not pixels.is_cuda or pixels.dtype != torch.uint8 or pixels.ndim != 3
                 or pixels.shape[2] != 3 or not pixels.numel()
                 or pixels.device.index != (device.index if device.index is not None else torch.cuda.current_device())):
             raise ValueError("Expected nonempty CUDA RGB uint8 pixels on the selected device")
-        torch.cuda.current_stream(device).synchronize()
+        with measure(timing, "explicit-sync"):
+            torch.cuda.current_stream(device).synchronize()
         return pixels
     if not isinstance(pixels, np.ndarray) or pixels.ndim != 3 or pixels.shape[2] != 3 or pixels.dtype != np.uint8 or not pixels.size:
         raise ValueError("Expected nonempty RGB uint8 pixels")
-    result = torch.from_numpy(np.ascontiguousarray(pixels)).to(device)
+    with measure(timing, "input-copy"):
+        result = torch.from_numpy(np.ascontiguousarray(pixels)).to(device)
     # Both model threads must see the completed upload, including their own streams.
-    torch.cuda.current_stream(device).synchronize()
+    with measure(timing, "explicit-sync"):
+        torch.cuda.current_stream(device).synchronize()
     return result
 
 
@@ -79,12 +84,16 @@ def blob(pixels, scale=1):
     return result.mul_(scale) if scale != 1 else result
 
 
-def run(session, tensor, stream):
-    stream.synchronize()
+def run(session, tensor, stream, *, timing=None, stage="forward-primary-face"):
+    with measure(timing, "explicit-sync"):
+        stream.synchronize()
     binding = session.io_binding()
     binding.bind_input(session.get_inputs()[0].name, "cuda", tensor.device.index,
                        np.float32, tuple(tensor.shape), tensor.data_ptr())
     for output in session.get_outputs():
         binding.bind_output(output.name, "cpu")
-    session.run_with_iobinding(binding)
-    return binding.copy_outputs_to_cpu()
+    # CPU-bound ORT outputs include device execution, implicit waits and DToH in this call.
+    with measure(timing, stage):
+        session.run_with_iobinding(binding)
+    with measure(timing, "output-copy"):
+        return binding.copy_outputs_to_cpu()

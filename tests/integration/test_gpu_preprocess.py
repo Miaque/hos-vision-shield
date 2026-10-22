@@ -67,12 +67,12 @@ def test_gpu_preprocessing_binds_matching_pixels_without_cpu_image_operations(mo
         expected[detail.plate].append((cv2.dnn.blobFromImage(canvas, 1 / 255, swapRB=True), 2 / 255 + 1e-6))
     run = cuda_pixels.run
 
-    def capture(session, tensor, stream):
+    def capture(session, tensor, stream, **timing):
         assert tensor.is_cuda and tensor.dtype == torch.float32 and tensor.is_contiguous()
         reference_session = detail.face if session in detail.face_sessions.values() else session
         reference, tolerance = expected[reference_session].pop(0)
         np.testing.assert_allclose(tensor.cpu().numpy(), reference, rtol=0, atol=tolerance)
-        return run(session, tensor, stream)
+        return run(session, tensor, stream, **timing)
 
     model = primary.models[1]
     images = []

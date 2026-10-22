@@ -8,6 +8,7 @@ import torch
 
 from vision_shield.detection import Detection
 from vision_shield.detection.egoblur import Detector as EgoBlurDetector, _HalfPlate
+from vision_shield.detection.timing import measure
 
 MODEL_PATH = Path(__file__).with_name("assets") / "yolov8n_face.onnx"
 
@@ -63,31 +64,37 @@ class Detector(EgoBlurDetector):
 
                 with torch.cuda.stream(self.stream):
                     rgb.record_stream(self.stream)
-                    view = pad(resize(rgb, (rw, rh), "linear"), left, round(dx / 2 + 0.1), top, round(dy / 2 + 0.1), 114)
-                    session = self._session(*view.shape[:2])
-                    output = run(session, blob(view, 1 / 255), self.stream)[0]
+                    with measure(self, "prepare-primary"):
+                        view = pad(resize(rgb, (rw, rh), "linear"), left, round(dx / 2 + 0.1), top, round(dy / 2 + 0.1), 114)
+                        session = self._session(*view.shape[:2])
+                        tensor = blob(view, 1 / 255)
+                    output = run(session, tensor, self.stream, timing=self)[0]
             else:
-                view = cv2.copyMakeBorder(cv2.resize(rgb, (rw, rh)), top, round(dy / 2 + 0.1),
-                                         left, round(dx / 2 + 0.1), cv2.BORDER_CONSTANT, value=(114, 114, 114))
-                session = self._session(*view.shape[:2])
-                output = session.run(None, {session.get_inputs()[0].name: cv2.dnn.blobFromImage(view, 1 / 255)})[0]
-            if (output.ndim != 3 or output.shape[:2] != (1, 20) or not np.isfinite(output).all()
-                    or (output[:, 4] < 0).any() or (output[:, 4] > 1).any()):
-                raise ValueError("Invalid face detector output")
-            # The remaining channels are landmarks; only box coordinates and confidence are consumed.
-            rows = output[0, :5].T
-            rows = rows[rows[:, 4] > self.face_threshold]
-            boxes = rows[:, :4].copy()
-            if (boxes[:, 2:] <= 0).any():
-                raise ValueError("Invalid face detector output")
-            boxes[:, :2] -= boxes[:, 2:] / 2
-            kept = cv2.dnn.NMSBoxes(boxes.tolist(), rows[:, 4].tolist(), self.face_threshold, 0.3)
-            for index in np.asarray(kept, dtype=int).reshape(-1)[:1000]:
-                x, y, w, h = boxes[index]
-                box = (max(0, (float(x) - left) / scale), max(0, (float(y) - top) / scale),
-                       min(width, (float(x + w) - left) / scale), min(height, (float(y + h) - top) / scale))
-                if box[2] > box[0] and box[3] > box[1]:
-                    detections.append(Detection("face", box, float(rows[index, 4])))
+                with measure(self, "prepare-primary"):
+                    view = cv2.copyMakeBorder(cv2.resize(rgb, (rw, rh)), top, round(dy / 2 + 0.1),
+                                             left, round(dx / 2 + 0.1), cv2.BORDER_CONSTANT, value=(114, 114, 114))
+                    session = self._session(*view.shape[:2])
+                    tensor = cv2.dnn.blobFromImage(view, 1 / 255)
+                with measure(self, "forward-primary-face"):
+                    output = session.run(None, {session.get_inputs()[0].name: tensor})[0]
+            with measure(self, "post-primary"):
+                if (output.ndim != 3 or output.shape[:2] != (1, 20) or not np.isfinite(output).all()
+                        or (output[:, 4] < 0).any() or (output[:, 4] > 1).any()):
+                    raise ValueError("Invalid face detector output")
+                # The remaining channels are landmarks; only box coordinates and confidence are consumed.
+                rows = output[0, :5].T
+                rows = rows[rows[:, 4] > self.face_threshold]
+                boxes = rows[:, :4].copy()
+                if (boxes[:, 2:] <= 0).any():
+                    raise ValueError("Invalid face detector output")
+                boxes[:, :2] -= boxes[:, 2:] / 2
+                kept = cv2.dnn.NMSBoxes(boxes.tolist(), rows[:, 4].tolist(), self.face_threshold, 0.3)
+                for index in np.asarray(kept, dtype=int).reshape(-1)[:1000]:
+                    x, y, w, h = boxes[index]
+                    box = (max(0, (float(x) - left) / scale), max(0, (float(y) - top) / scale),
+                           min(width, (float(x + w) - left) / scale), min(height, (float(y + h) - top) / scale))
+                    if box[2] > box[0] and box[3] > box[1]:
+                        detections.append(Detection("face", box, float(rows[index, 4])))
         if kind != "face":
             detections.extend(super().candidates(rgb, kind="plate"))
         return detections

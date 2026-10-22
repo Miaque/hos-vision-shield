@@ -12,6 +12,7 @@ import av
 import numpy as np
 
 from vision_shield.redaction import redact, FrameRedactor
+from vision_shield.detection.timing import snapshot
 if TYPE_CHECKING:
     from vision_shield.detection import Detector
 
@@ -153,7 +154,7 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                           "stats": {"processed_frames": count, "dropped_frames": 0,
                                     "elapsed_seconds": time.monotonic() - started},
                           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                                          encode=encode_seconds, **redactor.candidate_timings)})
+                                          encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})
         if not video or not count:
             raise ValueError("No valid video frames")
         stage = time.monotonic()
@@ -164,5 +165,5 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
           "video_encoder": video.codec_context.name,
           "stats": {"processed_frames": count, "dropped_frames": 0, "elapsed_seconds": time.monotonic() - started},
           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                          encode=encode_seconds, **redactor.candidate_timings)})
+                          encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})
     return count

@@ -10,6 +10,7 @@ import torch
 import torch.nn.functional as F
 
 from vision_shield.detection.cuda_pixels import resize
+from vision_shield.detection.timing import measure
 
 
 def hwaccel(device):
@@ -91,21 +92,27 @@ class CUDAFrames:
         if self.color is not None and color != self.color:
             raise ValueError("Video color properties changed")
         self.color = color
-        torch.cuda.synchronize(self.device)
+        with measure(redactor, "explicit-sync"):
+            torch.cuda.synchronize(self.device)
         y, uv = [torch.from_dlpack(plane.__dlpack__()) for plane in frame.planes]
         if frame.rotation:
             y, uv = [torch.rot90(plane, frame.rotation // 90, (0, 1)) for plane in (y, uv)]
         full = frame.color_range == 2
-        pixels = rgb_pixels(y, uv, frame.colorspace, full)
+        with measure(redactor, "color-convert"):
+            pixels = rgb_pixels(y, uv, frame.colorspace, full)
         height, width = pixels.shape[:2]
         rows = torch.tensor(np.linspace(0, height - 1, 36, dtype=int), device=pixels.device)
         cols = torch.tensor(np.linspace(0, width - 1, 64, dtype=int), device=pixels.device)
-        thumbnail = pixels[rows[:, None], cols[None, :]].float().cpu().numpy()
+        with measure(redactor, "gray-copy"):
+            thumbnail = pixels[rows[:, None], cols[None, :]].float().cpu().numpy()
+            gray = gray_pixels(pixels).cpu().numpy()
         # shortcut: template matching still uses CPU gray pixels; move it only after equivalent tracking is verified.
         boxes = redactor.regions(pixels, float(frame.pts * frame.time_base),
-                                 thumbnail=thumbnail, gray=gray_pixels(pixels).cpu().numpy())
-        output_y, output_uv = masked_planes(y, uv, pixels, boxes, redactor.mode, frame.colorspace, full)
-        torch.cuda.current_stream(self.device).synchronize()
+                                 thumbnail=thumbnail, gray=gray)
+        with measure(redactor, "mask-gpu"):
+            output_y, output_uv = masked_planes(y, uv, pixels, boxes, redactor.mode, frame.colorspace, full)
+        with measure(redactor, "explicit-sync"):
+            torch.cuda.current_stream(self.device).synchronize()
         output = av.VideoFrame.from_dlpack((output_y, output_uv), format="nv12", cuda_context=self.context)
         output.pts, output.time_base = frame.pts, frame.time_base
         output.color_range = 2 if full else 1

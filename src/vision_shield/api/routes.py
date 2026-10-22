@@ -12,6 +12,7 @@ from vision_shield.api.schemas import (DesiredStateInput, FileUrlInput, StreamIn
 from vision_shield.jobs.diagnostics import STALE_SECONDS
 from vision_shield.jobs.service import require_worker
 from vision_shield.media.source import SourceError, validate_source
+from vision_shield.detection.timing import STAGES
 
 router = APIRouter(prefix="/v1")
 
@@ -131,7 +132,7 @@ async def get_task(task_id: UUID, request: Request, response: Response):
     if task.get("timings"):
         response.headers["Server-Timing"] = ", ".join(
             f"task-{name};dur={task['timings'][name] * 1000:.3f}"
-            for name in ("frame", "inference", "encode", "candidate-primary", "candidate-detail")
+            for name in ("frame", "inference", "encode", "candidate-primary", "candidate-detail", *STAGES)
             if name in task["timings"])
     return public(request, task)
 

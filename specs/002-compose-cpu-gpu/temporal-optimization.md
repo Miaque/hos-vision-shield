@@ -470,3 +470,16 @@ a52eb83夜间整片任务2b01c005-0a25-4995-9c31-b739a0bf8647：1511帧、零丢
 1e8b450/opt-20261022-15已推送并成功部署。回撤后的独立双路复测任务cd7feda8-3323-4e97-a111-dd6733552913、e5f4be48-3d24-447b-bb4f-df9bfd5e32a9各1776帧、零丢帧，实际NVDEC/NVENC，所有尺寸/有理数PTS/943个AAC包内容与时钟保持。媒体119.646340/122.269921秒，即14.843747/14.525240 FPS；创建到完成135/137秒，即13.155556/12.963504 FPS。两份输出与debf404及1f87eaa逐字节相同。相同基线的第二次结果低于第一次，存在运行波动；两个候选均未证明稳定端到端收益，因此保留较简单的原图/逐视图路径，不将局部改善或单次最快结果当作达标。
 
 资源观测的GPU设备平均利用率约75%–81%、功耗约205–211瓦、峰值显存约5.0–5.2 GiB；设备计数含其他进程，不能当作本项目独占占用或Tensor Core使用证明。没有时钟/温度/限频细分证据。CPU仍负责灰度模板跟踪、密集ONNX输出后处理、框管理和调度；NVDEC、像素预处理、推理、遮罩及NVENC已接入GPU，不宣称所有处理均在GPU。下一步优先验证复用工作进程预检后已加载的模型/会话，保留每任务独立跟踪历史及取消、父进程退出和部署回收语义；减少重复初始化不能排除继续优化检测等待的必要。
+
+
+## 第二十四轮：逐帧检测链分项测量（opt-20261022-16）
+
+按更新目标暂停模型常驻辅助工作，清除仅新增且尚未通过的常驻进程测试草稿，未修改进程生命周期。主线先细分服务器真实双路瓶颈；不重复ROI裁减/视图合批等没有新证据的失败方案。本轮只增加计时，保持模型文件、输入尺寸、阈值、检测区域、逐帧执行、跟踪和编解码策略。
+
+CUDA quality/quality_yolo模型共享线程安全的固定字典StageTimes；仅记录perf_counter主机耗时，不采集无限历史，不新增GPU同步、参数或依赖。现有离线video事件合并累计计数，经既有私有timings存储与Server-Timing固定白名单暴露，响应JSON契约不变。prepare-primary/detail记录预处理调用，forward-primary-face/plate和forward-detail-face/plate分别记录前向调用，post-primary/detail记录原有筛选/解码范围，local-confirm与track-confirm记录两类局部复核，input-copy/output-copy/gray-copy及explicit-sync记录显式拷贝调用、灰度/缩略图下载和原有同步，color-convert/mask-gpu记录GPU颜色转换及遮罩的主机提交耗时。
+
+口径限制：前向、预处理、遮罩计时不等于GPU内核活跃时间。ORT当前把输出绑定到CPU，run_with_iobinding包含推理、内部同步及DToH；copy_outputs_to_cpu更多体现后续CPU取值，不能将output-copy作为完整DToH。Tensor.cpu等调用包含等待。post-primary也包含其内输出下载，prepare-detail包含_view末尾原有同步，local/track-confirm包含其内模型调用；线程范围还会重叠。各列不相加，不把重叠累计值除以媒体耗时称独占占比。该轮用于定位调用链，若需要区分内核、隐式同步和总线传输，必须继续采集有界设备时间线。
+
+327项默认单元/媒体检查通过（29.38秒）、29项条件跳过；40项真实GPU/媒体通过（87.78秒），17条上游警告。新增共享计时、嵌套/返回值、异常及4线程200次样本测试；将累计改为0时3项回归明确失败，再逐字节恢复后通过。真实模型与NVDEC测试断言预处理/前向/后处理/下载/同步及颜色转换/遮罩计时非零，同时保留原运动轨迹、主脸/车牌与音频/时钟检查。记录data/validation/detection-profile-20261022/{unit-media-final.log,gpu-media.log,mutation.log}。
+
+本机有界Torch profiler线程实验仅证明CUDA活动包含两线程、Python record_function默认不含后台线程标签，不能以仅主线程算子列表代表全部推理；GTX1080实验不是RTX6000瓶颈证据。参考PyTorch profiler官方文档 https://docs.pytorch.org/docs/stable/profiler.html 和ONNX Runtime profiling说明 https://onnxruntime.ai/docs/performance/tune-performance/profiling-tools.html 。部署后按相同15图、完整双路、夜间整片测量，计时开销也需检查，不将此轮诊断当作优化收益或目标达标。

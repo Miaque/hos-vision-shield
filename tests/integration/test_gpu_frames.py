@@ -144,3 +144,5 @@ def test_nvdec_keeps_real_moving_tracks_and_gray_references(filename, start, end
                 np.testing.assert_array_equal(actual[480:520, 380:490].cpu().numpy(), pixels[480:520, 380:490])
             count += 1
     assert count >= 15
+    for name in ("color-convert", "gray-copy", "mask-gpu", "explicit-sync"):
+        assert detector.stage_times.snapshot()[name] > 0, name

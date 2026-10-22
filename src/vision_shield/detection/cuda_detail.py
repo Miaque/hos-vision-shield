@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 from vision_shield.detection.cpu import Detector as CPUDetector
+from vision_shield.detection.timing import measure, timed
 
 
 def decode_faces(outputs, width, height, threshold):
@@ -99,9 +100,10 @@ class Detector(CPUDetector):
         if isinstance(rgb, torch.Tensor):
             from vision_shield.detection.cuda_pixels import upload
 
-            return self._candidates(upload(rgb, self.device), kind=kind)
+            return self._candidates(upload(rgb, self.device, timing=self), kind=kind)
         return super().candidates(rgb, kind=kind)
 
+    @timed("prepare-detail")
     def _view(self, rgb):
         if not isinstance(rgb, torch.Tensor):
             return super()._view(rgb)
@@ -114,7 +116,8 @@ class Detector(CPUDetector):
             scale = min(1, self.max_side / max(width, height))
             if scale < 1:
                 view = resize(view, (max(1, round(width * scale)), max(1, round(height * scale))), "area")
-        self.view_stream.synchronize()
+        with measure(self, "explicit-sync"):
+            self.view_stream.synchronize()
         return view
 
     def _faces(self, pixels):
@@ -123,24 +126,33 @@ class Detector(CPUDetector):
             from vision_shield.detection.cuda_pixels import pad, blob, run
 
             with torch.cuda.stream(self.face_stream):
-                pixels.record_stream(self.face_stream)
-                padded = pad(pixels, 0, (-width) % 32, 0, (-height) % 32)
-                session = self._face_session(*padded.shape[:2])
-                outputs = run(session, blob(padded), self.face_stream)
-            return decode_faces(dict(zip((o.name for o in session.get_outputs()), outputs)),
+                with measure(self, "prepare-detail"):
+                    pixels.record_stream(self.face_stream)
+                    padded = pad(pixels, 0, (-width) % 32, 0, (-height) % 32)
+                    session = self._face_session(*padded.shape[:2])
+                    tensor = blob(padded)
+                outputs = run(session, tensor, self.face_stream, timing=self, stage="forward-detail-face")
+            with measure(self, "post-detail"):
+                return decode_faces(dict(zip((o.name for o in session.get_outputs()), outputs)),
+                                    padded.shape[1], padded.shape[0], self.face_threshold)
+        with measure(self, "prepare-detail"):
+            padded = cv2.copyMakeBorder(pixels, 0, (-height) % 32, 0, (-width) % 32, cv2.BORDER_CONSTANT)
+            tensor = cv2.dnn.blobFromImage(padded)
+        with measure(self, "forward-detail-face"):
+            outputs = self.face.run(None, {self.face.get_inputs()[0].name: tensor})
+        with measure(self, "post-detail"):
+            return decode_faces(dict(zip((o.name for o in self.face.get_outputs()), outputs)),
                                 padded.shape[1], padded.shape[0], self.face_threshold)
-        padded = cv2.copyMakeBorder(pixels, 0, (-height) % 32, 0, (-width) % 32, cv2.BORDER_CONSTANT)
-        outputs = self.face.run(None, {self.face.get_inputs()[0].name: cv2.dnn.blobFromImage(padded)})
-        return decode_faces(dict(zip((o.name for o in self.face.get_outputs()), outputs)),
-                            padded.shape[1], padded.shape[0], self.face_threshold)
 
     def _plate_forward(self, blob):
         if isinstance(blob, torch.Tensor):
             from vision_shield.detection.cuda_pixels import run
 
-            return run(self.plate, blob, self.plate_stream)[0]
-        return self.plate.run(None, {self.plate.get_inputs()[0].name: blob})[0]
+            return run(self.plate, blob, self.plate_stream, timing=self, stage="forward-detail-plate")[0]
+        with measure(self, "forward-detail-plate"):
+            return self.plate.run(None, {self.plate.get_inputs()[0].name: blob})[0]
 
+    @timed("prepare-detail")
     def _plate_input(self, bgr):
         if not isinstance(bgr, torch.Tensor):
             return super()._plate_input(bgr)

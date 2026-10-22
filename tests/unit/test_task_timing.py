@@ -69,6 +69,12 @@ async def test_task_stage_timings_are_headers_and_do_not_change_the_json_contrac
         response = await client.get(f"/v1/tasks/{record['id']}")
         assert response.headers["server-timing"].endswith("task-candidate-primary;dur=800.000, task-candidate-detail;dur=600.000")
         assert "secret" not in str(response.headers) and "timings" not in response.json()
+        from vision_shield.detection.timing import STAGES
+        record["timings"].update(dict.fromkeys(STAGES, 0.01))
+        response = await client.get(f"/v1/tasks/{record['id']}")
+        for name in STAGES:
+            assert f"task-{name};dur=10.000" in response.headers["server-timing"]
+        assert "secret" not in str(response.headers) and "timings" not in response.json()
         record["video_encoder"] = "h264_nvenc"
         response = await client.get(f"/v1/tasks/{record['id']}")
         assert response.headers["x-video-encoder"] == "h264_nvenc"

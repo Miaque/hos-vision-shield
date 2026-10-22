@@ -8,6 +8,7 @@ import torchvision
 from PIL import Image
 
 from vision_shield.detection import Detection
+from vision_shield.detection.timing import measure
 
 
 class _HalfPlate(torch.nn.Module):
@@ -49,7 +50,7 @@ class Detector:
     def prepare(self, rgb):
         from vision_shield.detection.cuda_pixels import upload
 
-        return upload(rgb, self.device) if self.device.type == "cuda" else rgb
+        return upload(rgb, self.device, timing=self) if self.device.type == "cuda" else rgb
 
     def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Return padded xyxy boxes in source RGB coordinates without altering the pixels."""
@@ -62,22 +63,24 @@ class Detector:
         """Return unpadded source boxes with type and score for cross-model confirmation."""
         if isinstance(rgb, torch.Tensor):
             rgb = self.prepare(rgb)
-        height, width = rgb.shape[:2]
-        scale = min(1.0, self.max_side / max(height, width))
-        detection_pixels = rgb
-        if isinstance(rgb, torch.Tensor):
-            from vision_shield.detection.cuda_pixels import resize
+        with measure(self, "prepare-primary"):
+            height, width = rgb.shape[:2]
+            scale = min(1.0, self.max_side / max(height, width))
+            detection_pixels = rgb
+            if isinstance(rgb, torch.Tensor):
+                from vision_shield.detection.cuda_pixels import resize
 
-            with torch.cuda.stream(self.stream):
-                rgb.record_stream(self.stream)
+                with torch.cuda.stream(self.stream):
+                    rgb.record_stream(self.stream)
+                    if scale < 1:
+                        detection_pixels = resize(rgb, (max(1, round(width * scale)), max(1, round(height * scale))), "lanczos")
+                    image = detection_pixels.flip(2).permute(2, 0, 1).contiguous()
+            else:
                 if scale < 1:
-                    detection_pixels = resize(rgb, (max(1, round(width * scale)), max(1, round(height * scale))), "lanczos")
-                image = detection_pixels.flip(2).permute(2, 0, 1).contiguous()
-        else:
-            if scale < 1:
-                detection_pixels = np.asarray(Image.fromarray(rgb).resize(
-                    (max(1, round(width * scale)), max(1, round(height * scale))), Image.Resampling.LANCZOS))
-            image = torch.from_numpy(detection_pixels[:, :, ::-1].transpose(2, 0, 1).copy()).to(self.device)
+                    detection_pixels = np.asarray(Image.fromarray(rgb).resize(
+                        (max(1, round(width * scale)), max(1, round(height * scale))), Image.Resampling.LANCZOS))
+                with measure(self, "input-copy"):
+                    image = torch.from_numpy(detection_pixels[:, :, ::-1].transpose(2, 0, 1).copy()).to(self.device)
         # The released Gen1 model expects BGR uint8 CHW, without normalization.
         # 模型和输入必须在同一设备；后处理继续返回普通坐标。
         x_scale, y_scale = width / detection_pixels.shape[1], height / detection_pixels.shape[0]
@@ -89,16 +92,19 @@ class Detector:
                 # 局部复核只消费一种类别，跳过另一份独立模型而不改变目标模型输入。
                 if model is None or kind is not None and kind != model_kind:
                     continue
-                coordinates, _, scores, _ = model(image)
-                if (coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),)
-                        or not torch.isfinite(coordinates).all() or not torch.isfinite(scores).all()
-                        or (scores < 0).any() or (scores > 1).any()
-                        or (coordinates[:, 2:] <= coordinates[:, :2]).any()):
-                    raise ValueError("Invalid detector output")
-                keep = torchvision.ops.nms(coordinates, scores, 0.3)
-                # Map each axis using the actual rounded input size, then mask full-resolution pixels.
-                selected = keep[scores[keep] > threshold]
-                boxes.extend(Detection(model_kind, (x1 * x_scale, y1 * y_scale, x2 * x_scale, y2 * y_scale), score)
-                             for (x1, y1, x2, y2), score in zip(coordinates[selected].cpu().tolist(),
-                                                               scores[selected].cpu().tolist(), strict=True))
+                with measure(self, f"forward-primary-{model_kind}"):
+                    coordinates, _, scores, _ = model(image)
+                with measure(self, "post-primary"):
+                    if (coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),)
+                            or not torch.isfinite(coordinates).all() or not torch.isfinite(scores).all()
+                            or (scores < 0).any() or (scores > 1).any()
+                            or (coordinates[:, 2:] <= coordinates[:, :2]).any()):
+                        raise ValueError("Invalid detector output")
+                    keep = torchvision.ops.nms(coordinates, scores, 0.3)
+                    # Map each axis using the actual rounded input size, then mask full-resolution pixels.
+                    selected = keep[scores[keep] > threshold]
+                    with measure(self, "output-copy"):
+                        values, confidences = coordinates[selected].cpu().tolist(), scores[selected].cpu().tolist()
+                    boxes.extend(Detection(model_kind, (x1 * x_scale, y1 * y_scale, x2 * x_scale, y2 * y_scale), score)
+                                 for (x1, y1, x2, y2), score in zip(values, confidences, strict=True))
         return boxes

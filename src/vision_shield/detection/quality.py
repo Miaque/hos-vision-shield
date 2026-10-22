@@ -10,6 +10,7 @@ import numpy as np
 from vision_shield.detection.cpu import Detector as DetailDetector
 from vision_shield.detection.egoblur import Detector as PrimaryDetector
 from vision_shield.detection import Detection
+from vision_shield.detection.timing import StageTimes, measure, timed
 
 
 def _timed_candidates(model, pixels, *, kind=None):
@@ -37,6 +38,8 @@ class Detector:
         self.detail = detail_type(config["face_model_path"], config["plate_model_path"],
                                      self.max_side, self.box_padding, face_threshold=0.3,
                                      parallel=self.inference_device == "cuda", tile_side=1920)
+        if self.inference_device == "cuda":
+            self.stage_times = self.primary.stage_times = self.detail.stage_times = StageTimes()
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         return [detection.box for detection in self.detect_regions(rgb)]
@@ -102,6 +105,7 @@ class Detector:
         self.candidate_timings = {"candidate-primary": primary_seconds, "candidate-detail": detail_seconds}
         return boxes
 
+    @timed("local-confirm")
     def _recover_face(self, rgb, detection):
         """Weak small profiles need matching detections from both enlarged local models."""
         x1, y1, x2, y2 = detection.box
@@ -110,7 +114,8 @@ class Detector:
         right, bottom = min(rgb.shape[1], math.ceil((x1 + x2 + size) / 2)), min(rgb.shape[0], math.ceil((y1 + y2 + size) / 2))
         crop = rgb[top:bottom, left:right]
         if getattr(crop, "is_cuda", False):
-            crop = crop.cpu().numpy()
+            with measure(self, "output-copy"):
+                crop = crop.cpu().numpy()
         if not crop.size:
             return False
 
@@ -148,6 +153,7 @@ class Detector:
         union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - intersection
         return intersection / union
 
+    @timed("local-confirm")
     def _confirmed(self, rgb, detection, verifier, minimum_score=0, *, corroborate_mirror=False):
         x1, y1, x2, y2 = detection.box
         size = max(96, 3 * max(x2 - x1, y2 - y1))
@@ -158,7 +164,8 @@ class Detector:
             return False
         crop = rgb[top:bottom, left:right]
         if getattr(crop, "is_cuda", False):
-            crop = crop.cpu().numpy()
+            with measure(self, "output-copy"):
+                crop = crop.cpu().numpy()
         scale = 320 / max(crop.shape[:2])
         crop = cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
         xs, ys = (right - left) / crop.shape[1], (bottom - top) / crop.shape[0]

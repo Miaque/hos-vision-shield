@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 
 from vision_shield.detection import Detection
+from vision_shield.detection.timing import measure, timed
 
 
 def redact(pixels: np.ndarray, boxes: Iterable[tuple[float, float, float, float]], *, mode: str = "solid") -> np.ndarray:
@@ -52,6 +53,7 @@ class FrameRedactor:
             raise ValueError("Unsupported redaction mode")
         self.mode = mode
         self.detector = detector
+        self.stage_times = getattr(detector, "stage_times", None)
         self.history = deque(maxlen=128)
         self.previous, self.shape, self.moment = None, None, None
         self.gray = None
@@ -210,6 +212,7 @@ class FrameRedactor:
         dx, dy = sx + location[0] - left, sy + location[1] - top
         return max(0, x1 + dx), max(0, y1 + dy), min(width, x2 + dx), min(height, y2 + dy)
 
+    @timed("track-confirm")
     def _recheck(self, pixels, box, kind=""):
         x1, y1, x2, y2 = box
         size = max(96, 3 * max(x2 - x1, y2 - y1))
@@ -217,7 +220,8 @@ class FrameRedactor:
         right, bottom = min(pixels.shape[1], math.ceil((x1 + x2 + size) / 2)), min(pixels.shape[0], math.ceil((y1 + y2 + size) / 2))
         crop = pixels[top:bottom, left:right]
         if getattr(crop, "is_cuda", False):
-            crop = crop.cpu().numpy()
+            with measure(self, "output-copy"):
+                crop = crop.cpu().numpy()
         scale = 320 / max(crop.shape[:2])
         view = cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
         xs, ys = (right - left) / view.shape[1], (bottom - top) / view.shape[0]
