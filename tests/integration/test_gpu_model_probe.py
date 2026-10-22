@@ -154,6 +154,7 @@ def test_moving_heads_stay_masked_without_lost_tracks_covering_door_and_torso():
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual half CUDA model")
 @pytest.mark.parametrize("case_id", ["image-2", "face-video2-10s", "video-04-frame-24"])
 def test_half_plate_keeps_float_normalization_outputs_and_reviewed_targets(case_id):
+    from torch.utils._python_dispatch import TorchDispatchMode
     from vision_shield.detection.egoblur import _HalfPlate
 
     detector = load_detector(Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump())
@@ -166,11 +167,22 @@ def test_half_plate_keeps_float_normalization_outputs_and_reviewed_targets(case_
         torch.testing.assert_close(model.model.model.model.pixel_std, std, rtol=0, atol=0)
     assert all(parameter.dtype == torch.float16 for parameter in model.parameters())
     assert model.model.model.model.pixel_mean.dtype == model.model.model.model.pixel_std.dtype == torch.float32
-    with torch.inference_mode(), torch.jit.optimized_execution(False):
-        boxes, _, scores, size = model(torch.zeros((3, 319, 321), dtype=torch.uint8, device=detector.primary.device))
-    assert boxes.dtype == scores.dtype == torch.float32
-    assert size.device.type == "cpu" and size.tolist() == [319, 321]
-    assert torch.isfinite(boxes).all() and torch.isfinite(scores).all()
+    batches = []
+
+    class ObserveROI(TorchDispatchMode):
+        def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+            if func == torch.ops.aten.linear.default and args[1].shape[1] == 12544:
+                batches.append((args[0].shape[0], args[0].dtype, args[1].dtype))
+            return func(*args, **(kwargs or {}))
+
+    for height, width in [(319, 321), (32, 32)]:
+        with torch.inference_mode(), torch.jit.optimized_execution(False), ObserveROI():
+            boxes, _, scores, size = model(torch.zeros((3, height, width), dtype=torch.uint8, device=detector.primary.device))
+        assert boxes.dtype == scores.dtype == torch.float32
+        assert size.device.type == "cpu" and size.tolist() == [height, width]
+        assert torch.isfinite(boxes).all() and torch.isfinite(scores).all()
+    assert batches[0] == (512, torch.float16, torch.float16), "ROI裁减必须进入真实CUDA矩阵计算"
+    assert len(batches) == 2 and 0 < batches[1][0] < 512
     manifest = json.loads(Path("tests/fixtures/quality-cases.json").read_text("utf-8"))
     case = next(case for case in manifest["cases"] if case["id"] == case_id)
     source = Path(manifest["local_source"]) / case["file"]
