@@ -15,52 +15,11 @@ def test_yolo_quality_requires_cuda():
     assert Settings(_env_file=None, detection_backend="quality_yolo", inference_device="cuda").detection_backend == "quality_yolo"
 
 
-@pytest.mark.parametrize("max_side,plate_side", [(640, 640), (1280, 960)])
-def test_plate_view_budget_keeps_full_face_view_and_source_coordinates(monkeypatch, max_side, plate_side):
-    import torch
-    from vision_shield.detection import egoblur, yolo
-
-    plate_inputs, face_inputs = [], []
-
-    class Plate:
-        def __call__(self, pixels):
-            _, height, width = pixels.shape
-            plate_inputs.append((height, width))
-            return (torch.tensor([[width * 0.1, height * 0.2, width * 0.3, height * 0.4]]),
-                    None, torch.tensor([0.8]), None)
-
-    def initialize(self, face_path, plate_path, max_side, box_padding, **kwargs):
-        self.max_side, self.box_padding, self.face_threshold = max_side, box_padding, kwargs["face_threshold"]
-        self.device, self.models = torch.device("cpu"), [None, Plate()]
-
-    class Session:
-        def get_providers(self):
-            return ["CUDAExecutionProvider"]
-
-        def get_inputs(self):
-            return [SimpleNamespace(name="image")]
-
-        def run(self, names, values):
-            face_inputs.append(values["image"].shape)
-            return [np.zeros((1, 20, 0), np.float32)]
-
-    monkeypatch.setattr(egoblur.Detector, "__init__", initialize)
-    monkeypatch.setattr(yolo.Detector, "_session", lambda *a: Session())
-    instance = yolo.Detector("face.onnx", "plate.jit", max_side=max_side)
-    pixels = np.zeros((1080, 3840, 3), np.uint8)
-    pixels.setflags(write=False)
-    result = instance.candidates(pixels)
-    assert face_inputs[0][3] == max_side, "不能缩小人脸全图工作尺寸"
-    assert max(plate_inputs[0]) == plate_side, "只减少重型车牌视图的计算量"
-    assert result[0].kind == "plate"
-    np.testing.assert_allclose(result[0].box, (384, 216, 1152, 432), atol=0.001)
-
-
 def detector(monkeypatch, output):
     from vision_shield.detection import egoblur, yolo
 
     instance = yolo.Detector.__new__(yolo.Detector)
-    instance.max_side, instance.face_max_side, instance.face_threshold = 960, 1280, 0.1
+    instance.max_side, instance.face_threshold = 1280, 0.1
     inputs = []
 
     class Session:

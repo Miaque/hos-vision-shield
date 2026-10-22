@@ -126,7 +126,9 @@ async def get_task(task_id: UUID, request: Request, response: Response):
         raise HTTPException(404, "task_not_found")
     if task.get("timings"):
         response.headers["Server-Timing"] = ", ".join(
-            f"task-{name};dur={task['timings'][name] * 1000:.3f}" for name in ("frame", "inference", "encode"))
+            f"task-{name};dur={task['timings'][name] * 1000:.3f}"
+            for name in ("frame", "inference", "encode", "candidate-primary", "candidate-detail")
+            if name in task["timings"])
     return public(request, task)
 
 

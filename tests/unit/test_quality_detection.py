@@ -5,6 +5,30 @@ from vision_shield.config import Settings
 from vision_shield.detection import Detection
 
 
+def test_candidate_timings_keep_each_model_span_without_changing_masks(monkeypatch):
+    from vision_shield.detection import quality
+
+    clock = [0.0]
+    monkeypatch.setattr(quality.time, "monotonic", lambda: clock[0])
+
+    class Fixed:
+        def __init__(self, seconds, regions):
+            self.seconds, self.regions = seconds, regions
+
+        def candidates(self, pixels, *, kind=None):
+            clock[0] += self.seconds
+            return self.regions
+
+    detector = quality.Detector.__new__(quality.Detector)
+    detector.inference_device, detector.box_padding = "cpu", 0
+    region = Detection("face", (2, 2, 8, 8), 0.9)
+    detector.primary, detector.detail = Fixed(0.03, [region]), Fixed(0.02, [])
+    pixels = np.full((12, 12, 3), 180, np.uint8)
+    assert detector.detect_regions(pixels) == [region]
+    assert detector.candidate_timings == pytest.approx({"candidate-primary": 0.03, "candidate-detail": 0.02})
+    assert (pixels == 180).all()
+
+
 def test_quality_is_default_and_requires_both_primary_and_detail_models(monkeypatch):
     from vision_shield.detection import load_detector, quality
 

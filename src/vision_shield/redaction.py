@@ -56,6 +56,7 @@ class FrameRedactor:
         self.previous, self.shape, self.moment = None, None, None
         self.gray = None
         self.inference_seconds = 0.0
+        self.candidate_timings = {}
 
     def apply(self, pixels: np.ndarray, moment: float) -> np.ndarray:
         height, width = pixels.shape[:2]
@@ -134,6 +135,8 @@ class FrameRedactor:
                     or not 0 <= detection.score <= 1 or x2 <= x1 or y2 <= y1):
                 raise ValueError("Invalid detector output")
         self.inference_seconds += time.monotonic() - started
+        for name, seconds in getattr(self.detector, "candidate_timings", {}).items():
+            self.candidate_timings[name] = self.candidate_timings.get(name, 0.0) + seconds
         return detections
 
     @staticmethod

@@ -16,9 +16,7 @@ class Detector(EgoBlurDetector):
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=0.1, device="cuda"):
         if device != "cuda":
             raise ValueError("quality_yolo requires CUDA inference")
-        # 960保留已验车牌；640漏检，不能与人脸工作尺寸一同缩小。
-        super().__init__(None, plate_path, min(max_side, 960), box_padding, face_threshold=face_threshold, device=device)
-        self.face_max_side = max_side
+        super().__init__(None, plate_path, max_side, box_padding, face_threshold=face_threshold, device=device)
         self.face_path, self.sessions = Path(face_path), {}
         self.providers = [self._session(160, 160).get_providers()[0]]
 
@@ -51,7 +49,7 @@ class Detector(EgoBlurDetector):
         if kind != "plate":
             height, width = rgb.shape[:2]
             # Larger enlarged views miss the reviewed side profile; keep local confirmation at 160px.
-            side = 160 if kind == "face" else max(32, ((min(self.face_max_side, max(height, width)) + 31) // 32) * 32)
+            side = 160 if kind == "face" else max(32, ((min(self.max_side, max(height, width)) + 31) // 32) * 32)
             scale = side / max(height, width)
             rw, rh = max(1, round(width * scale)), max(1, round(height * scale))
             dx, dy = (side - rw) % 32, (side - rh) % 32

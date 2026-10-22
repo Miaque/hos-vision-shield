@@ -1,6 +1,7 @@
 """Cross-confirm uncertain detections; inference errors never become partial success."""
 
 import math
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import cv2
@@ -9,6 +10,12 @@ import numpy as np
 from vision_shield.detection.cpu import Detector as DetailDetector
 from vision_shield.detection.egoblur import Detector as PrimaryDetector
 from vision_shield.detection import Detection
+
+
+def _timed_candidates(model, pixels, *, kind=None):
+    started = time.monotonic()
+    candidates = model.candidates(pixels, kind=kind)
+    return candidates, time.monotonic() - started
 
 
 class Detector:
@@ -39,11 +46,12 @@ class Detector:
         if self.inference_device == "cuda":
             # 两路全图检测互不依赖；等待两路结束后再复核，异常不返回部分结果。
             with ThreadPoolExecutor(max_workers=1) as pool:
-                pending = pool.submit(self.primary.candidates, rgb, kind=kind)
-                detail = self.detail.candidates(rgb, kind=kind)
-                primary = pending.result()
+                pending = pool.submit(_timed_candidates, self.primary, rgb, kind=kind)
+                detail, detail_seconds = _timed_candidates(self.detail, rgb, kind=kind)
+                primary, primary_seconds = pending.result()
         else:
-            primary, detail = self.primary.candidates(rgb, kind=kind), self.detail.candidates(rgb, kind=kind)
+            primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind)
+            detail, detail_seconds = _timed_candidates(self.detail, rgb, kind=kind)
         height, width = rgb.shape[:2]
         boxes = []
         for candidates, others, verifier, is_primary in [(primary, detail, self.detail, True),
@@ -89,6 +97,7 @@ class Detector:
                 pad_y = (y2 - y1) * self.box_padding
                 boxes.append(Detection(detection.kind, (max(0, x1 - pad_x), max(0, y1 - pad_y),
                                        min(width, x2 + pad_x), min(height, y2 + pad_y)), detection.score))
+        self.candidate_timings = {"candidate-primary": primary_seconds, "candidate-detail": detail_seconds}
         return boxes
 
     def _recover_face(self, rgb, detection):

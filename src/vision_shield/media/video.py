@@ -122,7 +122,8 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                     count += 1
                     emit({"stats": {"processed_frames": count, "dropped_frames": 0,
                                     "elapsed_seconds": time.monotonic() - started},
-                          "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds, encode=encode_seconds)})
+                          "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
+                                          encode=encode_seconds, **redactor.candidate_timings)})
         if not video or not count:
             raise ValueError("No valid video frames")
         stage = time.monotonic()
@@ -130,5 +131,6 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
             writer.mux(packet)
     encode_seconds += time.monotonic() - stage
     emit({"stats": {"processed_frames": count, "dropped_frames": 0, "elapsed_seconds": time.monotonic() - started},
-          "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds, encode=encode_seconds)})
+          "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
+                          encode=encode_seconds, **redactor.candidate_timings)})
     return count

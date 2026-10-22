@@ -107,6 +107,8 @@ def test_yolo_quality_keeps_reviewed_regions_and_all_face_nodes_on_cuda(monkeypa
     assert hashlib.sha256(path.read_bytes()).hexdigest() == case["sha256"]
     pixels = np.array(Image.open(path).convert("RGB"))
     masked = redact(pixels, detector.detect(pixels))
+    assert detector.candidate_timings["candidate-primary"] > 0
+    assert detector.candidate_timings["candidate-detail"] > 0
     for x, y, right, bottom in case["masked_regions"]:
         assert (masked[y:bottom, x:right] == 64).all()
     for x, y, right, bottom in case["preserved_regions"]:

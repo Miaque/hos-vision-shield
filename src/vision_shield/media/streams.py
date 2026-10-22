@@ -146,7 +146,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 count += 1
                 emit({"stats": {"processed_frames": count, "dropped_frames": buffer.dropped,
                                 "elapsed_seconds": time.monotonic() - started},
-                      "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds, encode=encode_seconds)})
+                      "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
+                                      encode=encode_seconds, **redactor.candidate_timings)})
                 if stop.is_set():
                     break
             if video:

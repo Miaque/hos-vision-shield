@@ -65,6 +65,10 @@ async def test_task_stage_timings_are_headers_and_do_not_change_the_json_contrac
         assert response.headers["server-timing"] == "task-frame;dur=1500.000, task-inference;dur=1250.000, task-encode;dur=100.000"
         assert "timings" not in response.json() and response.json()["stats"] == record["stats"]
         assert "secret" not in response.text and "secret" not in str(response.headers)
+        record["timings"].update({"candidate-primary": 0.8, "candidate-detail": 0.6, "private-secret": 123})
+        response = await client.get(f"/v1/tasks/{record['id']}")
+        assert response.headers["server-timing"].endswith("task-candidate-primary;dur=800.000, task-candidate-detail;dur=600.000")
+        assert "secret" not in str(response.headers) and "timings" not in response.json()
         del record["timings"]
         response = await client.get(f"/v1/tasks/{record['id']}")
         assert "server-timing" not in response.headers
@@ -78,6 +82,7 @@ def test_inference_timing_includes_local_rechecks(monkeypatch):
     monkeypatch.setattr(redaction.time, "monotonic", lambda: clock[0])
     class Once:
         calls = 0
+        candidate_timings = {"candidate-primary": 0.03, "candidate-detail": 0.01}
 
         def detect(self, pixels):
             self.calls += 1
@@ -90,3 +95,4 @@ def test_inference_timing_includes_local_rechecks(monkeypatch):
     redactor.apply(pixels, 0.05)
     assert detector.calls == 3, "两次全图和一次局部确认都应实际运行"
     assert redactor.inference_seconds == pytest.approx(0.15)
+    assert redactor.candidate_timings == pytest.approx({"candidate-primary": 0.09, "candidate-detail": 0.03})

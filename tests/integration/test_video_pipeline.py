@@ -98,6 +98,8 @@ def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(
     target = tmp_path / "timed.mp4"
     events = []
     class SlowDetector:
+        candidate_timings = {"candidate-primary": 0.0005, "candidate-detail": 0.0002}
+
         def detect(self, pixels):
             time.sleep(0.001)
             return []
@@ -117,3 +119,5 @@ def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(
     assert 0.024 <= final["timings"]["inference"] <= final["timings"]["frame"]
     assert final["timings"]["encode"] > 0
     assert final["timings"]["frame"] + final["timings"]["encode"] <= final["stats"]["elapsed_seconds"]
+    assert final["timings"]["candidate-primary"] == pytest.approx(24 * 0.0005)
+    assert final["timings"]["candidate-detail"] == pytest.approx(24 * 0.0002)

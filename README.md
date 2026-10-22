@@ -21,8 +21,6 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 GPU Compose 选用 `DETECTION_BACKEND=quality_yolo`，用轻量 YOLO 人脸候选替换 EgoBlur 人脸，保留 EgoBlur 车牌、YuNet/HyperLPR、现有确认和跟踪规则。本机可在 CUDA 环境显式选择该后端。新权重随版本包交付，来源、哈希、GPL-3.0 许可与导出方法见[模型说明](src/vision_shield/detection/assets/README.md)。原 `quality` 和 CPU 默认值保留；该后端的目标服务器吞吐须单独实测，不能由本地片段速度推定双路达标。
 
-`quality_yolo` 的主人脸全图仍使用 `DETECTION_MAX_SIDE`，重型车牌全图最长边上限为960（同时受该配置约束）；局部复核、YuNet/HyperLPR和原分辨率输出保持原规则。960通过现有必验区域检查，640会漏掉已验车牌，未采用；降低工作分辨率仍可能影响未标注目标，详见[第十轮验证](specs/002-compose-cpu-gpu/temporal-optimization.md)。
-
 ### 本机 GTX 1080
 
 先执行 `uv sync --frozen --extra cuda`，在 `.env` 设置 `INFERENCE_DEVICE=cuda`，然后运行原有 `scripts/start-application.ps1`。EgoBlur 使用 PyTorch CUDA，YuNet/HyperLPR 使用 ONNX Runtime CUDA，四个模型均在 GPU 推理；图像预处理、后处理、编解码和遮挡仍使用 CPU。CUDA 不可用时启动失败，不静默降级。要使用 CPU，只需改为 `INFERENCE_DEVICE=cpu` 后重启应用。未设置该字段仍默认 CPU；轻量 `DETECTION_BACKEND=cpu` 不接受 cuda 设备。

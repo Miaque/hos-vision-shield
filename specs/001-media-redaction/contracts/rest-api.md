@@ -52,7 +52,7 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
 
 所有任务创建、详情、列表及停止接口的日期字符串均使用上述 UTC+8 格式，不含 `T`、时区后缀或小数秒。历史 UTC 记录在响应时转换，内部存储仍为 UTC。诊断接口顶层及 worker 快照的 `sampled_at_unix` 保持 Unix 秒数；耗时、年龄、采样窗口等数值字段保持秒数语义。当前接口没有日期时间入参。
 
-新版视频/流任务的`GET /v1/tasks/{id}`可附带`Server-Timing`响应头，JSON和stats字段保持不变。`task-frame`、`task-inference`、`task-encode`为当前媒体会话累计毫秒，inference是frame的子集；旧任务/图片可不返回。文件最终elapsed包括编码冲刷及关闭MP4。详细口径见[任务阶段计时](../../002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
+新版视频/流任务的`GET /v1/tasks/{id}`可附带`Server-Timing`响应头，JSON和stats字段保持不变。`task-frame`、`task-inference`、`task-encode`为当前媒体会话累计毫秒，inference是frame的子集；旧任务/图片可不返回。组合后端还可提供两项重叠的候选调用计时`task-candidate-primary`/`task-candidate-detail`，同样为累计毫秒，不可相加。文件最终elapsed包括编码冲刷及关闭MP4。详细口径见[任务阶段计时](../../002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
 原始来源、绝对磁盘路径、worker标识和发布凭据不进入响应。没有进度百分比，避免长流或未知时长的伪进度。
 
 ```json
