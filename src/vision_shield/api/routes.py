@@ -120,10 +120,13 @@ async def list_tasks(request: Request):
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
-async def get_task(task_id: UUID, request: Request):
+async def get_task(task_id: UUID, request: Request, response: Response):
     task = await request.app.state.store.get(str(task_id))
     if task is None:
         raise HTTPException(404, "task_not_found")
+    if task.get("timings"):
+        response.headers["Server-Timing"] = ", ".join(
+            f"task-{name};dur={task['timings'][name] * 1000:.3f}" for name in ("frame", "inference", "encode"))
     return public(request, task)
 
 

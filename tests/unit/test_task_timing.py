@@ -43,3 +43,50 @@ def test_model_load_time_is_logged_without_changing_response_stats(caplog):
         log_model_timing(event, "job-id", 3)
     assert "job-id" in caplog.text and "1.250" in caplog.text and "secret" not in caplog.text
     assert set(Stats.model_fields) == {"processed_frames", "dropped_frames", "elapsed_seconds"}
+
+
+async def test_task_stage_timings_are_headers_and_do_not_change_the_json_contract():
+    from unittest.mock import AsyncMock
+    import httpx
+    from vision_shield.main import create_app
+
+    record = dict(id="00000000-0000-0000-0000-000000000001", kind="video", state="processing",
+                  desired_state="run", ready=False, created_at="2026-10-22T00:00:00Z",
+                  updated_at="2026-10-22T00:00:01Z", error=None,
+                  stats=dict(processed_frames=1, dropped_frames=0, elapsed_seconds=2),
+                  timings=dict(frame=1.5, inference=1.25, encode=0.1), source_ref="rtsp://private:secret@camera")
+    app = create_app(Settings(_env_file=None))
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        app.state.store.get = AsyncMock(return_value=record)
+        response = await client.get(f"/v1/tasks/{record['id']}")
+        assert response.status_code == 200
+        assert response.headers["server-timing"] == "task-frame;dur=1500.000, task-inference;dur=1250.000, task-encode;dur=100.000"
+        assert "timings" not in response.json() and response.json()["stats"] == record["stats"]
+        assert "secret" not in response.text and "secret" not in str(response.headers)
+        del record["timings"]
+        response = await client.get(f"/v1/tasks/{record['id']}")
+        assert "server-timing" not in response.headers
+
+
+def test_inference_timing_includes_local_rechecks(monkeypatch):
+    import numpy as np
+    from vision_shield import redaction
+
+    clock = [0.0]
+    monkeypatch.setattr(redaction.time, "monotonic", lambda: clock[0])
+    class Once:
+        calls = 0
+
+        def detect(self, pixels):
+            self.calls += 1
+            clock[0] += 0.05
+            return [(20, 20, 40, 40)] if self.calls == 1 else []
+    detector = Once()
+    redactor = redaction.FrameRedactor(detector)
+    pixels = np.full((100, 100, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    redactor.apply(pixels, 0.05)
+    assert detector.calls == 3, "两次全图和一次局部确认都应实际运行"
+    assert redactor.inference_seconds == pytest.approx(0.15)

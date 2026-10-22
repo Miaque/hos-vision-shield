@@ -90,3 +90,30 @@ def test_video_mosaic_configuration_reaches_encoded_frames(generated_media, tmp_
         actual = next(reader.decode(video=0)).to_ndarray(format='rgb24')[20, 20]
     assert all(abs(int(a) - int(b)) < 10 for a, b in zip(actual, expected))
     assert any(abs(int(v) - 64) > 10 for v in actual), '必须实际使用马赛克而非默认灰块'
+
+
+def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(generated_media, tmp_path):
+    import time
+
+    target = tmp_path / "timed.mp4"
+    events = []
+    class SlowDetector:
+        def detect(self, pixels):
+            time.sleep(0.001)
+            return []
+    def observe(event):
+        try:
+            with av.open(str(target)) as reader:
+                complete = len(list(reader.decode(video=0))) == 24
+        except (av.error.FFmpegError, FileNotFoundError):
+            complete = False
+        events.append((event, complete))
+    process_video(generated_media / "silent.mp4", target, SlowDetector(), Settings(_env_file=None).model_dump(),
+                  threading.Event(), observe)
+    final, complete = events[-1]
+    assert complete, "最终计时必须在编码器冲刷和MP4封装关闭后发出"
+    assert final["stats"]["processed_frames"] == 24 and final["stats"]["dropped_frames"] == 0
+    assert set(final["stats"]) == {"processed_frames", "dropped_frames", "elapsed_seconds"}
+    assert 0.024 <= final["timings"]["inference"] <= final["timings"]["frame"]
+    assert final["timings"]["encode"] > 0
+    assert final["timings"]["frame"] + final["timings"]["encode"] <= final["stats"]["elapsed_seconds"]

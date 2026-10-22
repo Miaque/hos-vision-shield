@@ -110,6 +110,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     reader.start()
     count, origin, previous = 0, None, None
     started = time.monotonic()
+    frame_seconds = encode_seconds = 0.0
     try:
         with av.open(target, "w", format="rtsp", options={"rtsp_transport": "tcp"},
                      timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"])) as writer:
@@ -122,7 +123,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 previous = moment
                 if origin is None:
                     origin = moment
+                stage = time.monotonic()
                 output = masked_frame(frame, redactor, origin)
+                frame_seconds += time.monotonic() - stage
+                stage = time.monotonic()
                 if video is None:
                     video = add_video(writer, output, buffer.input_video, live=True)
                     if buffer.input_audio:
@@ -136,11 +140,13 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     writer.mux(packet)
                 for packet in video.encode(output):
                     writer.mux(packet)
+                encode_seconds += time.monotonic() - stage
                 if not count:
                     emit({"ready": True})
                 count += 1
                 emit({"stats": {"processed_frames": count, "dropped_frames": buffer.dropped,
-                                "elapsed_seconds": time.monotonic() - started}})
+                                "elapsed_seconds": time.monotonic() - started},
+                      "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds, encode=encode_seconds)})
                 if stop.is_set():
                     break
             if video:

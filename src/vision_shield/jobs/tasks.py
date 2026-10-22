@@ -92,7 +92,8 @@ async def execute(task_id, broker, context):
             if event.get("failure_type"):
                 logger.warning("task=%s media failure type=%s", task_id, event["failure_type"])
             if "stats" in event:
-                await store.update_owned(task_id, owner, generation, stats=event["stats"])
+                await store.update_owned(task_id, owner, generation,
+                                         **{key: event[key] for key in ("stats", "timings") if key in event})
 
         result = {}
         if not cancel.is_set():
@@ -148,6 +149,8 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                         values.update(state="running", ready=True, error=None)
                     if "stats" in event:
                         values["stats"] = event["stats"]
+                    if "timings" in event:
+                        values["timings"] = event["timings"]
                     if values:
                         await store.update_owned(task_id, owner, generation, **values)
 

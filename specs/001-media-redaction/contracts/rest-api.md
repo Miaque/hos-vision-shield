@@ -49,6 +49,8 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
 | stats | {processed_frames: nonnegative integer, dropped_frames: nonnegative integer, elapsed_seconds: nonnegative number} |
 
 流stats描述当前媒体会话，重连后重置，不代表跨故障累计的所有源帧；elapsed_seconds不含模型加载及排队。
+
+新版视频/流任务的`GET /v1/tasks/{id}`可附带`Server-Timing`响应头，JSON和stats字段保持不变。`task-frame`、`task-inference`、`task-encode`为当前媒体会话累计毫秒，inference是frame的子集；旧任务/图片可不返回。文件最终elapsed包括编码冲刷及关闭MP4。详细口径见[任务阶段计时](../../002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
 原始来源、绝对磁盘路径、worker标识和发布凭据不进入响应。没有进度百分比，避免长流或未知时长的伪进度。
 
 ```json

@@ -71,6 +71,7 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                   stop: Event, emit: Callable[[dict], None]) -> int:
     """Write complete MP4, preserving frame clocks and AAC packets; return frame count."""
     count, started = 0, time.monotonic()
+    frame_seconds = encode_seconds = 0.0
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"))
     with av.open(source) as reader, av.open(target, "w", format="mp4") as writer:
         brand = reader.metadata.get("major_brand", "").lower().strip()
@@ -104,7 +105,10 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                     if previous is None:
                         first = moment
                     previous = moment
+                    stage = time.monotonic()
                     output = masked_frame(frame, redactor)
+                    frame_seconds += time.monotonic() - stage
+                    stage = time.monotonic()
                     if video is None:
                         video = add_video(writer, output, input_video)
                         for audio_packet in pending_audio:
@@ -114,11 +118,17 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                         raise ValueError("Video dimensions changed")
                     for encoded in video.encode(output):
                         writer.mux(encoded)
+                    encode_seconds += time.monotonic() - stage
                     count += 1
                     emit({"stats": {"processed_frames": count, "dropped_frames": 0,
-                                    "elapsed_seconds": time.monotonic() - started}})
+                                    "elapsed_seconds": time.monotonic() - started},
+                          "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds, encode=encode_seconds)})
         if not video or not count:
             raise ValueError("No valid video frames")
+        stage = time.monotonic()
         for packet in video.encode():
             writer.mux(packet)
+    encode_seconds += time.monotonic() - stage
+    emit({"stats": {"processed_frames": count, "dropped_frames": 0, "elapsed_seconds": time.monotonic() - started},
+          "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds, encode=encode_seconds)})
     return count

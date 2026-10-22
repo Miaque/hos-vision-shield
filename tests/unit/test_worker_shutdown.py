@@ -57,6 +57,8 @@ async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path
         record["redaction_mode"] = mode
     async def run(command, payload, cancel, on_event, timeout):
         assert payload["config"]["redaction_mode"] == (mode or "solid")
+        await on_event(dict(stats=dict(processed_frames=1, dropped_frames=0, elapsed_seconds=2),
+                            timings=dict(frame=1.5, inference=1.25, encode=0.1)))
         await asyncio.sleep(0.04)
         assert not cancel.is_set()
         return dict(returncode=0, result_ref=str(tmp_path / "job/attempt-1/result.png"))
@@ -64,6 +66,9 @@ async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path
     await tasks.execute("job", broker, SimpleNamespace(message=SimpleNamespace(task_id="message")))
     assert store.finish.call_args.args[3] == "succeeded"
     assert store.heartbeat.await_count >= 2
+    assert store.update_owned.call_args.kwargs == dict(
+        stats=dict(processed_frames=1, dropped_frames=0, elapsed_seconds=2),
+        timings=dict(frame=1.5, inference=1.25, encode=0.1))
 
 
 async def test_reconciler_cancellation_closes_brokers_and_client(monkeypatch):

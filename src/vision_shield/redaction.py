@@ -1,6 +1,7 @@
 """Shared opaque masking in RGB pixel coordinates, independent of media and HTTP."""
 
 import math
+import time
 from collections.abc import Iterable
 from collections import deque
 from typing import NamedTuple
@@ -54,6 +55,7 @@ class FrameRedactor:
         self.history = deque(maxlen=128)
         self.previous, self.shape, self.moment = None, None, None
         self.gray = None
+        self.inference_seconds = 0.0
 
     def apply(self, pixels: np.ndarray, moment: float) -> np.ndarray:
         height, width = pixels.shape[:2]
@@ -119,6 +121,7 @@ class FrameRedactor:
         return redact(pixels, boxes + retained, mode=self.mode)
 
     def _detections(self, pixels, kind=None):
+        started = time.monotonic()
         regions = getattr(self.detector, "detect_regions", None)
         if regions:
             detections = regions(pixels, kind=kind) if kind else regions(pixels)
@@ -130,6 +133,7 @@ class FrameRedactor:
                     or not all(math.isfinite(v) for v in (*detection.box, detection.score))
                     or not 0 <= detection.score <= 1 or x2 <= x1 or y2 <= y1):
                 raise ValueError("Invalid detector output")
+        self.inference_seconds += time.monotonic() - started
         return detections
 
     @staticmethod
