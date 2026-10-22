@@ -12,7 +12,7 @@ from vision_shield.detection.timing import measure
 
 
 class _HalfPlate(torch.nn.Module):
-    """Keep original RPN/ROI math and float normalization, reusing bounded anchor grids."""
+    """Keep the original graph and float normalization while using half model weights."""
 
     def __init__(self, model):
         super().__init__()
@@ -21,34 +21,10 @@ class _HalfPlate(torch.nn.Module):
         mean, std = core.pixel_mean.clone(), core.pixel_std.clone()
         model.half()
         core.pixel_mean, core.pixel_std = mean, std
-        # shortcut: pinned Gen1/TorchScript graph; revalidate on model or PyTorch upgrades.
-        graph = core.proposal_generator.forward.graph.copy()
-        call, = [node for node in graph.nodes() if node.kind() == "prim::CallMethod"
-                 and node.s("name") == "forward" and node.inputsAt(0).node().kind() == "prim::GetAttr"
-                 and node.inputsAt(0).node().s("name") == "anchor_generator"]
-        # Keep the released RPN graph; replace only its repeated anchor construction with an input.
-        anchors = graph.addInput("cached_anchors").setType(call.output().type())
-        call.output().replaceAllUsesWith(anchors)
-        call.destroy()
-        torch._C._jit_pass_dce(graph)
-        self.rpn = torch._C._create_function_from_graph("rpn_with_anchors", graph)
-        self.anchors = {}
 
     def forward(self, pixels):
-        core = self.model.model.model
-        size = torch.tensor(list(pixels.shape[-2:]), device="cpu")
-        normalized = (pixels - core.pixel_mean) / core.pixel_std
-        normalized = torch.nn.functional.pad(normalized, (0, (-pixels.shape[2]) % 32, 0, (-pixels.shape[1]) % 32))
         with torch.autocast("cuda", dtype=torch.float16):
-            features = core.backbone(normalized.unsqueeze(0).contiguous())
-            key = tuple(tuple(feature.shape[-2:]) for feature in features)
-            anchors = self.anchors.get(key)
-            if anchors is None:
-                anchors = core.proposal_generator.anchor_generator(*features)
-                if len(self.anchors) < 4:
-                    self.anchors[key] = anchors
-            proposals = self.rpn(core.proposal_generator, *features, size, anchors)
-            boxes, labels, scores = core.roi_heads(features[0], proposals, features[1], features[2], features[3], size)
+            boxes, labels, scores, size = self.model(pixels)
         return boxes.float(), labels, scores.float(), size
 
 
