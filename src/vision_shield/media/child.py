@@ -54,12 +54,15 @@ def main():
 
         directory = Path(payload["directory"])
         directory.mkdir(parents=True, exist_ok=True)
-        if payload.get('profile_detection') == 'host':
-            from vision_shield.detection.host_profile import ProfileTimes, instrument
+        profile_mode = payload.get('profile_detection')
+        if isinstance(profile_mode, str):
+            from vision_shield.detection.host_profile import FORWARDS, ProfileTimes, instrument
 
-            if cfg['inference_device'] != 'cuda' or cfg['detection_backend'] != 'quality':
-                raise ValueError('Host profiling requires quality/CUDA')
-            collector = ProfileTimes(directory / 'host-profile')
+            if (profile_mode not in ('host', *FORWARDS) or cfg['inference_device'] != 'cuda'
+                    or cfg['detection_backend'] != 'quality'):
+                raise ValueError('Model profiling requires quality/CUDA')
+            collector = ProfileTimes(directory / 'host-profile',
+                                     device_stage=None if profile_mode == 'host' else profile_mode)
             observers.callback(collector.close)
             instrument(observers, collector)
         loading = time.monotonic()
@@ -105,7 +108,8 @@ def main():
             process_video(payload["source"], str(temporary), detector, cfg, stop, emit)
             if not stop.is_set():
                 if collector:
-                    report = dict(state='complete', mode='host', model_load_seconds=load_seconds,
+                    state = 'partial' if collector.device_stage and len(collector.device_samples) != len(collector.checkpoints) else 'complete'
+                    report = dict(state=state, mode=profile_mode, model_load_seconds=load_seconds,
                                   runtime=metadata, profile=collector.report(collector.frames))
                     (directory / 'host-profile/report.json').write_text(json.dumps(report), 'utf-8')
                     emit({'device_profile': report})
@@ -121,7 +125,7 @@ def main():
             raise ValueError("Unsupported task kind")
     except Exception as error:
         if collector:
-            emit({'device_profile': dict(state='failed', mode='host', reason=type(error).__name__)})
+            emit({'device_profile': dict(state='failed', mode=profile_mode, reason=type(error).__name__)})
         if payload["kind"] == "probe":
             from vision_shield.detection.preflight import PreflightError
             emit({"preflight_error": str(error) if isinstance(error, PreflightError) else "模型预检失败：内部异常"})

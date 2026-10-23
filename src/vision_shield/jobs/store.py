@@ -251,7 +251,8 @@ class TaskStore:
             raise ValueError("Unsupported redaction mode")
         if profile_detection and kind != 'video':
             raise ValueError('Detection profiling requires a video task')
-        if profile_detection not in (False, True, 'host'):
+        if profile_detection not in (False, True, 'host', 'forward-primary-face', 'forward-primary-plate',
+                                     'forward-detail-face', 'forward-detail-plate'):
             raise ValueError('Unsupported detection profile')
         task_id = task_id or str(uuid4())
         now = datetime.now(timezone.utc).isoformat()

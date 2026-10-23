@@ -118,7 +118,8 @@ def test_child_attaches_requested_sampler_and_finishes_only_after_video(tmp_path
 
 
 @pytest.mark.parametrize('fails', [False, True])
-def test_child_host_profile_is_opt_in_and_failure_does_not_publish_output(tmp_path, monkeypatch, capsys, fails):
+@pytest.mark.parametrize('mode', ['host', 'forward-detail-face'])
+def test_child_host_profile_is_opt_in_and_failure_does_not_publish_output(tmp_path, monkeypatch, capsys, fails, mode):
     from pathlib import Path
     from vision_shield import detection
     from vision_shield.media import video
@@ -129,7 +130,7 @@ def test_child_host_profile_is_opt_in_and_failure_does_not_publish_output(tmp_pa
     detail = SimpleNamespace(candidates=lambda pixels, **kw: [])
     detector = SimpleNamespace(primary=primary, detail=detail)
     payload = dict(kind='video', source='private-source', directory=str(tmp_path / 'attempt'),
-                   profile_detection='host', config=Settings(_env_file=None, inference_device='cuda').model_dump(mode='json'))
+                   profile_detection=mode, config=Settings(_env_file=None, inference_device='cuda').model_dump(mode='json'))
     monkeypatch.setattr(child.sys, 'stdin', io.StringIO(json.dumps(payload) + '\n'))
     monkeypatch.setattr(child.threading, 'Thread', lambda **kw: SimpleNamespace(start=lambda: None))
     monkeypatch.setattr(detection, 'load_detector', lambda cfg: detector)
@@ -150,7 +151,8 @@ def test_child_host_profile_is_opt_in_and_failure_does_not_publish_output(tmp_pa
         child.main()
     events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     report, = [event['device_profile'] for event in events if 'device_profile' in event]
-    assert report['state'] == ('failed' if fails else 'complete')
+    assert report['state'] == ('failed' if fails else 'complete' if mode == 'host' else 'partial')
+    assert report['mode'] == mode
     assert any('result_ref' in event for event in events) is not fails
     assert (tmp_path / 'attempt/result.mp4').exists() is not fails
     assert video.av.open is original

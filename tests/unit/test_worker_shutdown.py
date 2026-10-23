@@ -42,7 +42,7 @@ async def test_stopping_worker_does_not_claim_another_task(monkeypatch):
     await tasks.execute("job", broker, None)
 
 
-@pytest.mark.parametrize('mode', [True, 'host'])
+@pytest.mark.parametrize('mode', [True, 'host', 'forward-detail-face'])
 async def test_requested_device_profile_passes_to_child_and_is_stored_without_stats(tmp_path, monkeypatch, mode):
     broker = SimpleNamespace(connection_pool=None, state=SimpleNamespace(), ack_message=AsyncMock())
     record = dict(id='job', kind='video', generation=1, source_kind='upload', source_ref='local',

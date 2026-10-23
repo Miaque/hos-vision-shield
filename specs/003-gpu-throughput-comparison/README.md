@@ -120,6 +120,11 @@ attempt 的 `host-profile/`。仅支持本实验的 quality/CUDA，不允许静�
 上限 250000 个阶段观测，超出时诊断任务失败且不发布成功结果；三份现有整片均在上限内。
 普通请求不导入观察器；原 `X-Detection-Profile: 1` 的主车牌 CUDA 时间线保持。
 host 模式不与 CUDA 采样混用，诊断 FPS 不计验收；不改既有 stats 和任务 JSON 合同。
+需要区分内核与等待时，独立任务将该头设为 `forward-primary-face`、`forward-primary-plate`、
+`forward-detail-face` 或 `forward-detail-plate`，在该模型实际第 64/424/768 次前向采样，
+不额外调用模型。`profile.device_samples` 保存关联内核、复制及同步成本，原诊断接口
+`?sample=64` 等可下载对应原始 trace。调用不足三个采样点时状态为 partial，不能当作完整采样。
+每份 trace 上限 32 MiB；诊断失败终止本次任务，不返回未处理帧。
 373 项单元检查及 4 项真实编解码集成检查通过；本地实际子进程的非空 GPU 遮罩短片
 与普通处理逐字节一致，全部 PTS/尺寸保持。最初短片诊断暴露默认遮罩参数未写入元数据的
 KeyError，已按媒体处理器的有效默认值修复；失败样本保留且不计成功。
