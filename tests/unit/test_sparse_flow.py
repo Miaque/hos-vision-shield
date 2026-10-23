@@ -8,6 +8,7 @@ from vision_shield.redaction import FrameRedactor
 from tests.unit.test_detection_cadence import MovingTarget
 from vision_shield.config import Settings
 from vision_shield.main import create_app
+from vision_shield.detection import Detection
 
 
 def texture():
@@ -82,6 +83,85 @@ def test_forward_backward_inconsistency_cannot_be_accepted_as_motion(monkeypatch
 
     monkeypatch.setattr(cv2, 'calcOpticalFlowPyrLK', bad_reverse)
     assert redactor._flow(redactor.gray, (60, 50, 120, 100)) is None
+
+
+@pytest.mark.parametrize('first,current', [(None, (60, 50, 120, 100)),
+                                          ((60, 0, 120, 28), (50, 0, 125, 60))])
+def test_skipped_frame_proposal_rechecks_new_or_partially_entering_target(monkeypatch, first, current):
+    class Proposals:
+        box = first
+
+        def detect_regions(self, pixels, **kwargs):
+            return [Detection('face', self.box, .8)] if self.box else []
+
+        def proposals(self, pixels):
+            return [Detection('face', self.box, .4)] if self.box else []
+
+    detector = Proposals()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    detector.box = current
+    actual = redactor.apply(pixels, .04)
+    x,y,a,b = current
+    assert (actual[y:b, x:a] == 64).all()
+    assert redactor.detection_stats['proposal_frames'] == 1
+    assert redactor.detection_stats['proposal_rechecks'] == 1
+
+
+def test_visible_proposal_rechecks_before_missing_a_detection_lifetime_refresh(monkeypatch):
+    class Proposals:
+        def detect_regions(self, pixels, **kwargs):
+            return [Detection('face', (60, 50, 120, 100), .8)]
+
+        proposals = detect_regions
+
+    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow')
+    monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    redactor.apply(pixels, .04)
+    assert redactor.history[0].seen == 0
+    redactor.apply(pixels, .08)
+    assert redactor.history[0].seen == .08
+    assert redactor.detection_stats['proposal_rechecks'] == 1
+
+
+def test_unconfirmed_proposal_never_creates_a_mask():
+    class Proposals:
+        def detect_regions(self, pixels, **kwargs):
+            return []
+
+        def proposals(self, pixels):
+            return [Detection('face', (60, 50, 120, 100), .4)]
+
+    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow')
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    np.testing.assert_array_equal(redactor.apply(pixels, .04), pixels)
+    assert redactor.detection_stats['proposal_rechecks'] == 1
+
+
+def test_proposal_inference_is_included_in_the_existing_inference_time(monkeypatch):
+    from vision_shield import redaction
+
+    clock = [0.0]
+    monkeypatch.setattr(redaction.time, 'monotonic', lambda: clock[0])
+
+    class Proposals:
+        def detect_regions(self, pixels):
+            return []
+
+        def proposals(self, pixels):
+            clock[0] += .01
+            return []
+
+    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow')
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    redactor.apply(pixels, .04)
+    assert redactor.inference_seconds == pytest.approx(.01)
 
 
 @pytest.mark.parametrize('tracking,interval', [('bad', 3), ('flow', 1)])

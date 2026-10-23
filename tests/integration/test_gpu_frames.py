@@ -202,3 +202,44 @@ def test_nvdec_keeps_real_moving_tracks_and_gray_references(filename, start, end
     assert count >= 15
     for name in ("color-convert", "gray-copy", "mask-gpu", "explicit-sync"):
         assert detector.stage_times.snapshot()[name] > 0, name
+
+
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual CUDA models and NVDEC")
+def test_flow_proposals_recover_entry_growth_and_profile_expiry():
+    from pathlib import Path
+    from vision_shield.detection import load_detector
+    from vision_shield.detection.egoblur import _HalfPlate
+    from vision_shield.media.cuda_frames import CUDAFrames, hwaccel, rgb_pixels
+    from vision_shield.redaction import FrameRedactor
+
+    detector = load_detector(Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump())
+    if not isinstance(detector.primary.models[1], _HalfPlate):
+        detector.primary.models[1] = _HalfPlate(detector.primary.models[1])
+    cases = [("22-27-35车撞人.mp4", 42, 44.166, (1490, 505, 1530, 560)),
+             ("22-27-35车撞人.mp4", 50.8, 52.273, (90, 85, 215, 140)),
+             ("report/人脸视频1.mp4", 118.5, 120, (16, 214, 36, 244))]
+    for filename, start, target, box in cases:
+        frames = CUDAFrames()
+        baseline = FrameRedactor(detector)
+        candidate = FrameRedactor(detector, detection_interval=3, tracking="flow")
+        checked = False
+        with av.open(Path("tests/test_assets") / filename, hwaccel=hwaccel(frames.device)) as reader:
+            for index, frame in enumerate(reader.decode(video=0)):
+                moment = float(frame.pts * frame.time_base)
+                if moment < start:
+                    continue
+                if moment > target + 1e-6:
+                    break
+                candidate.frame_index = index
+                for redactor in (baseline, candidate):
+                    output = frames.masked(frame, redactor)
+                    if abs(moment - target) < 1e-6:
+                        planes = [torch.from_dlpack(plane.__dlpack__()) for plane in output.planes]
+                        actual = rgb_pixels(*planes, output.colorspace, output.color_range == 2)
+                        x, y, a, b = box
+                        assert ((actual[y:b, x:a].int() - 64).abs() <= 2).all(), (filename, moment, redactor.tracking)
+                        assert output.pts * output.time_base == frame.pts * frame.time_base
+                        checked = True
+        assert checked
+        assert candidate.detection_stats["proposal_rechecks"] > 0
+    assert detector.stage_times.snapshot()["track-probe"] > 0

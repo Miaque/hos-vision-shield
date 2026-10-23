@@ -503,3 +503,16 @@ def test_typed_quality_recheck_does_not_run_unrelated_models(kind):
     detector.box_padding = 0
     regions = detector.detect_regions(np.zeros((100, 100, 3), np.uint8), kind=kind)
     assert regions and all(region.kind == kind for region in regions)
+def test_flow_proposals_share_gpu_input_and_skip_expensive_primary_plate():
+    from types import SimpleNamespace
+    from vision_shield.detection.quality import Detector
+
+    pixels, prepared, calls = object(), object(), []
+    face = Detection("face", (20, 30, 50, 70), .4)
+    plate = Detection("plate", (90, 50, 150, 80), .3)
+    detector = Detector.__new__(Detector)
+    detector.primary = SimpleNamespace(prepare=lambda rgb: prepared if rgb is pixels else None,
+                                       proposals=lambda rgb: calls.append(("face", rgb)) or [face])
+    detector.detail = SimpleNamespace(candidates=lambda rgb, *, kind: calls.append((kind, rgb)) or [plate])
+    assert detector.proposals(pixels) == [face, plate]
+    assert calls == [("face", prepared), ("plate", prepared)]

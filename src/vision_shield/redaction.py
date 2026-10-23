@@ -61,7 +61,8 @@ class FrameRedactor:
         self.detection_interval, self.frame_index = detection_interval, 0
         self.detection_stats = dict(full_frames=0, skipped_frames=0, local_rechecks=0)
         if tracking == "flow":
-            self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0)
+            self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0,
+                                        proposal_frames=0, proposal_rechecks=0)
         self.detector = detector
         self.stage_times = getattr(detector, "stage_times", None)
         self.history = deque(maxlen=128)
@@ -101,6 +102,10 @@ class FrameRedactor:
                 if flow_boxes[old] is None:
                     self.detection_stats["flow_failures"] += 1
                     recheck = True
+            if not recheck and getattr(self.detector, "proposals", None):
+                recheck = self._proposal_recheck(pixels, flow_boxes, elapsed)
+                if recheck:
+                    self.detection_stats["proposal_rechecks"] += 1
             if recheck:
                 self.detection_stats["full_rechecks"] += 1
                 detect = True
@@ -292,6 +297,32 @@ class FrameRedactor:
         lower, upper = corners.min(axis=0) + (sx, sy), corners.max(axis=0) + (sx, sy)
         result = max(0, float(lower[0])), max(0, float(lower[1])), min(width, float(upper[0])), min(height, float(upper[1]))
         return result if result[2] - result[0] >= 2 and result[3] - result[1] >= 2 else None
+
+    @timed("track-probe")
+    def _proposal_recheck(self, pixels, flow_boxes, elapsed):
+        self.detection_stats["proposal_frames"] += 1
+        started = time.monotonic()
+        proposals = self.detector.proposals(pixels)
+        self.inference_seconds += time.monotonic() - started
+        for candidate in proposals:
+            x, y, a, b = candidate.box
+            if min(a - x, b - y) < 12:
+                continue
+            covered = False
+            for old, track in enumerate(self.history):
+                predicted = flow_boxes.get(old)
+                # Reconfirm a visible target before a second skipped observation delays its expiry.
+                if (predicted is None or track.kind != candidate.kind
+                        or self.moment - track.seen > 1.5 * elapsed):
+                    continue
+                left, top, right, bottom = predicted
+                intersection = max(0, min(a, right) - max(x, left)) * max(0, min(b, bottom) - max(y, top))
+                if intersection >= 0.9 * (a - x) * (b - y):
+                    covered = True
+                    break
+            if not covered:
+                return True
+        return False
 
     @timed("track-confirm")
     def _recheck(self, pixels, box, kind=""):

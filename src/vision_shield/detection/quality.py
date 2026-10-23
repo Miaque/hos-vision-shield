@@ -44,6 +44,14 @@ class Detector:
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         return [detection.box for detection in self.detect_regions(rgb)]
 
+    def proposals(self, rgb):
+        prepare = getattr(self.primary, "prepare", None)
+        pixels = prepare(rgb) if prepare else rgb
+        faces = getattr(self.primary, "proposals", None)
+        # Proposals trigger the unchanged quality gate; they never create or renew masks.
+        return ((faces(pixels) if faces else self.primary.candidates(pixels, kind="face"))
+                + self.detail.candidates(pixels, kind="plate"))
+
     def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         """Retain strong primary detections and confirmed complementary masks."""
         if self.inference_device == "cuda":
