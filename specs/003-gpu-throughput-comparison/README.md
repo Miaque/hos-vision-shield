@@ -23,8 +23,9 @@ A **不是所有模型每三帧运行一次**：`plate_proposals` 在间隔帧�
 复用同帧候选，再按变化或跟踪失败复核主车牌。实际计数以 forward 为准，不能用帧数除三。
 YOLO 的局部 160px 与全图最长边 1280 也必须分开统计。
 
-B 的 `compose.gpu.yaml` 原本设置 `DETECTION_BACKEND=quality_yolo`，不能直接沿用它建立 B 基线。
-B 必须显式覆盖 `DETECTION_BACKEND=quality`、`INFERENCE_DEVICE=cuda`；测量脚本直接传递这些参数，
+B 基点的 `compose.gpu.yaml` 原本设置 `DETECTION_BACKEND=quality_yolo`，不能直接沿用它建立 B 基线。
+本实验分支将两个 GPU worker 的部署配置显式固定为 `DETECTION_BACKEND=quality`、`INFERENCE_DEVICE=cuda`，
+作为 B 基线的配置覆盖，不改检测实现；测量脚本也直接传递这些参数，
 不读取 `.env`，并在初始化及完成后检查没有导入 YOLO 模块。
 基点虽然包含 `_HalfPlate`，`quality` 没有调用它，不能把其 FP16 效果当作已经实现。
 表内 FP32 指参数/张量 dtype，不表示禁用了 TF32 数学路径；实际全局、matmul、cuDNN 卷积策略

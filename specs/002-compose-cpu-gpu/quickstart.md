@@ -106,7 +106,7 @@ GPU 模式随后使用当前 GPU 文件组合验证唯一设备和非空 NMS；�
 docker run --rm --network none --mount type=bind,source="$MODEL_DIR",target=/models,readonly -e INFERENCE_DEVICE=cpu vision-shield:cpu python -m vision_shield.detection.preflight
 # 仅 GPU 模式：填写实际所选 UUID
 GPU_DEVICE_ID=GPU-替换为所选卡UUID
-docker run --rm --network none --gpus "device=$GPU_DEVICE_ID" --mount type=bind,source="$MODEL_DIR",target=/models,readonly -e DETECTION_BACKEND=quality_yolo -e INFERENCE_DEVICE=cuda vision-shield:cu126 python -m vision_shield.detection.preflight
+docker run --rm --network none --gpus "device=$GPU_DEVICE_ID" --mount type=bind,source="$MODEL_DIR",target=/models,readonly -e DETECTION_BACKEND=quality -e INFERENCE_DEVICE=cuda vision-shield:cu126 python -m vision_shield.detection.preflight
 ```
 
 预期所选后端的四份模型哈希、加载、实际推理和目标 NMS 均通过，退出码 0；quality_yolo 的 YOLO 权重来自应用包，其余三份来自模型目录。该步骤仅证明检测可在无网络条件下运行。整套媒体验收另须限制外部模型来源，保留容器内部网络与授权媒体源，确认启动及处理均无模型下载尝试。

@@ -5,7 +5,7 @@ services:
       args:
         TORCH_BACKEND: cu126
     environment:
-      DETECTION_BACKEND: quality_yolo
+      DETECTION_BACKEND: quality
       INFERENCE_DEVICE: cuda
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
       GPU_DEVICE_ID: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
@@ -24,7 +24,7 @@ services:
       args:
         TORCH_BACKEND: cu126
     environment:
-      DETECTION_BACKEND: quality_yolo
+      DETECTION_BACKEND: quality
       INFERENCE_DEVICE: cuda
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
       GPU_DEVICE_ID: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
