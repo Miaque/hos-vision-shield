@@ -200,3 +200,62 @@ def test_server_deployment_rejects_unknown_or_invalid_branch(deployment, args):
     assert d.git("rev-parse", "HEAD", cwd=d.server) == original_head
     if d.log.exists():
         assert " build" not in d.log.read_text("utf-8")
+
+
+@pytest.mark.parametrize("annotated", [False, True])
+def test_server_deployment_selects_an_exact_tag_without_moving_branches(deployment, annotated):
+    d = deployment
+    tag = "exp-test-p0-01"
+    if annotated:
+        d.git("-c", "user.name=Test", "-c", "user.email=test@example.com",
+              "tag", "-a", tag, "-m", "固定实验版本", cwd=d.remote)
+    else:
+        d.git("tag", tag, cwd=d.remote)
+    original_main = d.git("rev-parse", "main", cwd=d.server)
+
+    result = d.run("--tag", tag)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert d.git("branch", "--show-current", cwd=d.server) == ""
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == d.git("rev-parse", "HEAD", cwd=d.remote)
+    assert d.git("rev-parse", "main", cwd=d.server) == original_main
+    assert (d.server / ".env.compose").read_text("utf-8") == "server settings"
+    assert (d.server / "data/result.bin").read_bytes() == b"media"
+    assert (d.server / "models/face.jit").read_bytes() == b"weights"
+    assert tag in result.stdout
+
+    # A remote branch can advance independently; repeating the tag keeps the fixed version.
+    fixed_commit = d.git("rev-parse", "HEAD", cwd=d.server)
+    (d.remote / "app.txt").write_text("next release", encoding="utf-8")
+    d.commit(d.remote)
+    result = d.run("--tag", tag)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == fixed_commit
+    result = d.run("main")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (d.server / "app.txt").read_text("utf-8") == "next release"
+
+
+def test_server_deployment_rejects_replaced_tag(deployment):
+    d = deployment
+    tag = "exp-immutable"
+    d.git("tag", tag, cwd=d.server)
+    d.git("tag", tag, cwd=d.remote)
+    original = d.git("rev-parse", tag, cwd=d.server)
+    result = d.run("--tag", tag)
+    assert result.returncode != 0
+    assert d.git("rev-parse", tag, cwd=d.server) == original
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == original
+    assert " build" not in d.log.read_text("utf-8")
+
+
+@pytest.mark.parametrize("args", [("--tag",), ("--tag", "missing"), ("--tag", "bad..tag"),
+                                  ("--tag", "ok", "extra")])
+def test_server_deployment_rejects_unknown_or_invalid_tag(deployment, args):
+    d = deployment
+    original = d.git("rev-parse", "HEAD", cwd=d.server)
+    result = d.run(*args)
+    assert result.returncode != 0
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == original
+    if d.log.exists():
+        assert " build" not in d.log.read_text("utf-8")

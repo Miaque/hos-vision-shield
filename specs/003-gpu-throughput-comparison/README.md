@@ -125,7 +125,8 @@ python scripts/profile-video.py --route B --mode host `
 - [ ] 输出、关键片段、质量判定、离线/实时报告及路线结论。
 
 用户确认复用同一服务器顺序测试，并授权扩展部署脚本支持指定分支。
-新版 `scripts/deploy-server.sh feature/gpu-throughput-optimization` 支持安全切换和快进；
+新版推荐 `scripts/deploy-server.sh --tag exp-20261023-b-deploy-02` 按准确 tag 部署及回退，
+不移动本地分支、不覆盖已有 tag；也支持显式分支参数的安全切换和快进。
 无参数仍仅部署 main。服务器须先取得新版脚本，旧版会忽略参数，不能直接据此执行分支部署。
 该变更尚未完成真实 Docker/服务器验证，不阻塞本地 P0。
 实验仅推送 `feature/gpu-throughput-optimization` 和不可覆盖 tag，不合并或推送 main。
