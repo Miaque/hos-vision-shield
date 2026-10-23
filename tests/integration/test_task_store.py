@@ -77,3 +77,20 @@ async def test_stopped_queued_stream_never_claims_and_history_is_retained(store)
     assert not await store.claim(task["id"], "worker")
     assert await store.active() == []
     assert await store.get(task["id"]) is not None
+
+
+@pytest.mark.parametrize("profile", ["host", "forward-detail-plate"])
+async def test_external_output_preserves_video_diagnostic_modes(store, profile):
+    publish_url = "rtmp://approved/app/camera?sign=test"
+    stream = await store.create("stream", "rtsp", "rtsp://approved/live", publish_url=publish_url)
+    stored_stream = await store.get(stream["id"])
+    assert stored_stream["publish_url"] == publish_url
+    assert stored_stream["publisher_owner_id"] is None
+
+    video = await store.create("video", "upload", "data/test/source.mp4", profile_detection=profile)
+    assert (await store.get(video["id"]))["profile_detection"] == profile
+
+    with pytest.raises(ValueError, match="video"):
+        await store.create("stream", "rtsp", "rtsp://approved/live", profile_detection=profile)
+    with pytest.raises(ValueError, match="stream"):
+        await store.create("video", "upload", "data/test/source.mp4", publish_url=publish_url)
