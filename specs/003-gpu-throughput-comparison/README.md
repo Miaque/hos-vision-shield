@@ -123,9 +123,12 @@ python scripts/profile-video.py --route B --mode host `
 - [ ] 候选双路至少 30 分钟，每秒/10秒有效 FPS、延迟分位、队列及资源/恢复。
 - [ ] 输出、关键片段、质量判定、离线/实时报告及路线结论。
 
-原授权 SSH 入口仅部署 main，不用于本实验。隔离 API/部署入口尚待用户提供；
-这不阻塞本地 P0。实验仅推送 `feature/gpu-throughput-optimization` 和不可覆盖 tag。
-回退使用固定基点或相应实验 tag 在隔离环境重新部署，不移动原 tag、不改生产 main。
+用户确认复用同一服务器顺序测试，并授权扩展部署脚本支持指定分支。
+新版 `scripts/deploy-server.sh feature/gpu-throughput-optimization` 支持安全切换和快进；
+无参数仍仅部署 main。服务器须先取得新版脚本，旧版会忽略参数，不能直接据此执行分支部署。
+该变更尚未完成真实 Docker/服务器验证，不阻塞本地 P0。
+实验仅推送 `feature/gpu-throughput-optimization` 和不可覆盖 tag，不合并或推送 main。
+回退使用保留的固定基点/实验版本重新部署，不移动原 tag、不重置其他分支及未提交文件。
 
 清晰正脸/可读车牌必须遮挡，中大目标不能整体退化；仅容忍 1–2 帧侧脸边缘/背脸/出入画残影。
 自动差异只定位复核，不能充当准确率；对照自身的误遮/漏遮和不可判读目标分别保留，不强行通过。

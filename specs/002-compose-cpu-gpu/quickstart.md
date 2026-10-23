@@ -222,7 +222,7 @@ git status --short
 
 ### 后续日常更新
 
-GPU 服务器使用 `scripts/deploy-server.sh`。前提是当前目录已经接入 Git、分支为 `main`，保留原 `.env.compose`，且原部署项目名为 `vision-shield`。脚本可从任意目录以实际脚本路径调用，会自动进入仓库根目录。
+GPU 服务器使用 `scripts/deploy-server.sh [远程分支]`。前提是当前目录已经接入 Git，保留原 `.env.compose`，且原部署项目名为 `vision-shield`。不传参数仍要求当前位于 `main` 并部署 `origin/main`；显式传入分支时允许安全切换到该分支。脚本可从任意目录以实际脚本路径调用，会自动进入仓库根目录。
 
 开发机先提交并推送变更；第一次使用时，在服务器仓库根目录获取脚本：
 
@@ -234,11 +234,13 @@ git -c http.version=HTTP/1.1 pull --ff-only origin main
 
 ```bash
 bash scripts/deploy-server.sh
+# 同一服务器依次部署实验分支；首次必须先同步新版脚本
+bash scripts/deploy-server.sh feature/gpu-throughput-optimization
 ```
 
-脚本依次验证 Git/配置前提、使用 HTTP/1.1 拉取 `origin main`、静默校验 Compose 配置、构建 CPU/GPU 镜像，再更新容器并等待服务运行及 API 健康（最多 240 秒）。沿用原 API `/health/ready` 和 worker 预检机制，成功后显示服务状态及部署提交号；HTTP/1.1 不保证网络可用，拉取失败时直接停止。
+旧版脚本忽略参数，不能直接向旧版传实验分支；须先同步本次新版脚本。新脚本依次验证参数及 Git/配置前提、使用 HTTP/1.1 fetch 指定远程分支、检查目标本地分支可快进后切换并更新到刚获取的提交，再静默校验 Compose 配置、构建 CPU/GPU 镜像、更新容器并等待服务运行及 API 健康（最多 240 秒）。沿用原 API `/health/ready` 和 worker 预检机制，成功后显示服务状态、部署分支及提交号；HTTP/1.1 不保证网络可用，拉取失败时直接停止。
 
-脚本拒绝未提交的跟踪文件修改、非 `main` 分支、分叉或本地额外提交，不自动 stash、强制重置、备份或回滚，不输出包含凭据的展开配置。脚本更新自身时，本次执行使用启动时已解析的脚本内容。验证使用真实 Bash 和临时 Git 仓库、替代 Compose 命令；没有执行真实 Docker 构建或服务器部署。
+脚本拒绝未提交的跟踪文件修改、目标分支分叉或本地额外提交，不自动 stash、强制重置、备份或回滚，不输出包含凭据的展开配置。目标不存在时停止；切换与未跟踪文件冲突时由 Git 拒绝覆盖。只更新显式选择的目标分支，不合并到其他分支。配置、媒体和权重继续保留。脚本更新自身时，本次执行使用启动时已解析的脚本内容。验证使用真实 Bash 和临时 Git 仓库、替代 Compose 命令；没有执行真实 Docker 构建或服务器部署。
 
 CPU 部署仍可使用手动命令；GPU 模式的手动命令与脚本主体对应如下：
 

@@ -63,9 +63,11 @@ docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compo
 
 ```bash
 bash scripts/deploy-server.sh
+# 实验分支：必须先同步支持分支参数的新版脚本
+bash scripts/deploy-server.sh feature/gpu-throughput-optimization
 ```
 
-代码须先从开发机提交并推送到远程 `main`；首次使用前先执行 `git -c http.version=HTTP/1.1 pull --ff-only origin main` 获取脚本。脚本固定使用 GPU 文件组合、项目名 `vision-shield` 和现有 `.env.compose`，依次拉取代码、检查配置、构建、更新容器并等待就绪（最多 240 秒），成功后输出提交号。未提交的跟踪文件修改、分支不符、分叉或本地额外提交均会停止部署。脚本不备份、不强制重置、不自动回滚，网络或构建失败时不会进入容器更新步骤。
+代码须先从开发机提交并推送到指定远程分支。脚本不传参数时仍要求当前在 `main` 并部署 `origin/main`；显式传分支时安全切换并快进到该分支，保留其他分支。首次使用须先同步新版脚本，旧版会忽略参数并继续部署 main。脚本固定使用 GPU 文件组合、项目名 `vision-shield` 和现有 `.env.compose`，依次拉取代码、检查配置、构建、更新容器并等待就绪（最多 240 秒），成功后输出分支和提交号。未提交的跟踪文件修改、目标分支分叉或本地额外提交均会停止部署；未跟踪文件与目标分支冲突时也会停止，不覆盖本地文件。脚本不备份、不强制重置、不自动回滚，网络或构建失败时不会进入容器更新步骤。
 
 日常更新不先执行 `down`，构建成功后才替换容器。重建期间旧容器继续服务，替换时会短暂中断；正在执行的文件任务不会续跑，流任务会尝试恢复。当前 Dockerfile 已分离依赖层与应用层，构建缓存可用且依赖未变时，源码修改可复用已安装的 PyTorch/CUDA 依赖；不要在日常更新中使用 `--no-cache`。
 
