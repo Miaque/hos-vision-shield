@@ -85,7 +85,8 @@ def test_fixed_face_sessions_keep_dimensions_device_and_bounded_lifetime(monkeyp
     assert len(created) == 5 and all(session.disabled for session in created)
 
 
-@pytest.mark.parametrize("count,fault,parallel,kind", [(5, False, True, None), (6, False, True, None),
+@pytest.mark.parametrize("count,fault,parallel,kind", [(2, False, True, None), (4, False, True, None),
+    (5, False, True, None), (6, False, True, None),
     (5, True, True, None), (5, False, False, None), (5, False, True, "face"),
     (5, False, True, "plate"), (5, False, True, "other")])
 def test_batched_views_keep_source_mapping_tail_and_fail_on_invalid_member(monkeypatch, count, fault, parallel, kind):
@@ -108,7 +109,7 @@ def test_batched_views_keep_source_mapping_tail_and_fail_on_invalid_member(monke
         predictions[:, 0, :5] = [160, 160, 160, 160, .9]
         predictions[:, 0, 13] = 1
         if fault:
-            predictions[2, 0, 0] = np.nan
+            predictions[-1, 0, 0] = np.nan
         return predictions
 
     detector._plate_forward = forward
@@ -122,7 +123,7 @@ def test_batched_views_keep_source_mapping_tail_and_fail_on_invalid_member(monke
             detector._candidates(pixels, kind=kind)
         return
     detections = detector._candidates(pixels, kind=kind)
-    assert batches == ([] if not parallel or kind == "face" else [4] if count == 5 else [4, 2])
+    assert batches == ([] if not parallel or kind == "face" else [2] * (count // 2))
     kinds = [kind] if kind in {"face", "plate"} else ["face", "plate"]
     assert [d.kind for d in detections] == kinds * count
     expected = [(left, 0, left + 2, 2) if target == "face" else (left + 1, 1, left + 3, 3)

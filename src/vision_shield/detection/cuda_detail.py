@@ -153,7 +153,7 @@ class Detector(CPUDetector):
             yield from super()._view_detections(rgb, kind=kind)
             return
         height, width = rgb.shape[:2]
-        for bounds in batched(self._views(width, height, self.tile_side), 4):
+        for bounds in batched(self._views(width, height, self.tile_side), 2):
             prepared = []
             for left, top, right, bottom in bounds:
                 source = rgb[top:bottom, left:right]
