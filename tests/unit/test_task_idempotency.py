@@ -19,7 +19,8 @@ def test_fingerprint_tracks_content_and_effective_parameters():
     digest = request_fingerprint(**values)
     assert digest == request_fingerprint(**dict(reversed(list(values.items()))))
     for key, value in (("source_digest", "def"), ("redaction_mode", "mosaic"),
-                       ("notification_target", "platform"), ("profile_detection", True)):
+                       ("notification_target", "platform"), ("profile_detection", True),
+                       ("profile_detection", "host"), ("profile_detection", "forward-primary-face")):
         assert digest != request_fingerprint(**(values | {key: value}))
 
 

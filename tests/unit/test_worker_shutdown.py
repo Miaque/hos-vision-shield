@@ -42,11 +42,12 @@ async def test_stopping_worker_does_not_claim_another_task(monkeypatch):
     await tasks.execute("job", broker, None)
 
 
+@pytest.mark.parametrize('profile_mode', [True, 'host', 'forward-primary-face', 'forward-detail-plate'])
 @pytest.mark.parametrize('interval,tracking', [(1, 'template'), (3, 'template'), (3, 'flow')])
-async def test_requested_device_profile_passes_to_child_and_is_stored_without_stats(tmp_path, monkeypatch, interval, tracking):
+async def test_requested_device_profile_passes_to_child_and_is_stored_without_stats(tmp_path, monkeypatch, interval, tracking, profile_mode):
     broker = SimpleNamespace(connection_pool=None, state=SimpleNamespace(), ack_message=AsyncMock())
     record = dict(id='job', kind='video', generation=1, source_kind='upload', source_ref='local',
-                  desired_state='run', profile_detection=True, detection_interval=interval, tracking=tracking)
+                  desired_state='run', profile_detection=profile_mode, detection_interval=interval, tracking=tracking)
     store = SimpleNamespace(claim=AsyncMock(return_value=record), get=AsyncMock(return_value=record),
                             heartbeat=AsyncMock(return_value=True), finish=AsyncMock(), update_owned=AsyncMock())
     monkeypatch.setattr(tasks, 'Settings', lambda: Settings(_env_file=None, media_root=tmp_path))
@@ -55,7 +56,7 @@ async def test_requested_device_profile_passes_to_child_and_is_stored_without_st
     profile = dict(state='complete', samples=[dict(frame=64)])
     counts = dict(full_frames=4, skipped_frames=8, local_rechecks=2)
     async def run(command, payload, cancel, on_event, timeout):
-        assert payload['profile_detection'] is True and 'profile_detection' not in payload['config']
+        assert payload['profile_detection'] == profile_mode and 'profile_detection' not in payload['config']
         assert payload['config']['detection_interval'] == interval
         assert payload['config']['tracking'] == tracking
         await on_event(dict(device_profile=profile))
