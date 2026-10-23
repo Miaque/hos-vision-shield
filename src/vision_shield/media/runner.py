@@ -31,6 +31,8 @@ async def run_process(command: list[str], payload: dict, cancel: asyncio.Event,
         process = await asyncio.create_subprocess_exec(
             *command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
+            # A bounded 512-frame timing window exceeds asyncio's default 64 KiB line.
+            limit=256 * 1024,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
     except OSError:
