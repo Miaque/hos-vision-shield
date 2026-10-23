@@ -99,3 +99,22 @@ def test_trace_budget_failure_is_explicit_and_does_not_rerun_model(tmp_path, mon
     assert len(calls) == 1
     assert events[-1]['device_profile']['state'] == 'failed'
     assert not list(tmp_path.glob('plate-profile-*'))
+
+
+def test_external_ids_correlate_recreated_threads_without_including_parallel_models():
+    trace = dict(traceEvents=[event('user_annotation', SCOPE, 1000, 1000, **{'External id': 10}),
+        event('cpu_op', 'aten::model', 1050, 500, **{'External id': 11}),
+        event('cpu_op', 'other-model', 1050, 500, thread=7, **{'External id': 12}),
+        event('cpu_op', 'outside-scope', 2100, 500, **{'External id': 13}),
+        event('cuda_runtime', 'cudaLaunchKernel', 1100, 20, thread=99, correlation=1, **{'External id': 11}),
+        event('cuda_runtime', 'cudaMemcpyAsync', 1600, 10, thread=99, correlation=2, **{'External id': 10}),
+        event('cuda_runtime', 'cudaLaunchKernel', 1100, 20, thread=99, correlation=3, **{'External id': 12}),
+        event('cuda_runtime', 'cudaLaunchKernel', 1100, 20, correlation=4, **{'External id': 13}),
+        event('kernel', 'selected-model', 1200, 100, thread=2, correlation=1),
+        event('gpu_memcpy', 'Memcpy DtoH', 1700, 50, thread=2, correlation=2, bytes=64),
+        event('kernel', 'parallel-model', 1200, 700, thread=3, correlation=3),
+        event('kernel', 'outside-parent', 1200, 700, thread=3, correlation=4)])
+    result = summarize(trace)
+    assert result['kernel_count'] == 1 and result['top_kernels'][0]['name'] == 'selected-model'
+    assert result['cuda_api_events'] == 2
+    assert result['DtoH'] == dict(calls=1, milliseconds=0.05, bytes=64)

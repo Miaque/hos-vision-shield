@@ -142,7 +142,9 @@ class ProfileTimes:
             raise RuntimeError("Device trace exceeded 32 MiB budget")
         with patch("vision_shield.detection.device_profile.SCOPE", name):
             summary = summarize(json.loads(target.read_text("utf-8")))
-        self.device_samples.append(dict(stage=name, call=call, trace=target.name, **summary))
+        self.device_samples.append(dict(stage=name, call=call, trace=target.name,
+                                        context={key: value for key, value in CONTEXT.get().items() if key != "local_calls"},
+                                        **summary))
 
     def snapshot(self):
         from vision_shield.detection.timing import STAGES
@@ -294,5 +296,3 @@ def instrument(stack, collector):
     method(FrameRedactor, "_detections", "detect-pass")
     method(FrameRedactor, "_recheck", "track-recheck-request", purpose="track-confirm")
     method(FrameRedactor, "_follow", "template-follow")
-
-

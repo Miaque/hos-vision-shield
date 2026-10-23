@@ -147,10 +147,12 @@ def test_device_trace_uses_actual_model_name_and_restores_shared_helper(tmp_path
     monkeypatch.setattr(torch.profiler, "record_function", record)
     original = device_profile.SCOPE
     collector = profile.ProfileTimes(tmp_path)
-    with collector.trace(stage, 2):
+    with profile.scope(frame=17, purpose="local-confirm", source_shape=[320, 320, 3]), collector.trace(stage, 2):
         pass
     assert names == [stage]
     assert collector.device_samples[0]["stage"] == stage
     assert collector.device_samples[0]["kernel_count"] == 1
+    assert collector.device_samples[0]["context"]["frame"] == 17
+    assert collector.device_samples[0]["context"]["source_shape"] == [320, 320, 3]
     assert device_profile.SCOPE == original
     collector.close()
