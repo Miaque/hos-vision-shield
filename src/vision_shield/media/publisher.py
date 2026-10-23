@@ -14,7 +14,11 @@ class Publisher:
         """媒体侧也走统一状态转换，冻结和停流不能遗漏通知。"""
         return await self.store.publisher_change(task_id, operation, **arguments)
 
-    async def close(self, task: dict, owner_id: str | None = None, generation: int | None = None) -> bool:
+    async def close(self, task: dict, owner_id: str | None = None, generation: int | None = None,
+                    *, process_exited: bool = False) -> bool:
+        if task.get("publish_url"):
+            return bool(await self._change(task["id"], "external_close", owner_id=owner_id,
+                                          generation=generation, process_exited=process_exited))
         frozen = await self._change(task["id"], "freeze", owner_id=owner_id, generation=generation)
         if not frozen:
             return False
@@ -47,7 +51,7 @@ class Publisher:
         if not await self._change(task["id"], "open", owner_id=owner_id, generation=generation):
             raise RuntimeError("Media ownership was lost")
         if target is not None:
-            # shortcut: 外部推流依赖子进程退出，需跨 worker 强隔离时接入接收平台踢流接口。
+            # shortcut: 外部平台无远程踢流，需自动恢复未确认任务时接入接收平台踢流接口。
             return target
         base = self.settings.rtsp_publish_base_url or self.settings.rtsp_public_base_url
         url = httpx.URL(f"{base}/redacted/{task['id']}")

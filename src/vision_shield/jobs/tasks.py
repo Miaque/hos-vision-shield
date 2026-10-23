@@ -136,6 +136,10 @@ async def execute(task_id, broker, context):
 async def run_stream(record, store, settings, cancel, owner, generation):
     task_id, retry = record["id"], 0
     publisher = Publisher(store, settings)
+
+    async def child_exited():
+        await publisher.close(record, owner, generation, process_exited=True)
+
     try:
         while not cancel.is_set():
             try:
@@ -168,7 +172,8 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                                                                "publish_url": record.get("publish_url")},
                                directory=str(settings.media_root.resolve() / task_id / f"attempt-{generation}"))
                 result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
-                                           payload, cancel, event_received, settings.process_stop_timeout)
+                                           payload, cancel, event_received, settings.process_stop_timeout,
+                                           on_exit=child_exited if record.get("publish_url") else None)
                 if cancel.is_set():
                     break
                 await publisher.close(record, owner, generation)
