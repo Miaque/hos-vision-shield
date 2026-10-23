@@ -14,7 +14,8 @@ from vision_shield.media.video import check_streams
 
 @pytest.mark.parametrize("scheme", ["rtsp", "rtmp"])
 @pytest.mark.parametrize("audio_codec", [None, "aac", "pcm_alaw", "pcm_mulaw"])
-def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec):
+@pytest.mark.parametrize("fault", [None, TimeoutError, RuntimeError])
+def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec, fault):
     source, target = tmp_path / "source.nut", tmp_path / "output.nut"
     with av.open(str(source), "w") as writer:
         video = writer.add_stream("libx264", rate=12)
@@ -67,12 +68,21 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
 
     class Detector:
         def detect(self, pixels):
+            if fault:
+                raise fault("inference failed")
             return [(0, 0, 64, 48)]
 
     monkeypatch.setattr(streams.av, "open", open_endpoint)
     events = []
     config = Settings(_env_file=None).model_dump(mode="json")
     config["publish_url"] = f"{scheme}://media.test/live/camera?sign=secret"
+    if fault:
+        with pytest.raises(fault, match="inference failed"):
+            streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
+                                   Detector(), config, threading.Event(), events.append)
+        assert not any(event.get("output") for event in events)
+        assert not target.exists() or target.stat().st_size == 0
+        return
     streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
                            Detector(), config, threading.Event(), events.append)
     assert opened["format"] == ("flv" if scheme == "rtmp" else "rtsp")
