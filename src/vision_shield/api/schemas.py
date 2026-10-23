@@ -41,10 +41,36 @@ class TaskError(BaseModel):
     message: str
 
 
+class StreamOutputSample(BaseModel):
+    sequence: int = Field(ge=1)
+    source_pts: str
+    received_monotonic: float | None
+    encoded_monotonic: float
+    latency_seconds: float | None
+
+
+class StreamStats(BaseModel):
+    attempt_id: str
+    started_monotonic: float
+    sampled_monotonic: float
+    input_frames: int = Field(ge=0)
+    encoded_frames: int = Field(ge=0)
+    encoded_packets: int = Field(ge=0)
+    unmatched_packets: int = Field(ge=0)
+    missing_receive_frames: int = Field(ge=0)
+    pending_encoder_frames: int = Field(ge=0)
+    queue_frames: int = Field(ge=0)
+    audio_queue_bytes: int = Field(ge=0)
+    failed_frames: int = Field(ge=0)
+    protected_frames: int = Field(ge=0)
+    recent_outputs: list[StreamOutputSample] = Field(max_length=512)
+
+
 class Stats(BaseModel):
     processed_frames: Annotated[int, Field(ge=0)] = 0
     dropped_frames: Annotated[int, Field(ge=0)] = 0
     elapsed_seconds: Annotated[float, Field(ge=0)] = 0
+    stream: StreamStats | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class CpuUsage(BaseModel):

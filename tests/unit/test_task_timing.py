@@ -42,7 +42,7 @@ def test_model_load_time_is_logged_without_changing_response_stats(caplog):
     with caplog.at_level(logging.INFO):
         log_model_timing(event, "job-id", 3)
     assert "job-id" in caplog.text and "1.250" in caplog.text and "secret" not in caplog.text
-    assert set(Stats.model_fields) == {"processed_frames", "dropped_frames", "elapsed_seconds"}
+    assert set(Stats.model_validate(event).model_dump()) == {"processed_frames", "dropped_frames", "elapsed_seconds"}
 
 
 async def test_task_stage_timings_are_headers_and_do_not_change_the_json_contract():

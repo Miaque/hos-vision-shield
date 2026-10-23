@@ -68,13 +68,26 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
             assert payload["config"].get("detection_interval", 1) == (3 if cadence else 1)
             assert payload["config"].get("tracking", "template") == ("flow" if cadence else "template")
             await on_event(dict(output=True, output_monotonic=time.monotonic(), ready=True))
-            await on_event(dict(stats=dict(processed_frames=3, dropped_frames=0, elapsed_seconds=1),
+            from fractions import Fraction
+            from types import SimpleNamespace
+            from vision_shield.media.stream_metrics import StreamMetrics
+
+            metrics = StreamMetrics()
+            metrics.submit(SimpleNamespace(pts=0, time_base=Fraction(1, 1000)), 10.0, Fraction(9))
+            metrics.written(Fraction(0), 10.25)
+            stream_stats = dict(input_frames=3, queue_frames=0, audio_queue_bytes=0,
+                                failed_frames=0, protected_frames=0, **metrics.snapshot())
+            await on_event(dict(stats=dict(processed_frames=3, dropped_frames=0, elapsed_seconds=1, stream=stream_stats),
                                 video_decoder="h264_nvdec", video_encoder="h264_nvenc",
                                 detection_stats=dict(full_frames=1, skipped_frames=2)))
             current = await store.get(task["id"])
             assert current["ready"] and current["state"] == "running"
             assert current["video_decoder"] == "h264_nvdec" and current["video_encoder"] == "h264_nvenc"
             assert current["detection_stats"] == dict(full_frames=1, skipped_frames=2)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+                response = await client.get('/v1/tasks/' + task['id'])
+                assert response.status_code == 200
+                assert response.json()['stats']['stream'] == stream_stats
             await store.request_stop(task["id"], "stopped")
             cancel.set()
             if on_exit:

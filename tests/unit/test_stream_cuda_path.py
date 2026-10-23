@@ -12,8 +12,9 @@ from vision_shield.config import Settings
 from vision_shield.media import cuda_frames, streams
 
 
-@pytest.mark.parametrize("fault", [None, "decode", "mask", "encode"])
-def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault):
+@pytest.mark.parametrize("fault", [None, "decode", "mask", "encode", "mux"])
+@pytest.mark.parametrize("delayed", [False, True])
+def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed):
     source_video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
     frames = [SimpleNamespace(width=64, height=48, pts=900000 + 3600 * i, time_base=Fraction(1, 90000))
               for i in range(3)]
@@ -28,7 +29,9 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         streams = SimpleNamespace(video=[source_video], audio=[])
 
         def demux(self):
-            yield SimpleNamespace(stream=source_video, decode=lambda: frames)
+            for frame in frames:
+                yield SimpleNamespace(stream=source_video, pts=frame.pts, time_base=frame.time_base,
+                                      decode=lambda frame=frame: [frame])
 
         def close(self):
             closed.set()
@@ -57,7 +60,10 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             return False
 
         def mux(self, packet):
+            if fault == "mux":
+                raise RuntimeError("mux failed")
             encoded.append(packet.pts)
+            packet.pts = -1  # Muxers may rescale/mutate the packet after accepting it.
 
     def open_endpoint(url, *args, **kwargs):
         if url == "rtsp://camera/input":
@@ -68,12 +74,18 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             return Reader()
         return Writer()
 
+    pending = []
+
     def encode(frame=None):
         if frame is None:
-            return []
+            return pending
         if fault == "encode":
             raise RuntimeError("encode failed")
-        return [SimpleNamespace(pts=frame.pts)]
+        packet = SimpleNamespace(pts=frame.pts, time_base=frame.time_base)
+        if delayed:
+            pending.append(packet)
+            return []
+        return [packet]
 
     output_video = SimpleNamespace(width=64, height=48, encode=encode,
                                    codec_context=SimpleNamespace(name="h264_nvenc"))
@@ -96,6 +108,9 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         with pytest.raises(RuntimeError, match=f"{fault} failed"):
             process()
         assert not encoded and not any(event.get("output") for event in events)
+        if fault == "mux":
+            assert events[-1]['stats']['stream']['failed_frames'] == 1
+            assert events[-1]['stats']['stream']['encoded_frames'] == 0
     else:
         process()
         assert masked == [900000, 903600, 907200]
@@ -103,6 +118,8 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         assert threads["context"] == threads["decode"] != threading.get_ident()
         assert add_video.call_args.kwargs == {"live": True, "device": "cuda"}
         assert events[-1]["stats"]["processed_frames"] == 3
+        assert events[-1]["stats"]["stream"]["encoded_frames"] == 3
+        assert events[-1]["stats"]["stream"]["missing_receive_frames"] == 0
         assert events[-1]["video_decoder"] == "h264_nvdec"
         assert events[-1]["video_encoder"] == "h264_nvenc"
     software_mask.assert_not_called()

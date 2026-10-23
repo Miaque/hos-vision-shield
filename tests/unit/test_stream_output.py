@@ -16,14 +16,15 @@ from vision_shield.media.video import check_streams
 @pytest.mark.parametrize("scheme", ["rtsp", "rtmp"])
 @pytest.mark.parametrize("audio_codec", [None, "aac", "pcm_alaw", "pcm_mulaw"])
 @pytest.mark.parametrize("fault", [None, TimeoutError, RuntimeError])
+@pytest.mark.parametrize("source_bframes", [0, 2])
 @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
     os.getenv("RUN_GPU_TESTS") != "1", reason="requires real NVDEC/GPU mask/NVENC"))])
-def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec, fault, device):
+def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec, fault, source_bframes, device):
     source, target = tmp_path / "source.nut", tmp_path / "output.nut"
     with av.open(str(source), "w") as writer:
         video = writer.add_stream("libx264", rate=12)
         video.width, video.height, video.pix_fmt = 64, 48, "yuv420p"
-        video.options = {"tune": "zerolatency", "bf": "0"}
+        video.options = {"tune": "zerolatency", "bf": str(source_bframes)}
         audio = writer.add_stream(audio_codec, rate=8000 if audio_codec != "aac" else 48000) if audio_codec else None
         if audio:
             audio.layout = "mono"
@@ -86,9 +87,17 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
                                    Detector(), config, threading.Event(), events.append)
         assert not any(event.get("output") for event in events)
         assert not target.exists() or target.stat().st_size == 0
+        assert events[-1]['stats']['stream']['encoded_frames'] == 0
+        assert events[-1]['stats']['stream']['failed_frames'] == 1
         return
     streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
                            Detector(), config, threading.Event(), events.append)
+    metrics = events[-1]['stats']['stream']
+    assert metrics['input_frames'] == metrics['encoded_frames'] == 12
+    assert metrics['unmatched_packets'] == metrics['missing_receive_frames'] == metrics['failed_frames'] == 0
+    assert metrics['protected_frames'] == metrics['pending_encoder_frames'] == 0
+    assert [sample['sequence'] for sample in metrics['recent_outputs']] == list(range(1, 13))
+    assert all(sample['latency_seconds'] >= 0 for sample in metrics['recent_outputs'])
     assert opened["format"] == ("flv" if scheme == "rtmp" else "rtsp")
     if scheme == "rtmp":
         assert "rtsp_transport" not in opened["options"]

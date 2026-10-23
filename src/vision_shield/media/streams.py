@@ -10,6 +10,7 @@ import av
 import httpx
 
 from vision_shield.media.video import add_video, check_streams, check_dimensions, masked_frame
+from vision_shield.media.stream_metrics import StreamMetrics
 from vision_shield.redaction import FrameRedactor
 from vision_shield.detection.timing import snapshot
 if TYPE_CHECKING:
@@ -21,11 +22,13 @@ class StreamBuffer:
         self.frame_limit, self.audio_seconds, self.audio_limit = frame_limit, audio_seconds, audio_bytes
         self.stop, self.condition = stop, threading.Condition()
         self.frames, self.audio = deque(), deque()
+        self.received, self.last_received, self.input_frames = deque(), None, 0
         self.audio_size, self.dropped = 0, 0
         self.eof, self.error, self.input_video, self.input_audio = False, None, None, None
 
-    def frame(self, value):
+    def frame(self, value, received_at=None):
         with self.condition:
+            self.input_frames += 1
             # Some RTSP sources omit the first PTS; never publish or invent its clock.
             if value.pts is None or value.time_base is None:
                 self.dropped += 1
@@ -35,6 +38,7 @@ class StreamBuffer:
             if self.stop.is_set():
                 return
             self.frames.append(value)
+            self.received.append(received_at)
             self.condition.notify()
 
     def audio_packet(self, packet):
@@ -57,6 +61,7 @@ class StreamBuffer:
             if self.stop.is_set() or not self.frames:
                 return None
             frame = self.frames.popleft()
+            self.last_received = self.received.popleft()
             self.condition.notify()
             if frame.pts is None or frame.time_base is None:
                 raise BufferError("Invalid video clock")
@@ -77,6 +82,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         raise ValueError("Unsupported output protocol")
     buffer = StreamBuffer(config["frame_buffer_size"], config["audio_buffer_seconds"], config["audio_buffer_bytes"], stop)
     writer_done = threading.Event()
+    metrics = StreamMetrics()
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
                              detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"))
     frames = None
@@ -105,13 +111,19 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             with buffer.condition:
                 buffer.input_video = video
                 buffer.input_audio = source_reader.streams.audio[0] if source_reader.streams.audio else None
+            received = {}
             for packet in source_reader.demux():
                 if stop.is_set():
                     break
                 if packet.stream.type == "video":
+                    if packet.pts is not None and packet.time_base is not None:
+                        received.setdefault(packet.pts * packet.time_base, time.monotonic())
+                        if len(received) > 256:
+                            del received[next(iter(received))]
                     for frame in packet.decode():
                         check_dimensions(frame.width, frame.height, config)
-                        buffer.frame(frame)
+                        moment = frame.pts * frame.time_base if frame.pts is not None and frame.time_base is not None else None
+                        buffer.frame(frame, received.pop(moment, None))
                 elif packet.stream.type == "audio" and packet.dts is not None:
                     buffer.audio_packet(packet)
         except Exception as error:
@@ -132,6 +144,39 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     started = time.monotonic()
     last_output_report = None
     frame_seconds = encode_seconds = 0.0
+    video, last_stats, failed_frames, processing = None, None, 0, False
+
+    def report(force=False):
+        nonlocal last_stats
+        now = time.monotonic()
+        if not force and last_stats is not None and now - last_stats < 1:
+            return
+        with buffer.condition:
+            dropped = buffer.dropped
+            stream_stats = dict(input_frames=buffer.input_frames, queue_frames=len(buffer.frames),
+                               audio_queue_bytes=buffer.audio_size, failed_frames=failed_frames,
+                               protected_frames=0, **metrics.snapshot())
+        emit({**({"video_decoder": "h264_nvdec" if frames else "h264",
+                  "video_encoder": video.codec_context.name} if video else {}),
+              "detection_stats": redactor.detection_stats.copy(),
+              "stats": {"processed_frames": count, "dropped_frames": dropped,
+                        "elapsed_seconds": now - started, "stream": stream_stats},
+              "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
+                              encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})
+        last_stats = now
+
+    def mux_video(packet):
+        nonlocal failed_frames, processing
+        # Capture the encoder clock before mux rescales it (notably FLV milliseconds).
+        moment = packet.pts * packet.time_base if packet.pts is not None and packet.time_base is not None else None
+        try:
+            writer.mux(packet)
+        except Exception:
+            failed_frames += 1
+            processing = False
+            raise
+        metrics.written(moment, time.monotonic())
+
     try:
         options = {"rtsp_transport": "tcp"}
         if protocol == "rtmp":
@@ -146,6 +191,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             transcode_audio = False
             while sample := buffer.take():
                 frame, packets = sample
+                processing = True
                 moment = frame.pts * frame.time_base
                 if previous is not None and moment <= previous:
                     raise BufferError("Stream clock moved backwards")
@@ -182,8 +228,9 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         packet.stream = audio
                         writer.mux(packet)
                 published = False
+                metrics.submit(output, buffer.last_received, moment)
                 for packet in video.encode(output):
-                    writer.mux(packet)
+                    mux_video(packet)
                     published = True
                 encode_seconds += time.monotonic() - stage
                 # 只有视频包实际写入成功才证明输出；合并到至多每五秒一次。
@@ -191,22 +238,21 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     emit({"output": True, "output_monotonic": time.monotonic(), "ready": True})
                     last_output_report = time.monotonic()
                 count += 1
-                emit({"video_decoder": "h264_nvdec" if frames else "h264",
-                      "video_encoder": video.codec_context.name,
-                      "detection_stats": redactor.detection_stats.copy(),
-                      "stats": {"processed_frames": count, "dropped_frames": buffer.dropped,
-                                "elapsed_seconds": time.monotonic() - started},
-                      "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                                      encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})
+                processing = False
+                report()
                 if stop.is_set():
                     break
             if video:
                 for packet in video.encode():
-                    writer.mux(packet)
+                    mux_video(packet)
             if transcode_audio:
                 for packet in audio.encode():
                     writer.mux(packet)
+    except Exception:
+        failed_frames += int(processing)
+        raise
     finally:
         stop.set()
         writer_done.set()
         reader.join(timeout=config["rtsp_read_timeout"] + 1)
+        report(force=True)

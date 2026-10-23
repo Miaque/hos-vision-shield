@@ -57,6 +57,15 @@ def test_audio_remains_bounded():
         buffer.audio_packet(packet)
 
 
+def test_receive_timestamp_survives_queueing_and_input_count_includes_invalid_clock():
+    buffer = StreamBuffer(2, 2, 4, threading.Event())
+    buffer.frame(SimpleNamespace(pts=1, time_base=Fraction(1)), received_at=10.0)
+    buffer.frame(SimpleNamespace(pts=None, time_base=Fraction(1)), received_at=11.0)
+    buffer.take()
+    assert buffer.last_received == 10.0
+    assert buffer.input_frames == 2 and buffer.dropped == 1
+
+
 def test_take_uses_fifo_and_preserves_audio_clock():
     buffer = StreamBuffer(2, 2, 100, threading.Event())
     for pts in [1, 2]:
