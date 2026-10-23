@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -105,4 +106,37 @@ def test_codec_wrappers_keep_packets_and_stream_configuration(tmp_path):
     assert wrapped.mux(audio) is audio
     assert collector.report(0)["host_stages"]["decode-host"]["calls"] == 1
     assert collector.report(0)["host_stages"]["encode-host"]["calls"] == 2
+    collector.close()
+
+
+def test_device_trace_uses_actual_model_name_and_restores_shared_helper(tmp_path, monkeypatch):
+    import torch.profiler
+    from vision_shield.detection import device_profile
+
+    stage, names = "forward-detail-face", []
+    trace = {"traceEvents": [
+        dict(ph="X", cat="user_annotation", name=stage, tid=1, ts=0, dur=100),
+        dict(ph="X", cat="cuda_runtime", name="cudaLaunchKernel", tid=1, ts=1, dur=2, args={"correlation": 7}),
+        dict(ph="X", cat="kernel", name="actual-kernel", tid=2, ts=10, dur=5, args={"correlation": 7}),
+    ]}
+
+    @contextmanager
+    def profiler(**kwargs):
+        yield SimpleNamespace(export_chrome_trace=lambda target: Path(target).write_text(json.dumps(trace)))
+
+    @contextmanager
+    def record(name):
+        names.append(name)
+        yield
+
+    monkeypatch.setattr(torch.profiler, "profile", profiler)
+    monkeypatch.setattr(torch.profiler, "record_function", record)
+    original = device_profile.SCOPE
+    collector = profile.ProfileTimes(tmp_path)
+    with collector.trace(stage, 2):
+        pass
+    assert names == [stage]
+    assert collector.device_samples[0]["stage"] == stage
+    assert collector.device_samples[0]["kernel_count"] == 1
+    assert device_profile.SCOPE == original
     collector.close()

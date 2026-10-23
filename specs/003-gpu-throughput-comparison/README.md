@@ -1,7 +1,8 @@
 # 双路 GPU 吞吐与技术路线对比
 
 目标为 RTX 6000 Ada 上双路实时视频各稳定至少 15 FPS，继续争取 30 FPS。
-离线结果不能替代实时验收。当前仅完成代码审计和 P0 测量工具准备，未选定最终路线。
+离线结果不能替代实时验收。当前已完成代码审计、工具验证和两条路线的本地人脸整片诊断，
+RTX 6000 统一 P0 及最终路线选择尚未完成。
 
 ## 固定版本及实际配置
 
@@ -26,6 +27,8 @@ B 的 `compose.gpu.yaml` 原本设置 `DETECTION_BACKEND=quality_yolo`，不能�
 B 必须显式覆盖 `DETECTION_BACKEND=quality`、`INFERENCE_DEVICE=cuda`；测量脚本直接传递这些参数，
 不读取 `.env`，并在初始化及完成后检查没有导入 YOLO 模块。
 基点虽然包含 `_HalfPlate`，`quality` 没有调用它，不能把其 FP16 效果当作已经实现。
+表内 FP32 指参数/张量 dtype，不表示禁用了 TF32 数学路径；实际全局、matmul、cuDNN 卷积策略
+另记在运行报告。本地两条路线的 cuDNN 卷积策略均为 `tf32`，GTX 1080 不能验证 Ada 的对应数值路径。
 
 权重来源和预期 SHA256 见 [基线清单](baseline.json)，每次运行另记录实际文件哈希、
 实际参数 dtype、CUDA provider、设备 UUID、源码 SHA256 和工作区状态。
@@ -102,7 +105,8 @@ python scripts/profile-video.py --route B --mode host `
   `--checkpoints 64,424,768` 按该模型真实调用序号采样，每份至多 32 MiB。
   复用现有 CUDA trace 相关性分析，区分关联内核、GPU 活跃并集、HtoD/DtoH/DtoD、
   主机同步/分配；缺少关联内核直接失败，不将主机等待误报为纯 GPU 时间。
-- `throughput`：不安装包装器/设备采样，使用原生产处理器。媒体 FPS 与进程启动至结束 FPS 分列。
+- `throughput`：不安装包装器/设备采样，使用原生产处理器。媒体 FPS 与脚本测量开始至媒体处理完成 FPS 分列；
+  后者从导入推理依赖前计时，不含解释器启动、输出校验及报告写入。另记录工具文件 SHA256。
   CLI 没有 API 任务/队列边界，`task_creation_to_finish_fps=null`，正式该指标另从隔离 API 测量。
 
 首次前向与其后统计不等于所有尺寸均已预热。设备采样和 host 诊断 FPS 不计有效提速，

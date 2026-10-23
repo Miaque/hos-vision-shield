@@ -71,6 +71,7 @@ Kineto 在部分工作线程采样时打印 `External init callback must run in 
 
 本地大文件在忽略目录 `data/validation/route-b-p0-local/`，包括八份原始 trace、
 `calls.jsonl`、各次 `report.json`、`pilot-integrity.json` 和 MP4。
+
 ## B 原始人脸视频完整诊断
 
 已完成原始 `人脸视频1.mp4` 全部 **2450 帧**：零丢帧，所有有理数 PTS 与 1920×536 尺寸保持；
@@ -103,7 +104,58 @@ Kineto 在部分工作线程采样时打印 `External init callback must run in 
 
 完整记录：`full-face-host/report.json`、`full-face-host/calls.jsonl`、
 `full-face-host-integrity.json`、`full-face-host.mp4`、`positive-{host,throughput}`。
-A 的同素材完整诊断随后启动，当前未把运行中状态计作完成。
+
+## A 固定对照的同素材完整诊断
+
+精确检出 `581c175`、`quality_yolo`/CUDA、interval3/flow 完成 2450 帧，
+所有有理数 PTS/尺寸与源一致，零丢帧、实际 NVDEC/NVENC；源本来无音频。
+输出 SHA256 `ed2a6e96c04cbe79e85768dc8c00694640e0cd8f8a1ccc98dc85f4863a4c0fa2`。
+仍是 GTX 1080 单路仪表诊断，媒体 11.50402171 FPS，不作 RTX 6000 或最终路线结论。
+工具快照 `full-route-a-face-host-harness.py` SHA256
+`c1b3a2bec6ad4365cff319c68c99afecb8d65ffcdee8b72583fd60abb312f470`。
+
+| 模型 | 真实 forward | host 累计秒 | host P50/P95 ms，含所有用途 |
+| --- | ---: | ---: | --- |
+| YOLO face | 4283 | 40.596 | 10.071 / 12.268 |
+| EgoBlur plate，本机 FP32 | 1022 | 120.097 | 120.092 / 124.930 |
+| YuNet | 3890 | 46.437 | 9.283 / 11.373 |
+| HyperLPR detection | 2581 | 30.630 | 10.808 / 17.175 |
+
+实际主车牌 1022 次不是 2450/3；人脸及补模型仍在每帧工作，局部复核另增调用。
+A/B 不仅跟踪不同，还包括主脸模型、主车牌调度、执行池，不能把时间差归因于光流。
+
+同为整帧、同权重的 YuNet，host P50 在 A/B 分别为 9.874/37.679 ms；HyperLPR 为 10.870/36.721 ms。
+这说明 host 时间受到并发上下文影响，不能据此声称同一模型的纯 GPU 算子变慢了数倍。
+需在 RTX 6000 统一环境继续分离关联内核与等待；本机仍不能替代该验证。
+
+## 初步质量对照：尚未通过质量门槛
+
+对齐三份完整文件的全部 2450 帧，双向差异定位生成 615/316 个**候选组件**及 66/51 张逐秒代表图。
+它们不是目标标注，也不是漏遮数、误遮率或准确率。
+当前人工仅核查代表画面，未将整片质量标为通过：
+
+- 22.6 秒 B 在非人脸/非车牌的左侧格栅背景上出现遮罩，A 对应区域未遮。
+  自动候选在 22.45–22.65 秒的五帧出现同位置差异，已保存连续片段并重放原始 NVDEC 帧。
+  第 449 帧 EgoBlur plate 将格栅判为车牌，分数 0.753459 越过现有 0.7 直接接受线；
+  第 450/451 帧的 0.334249/0.181166 候选被 detail 局部确认否决，但历史遮罩仍延续到第 453 帧。
+  `trace-grid.py`、`grid-trigger.json`、`grid-trigger.log` 保留原调用及最终框证据。
+  下一步结合真实车牌/夜间的单模型召回评估选择性确认或补偿修复；
+  不直接复活历史已损失真实车牌的全面双模型强制确认，也不盲目统一抬阈值。
+- 117.5 秒两路对相邻人物的覆盖范围明显不同，119.7 秒帽子后侧轮廓与 117.85 秒背头遮罩也不同。
+  尚需原像素及连续片段确认，不把单帧面积差直接归为新漏遮或允许通过。
+
+`face-witnesses/` 保存 source/A/B 的两组连续片段（21.9–23.4 秒、117.3–120.2 秒），
+共六份 MP4，全部原分辨率及有理数 PTS 保持；`manifest.json` 记录完整源、帧区间和哈希。
+双向候选与拼图分别位于 `face-compare-a-to-b/`、`face-compare-b-to-a/`。
+
+## 诊断工具计时口径补正
+
+新报告将字段明确命名为 `measurement_start_to_media_finish_fps`，
+边界为导入推理依赖前到生产媒体处理器返回；不含解释器启动、输出核验和报告写入。
+旧样例的 `process_start_to_finish_fps` 实际也是这个边界，不能解释为完整进程或 API 端到端 FPS。
+另增加工具文件哈希及实际线程/数学策略；trace 标记改用实际模型名。
+最后八项定向检查通过（2.00 秒），真实非空 GPU 遮罩另采 `forward-detail-face` 第 2 次调用，
+得到 150 个关联内核，trace 标记与模型名一致，完整输出仍与普通短片逐字节相同。
 
 `http://localhost:18000` 存活/就绪及资源接口只读查询均为 200；现有响应不能证明独立 B 的
 源码/后端配置，未在该入口提交对照任务，也未使用 main 部署命令更新实验分支。

@@ -98,17 +98,18 @@ class ProfileTimes:
     @contextmanager
     def trace(self, name, call):
         from torch.profiler import ProfilerActivity, profile, record_function
-        from vision_shield.detection.device_profile import MAX_TRACE_BYTES, SCOPE, summarize
+        from vision_shield.detection.device_profile import MAX_TRACE_BYTES, summarize
 
         with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as profiler:
-            with record_function(SCOPE):
+            with record_function(name):
                 yield
         target = self.directory / f"{name}-{call}.json"
         profiler.export_chrome_trace(str(target))
         if target.stat().st_size > MAX_TRACE_BYTES:
             target.unlink()
             raise RuntimeError("Device trace exceeded 32 MiB budget")
-        summary = summarize(json.loads(target.read_text("utf-8")))
+        with patch("vision_shield.detection.device_profile.SCOPE", name):
+            summary = summarize(json.loads(target.read_text("utf-8")))
         self.device_samples.append(dict(stage=name, call=call, trace=target.name, **summary))
 
     def snapshot(self):
@@ -311,6 +312,7 @@ def main():
     collector = None if args.mode == "throughput" else ProfileTimes(
         args.report_dir, device_stage=args.device_stage if args.mode == "device" else None, checkpoints=checkpoints)
     result = dict(state="running", route=args.route, mode=args.mode, git_commit=head, source_root=str(root),
+                  harness_sha256=sha256(__file__),
                   config={key: str(config[key]) for key in ("detection_backend", "inference_device", "detection_max_side",
                           "detection_box_padding", "redaction_mode", "detection_interval", "tracking")},
                   source_sha256=sha256(args.source), weights={}, instrumented=args.mode != "throughput",
@@ -326,6 +328,7 @@ def main():
         result["runtime"] = dict(torch=torch.__version__, cuda=torch.version.cuda, ort=ort.__version__,
                                  gpu=torch.cuda.get_device_name(), gpu_uuid=str(getattr(torch.cuda.get_device_properties(0), "uuid", "unavailable")),
                                  capability=list(torch.cuda.get_device_capability()),
+                                 global_fp32_precision=torch.backends.fp32_precision,
                                  matmul_fp32_precision=torch.backends.cuda.matmul.fp32_precision,
                                  cudnn_conv_fp32_precision=torch.backends.cudnn.conv.fp32_precision)
         with ExitStack() as stack:
@@ -334,6 +337,8 @@ def main():
             initialize = perf_counter()
             detector = load_detector(config)
             result["initialize_seconds"] = perf_counter() - initialize
+            import cv2
+            result["runtime"].update(torch_threads=torch.get_num_threads(), opencv_threads=cv2.getNumThreads())
             if args.route == "B" and "vision_shield.detection.yolo" in sys.modules:
                 raise RuntimeError("Route B must not import YOLO")
             result["runtime"]["primary_parameter_dtypes"] = [sorted({str(p.dtype) for p in model.parameters()})
@@ -355,7 +360,8 @@ def main():
             frames = process_video(args.source, args.target, detector, config, Event(), emit)
             result.update(state="complete", frames=frames, processing_seconds=perf_counter() - processing, event=latest)
             result["media_fps"] = frames / latest["stats"]["elapsed_seconds"]
-            result["process_start_to_finish_fps"] = frames / (perf_counter() - started)
+            result["measurement_start_to_media_finish_fps"] = frames / (perf_counter() - started)
+            result["measurement_boundary"] = "Before framework imports to process_video return; excludes interpreter startup, output verification and report writing."
             result["task_creation_to_finish_fps"] = None  # Direct CLI has no API/queue boundary.
             result["peak_torch_memory_bytes"] = torch.cuda.max_memory_allocated()
             if args.route == "B" and "vision_shield.detection.yolo" in sys.modules:
