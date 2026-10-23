@@ -76,13 +76,21 @@ async def resources(request: Request):
 
 
 @router.post("/stream-tasks", response_model=TaskResponse, status_code=202)
-async def create_stream(data: StreamInput, request: Request, response: Response):
+async def create_stream(data: StreamInput, request: Request, response: Response,
+                        detection_interval: Literal['1', '3'] | None = Header(default=None, alias='X-Detection-Interval',
+                            description='路线 A 实验调度；省略时逐帧，3 配合 flow 验证；不丢解码或输出帧'),
+                        tracking: Literal['template', 'flow'] | None = Header(default=None, alias='X-Tracking-Mode',
+                            description='flow 须显式配合检测间隔 3；质量及实时性能需独立验证')):
     key, target = creation_headers(request)
     settings = request.app.state.settings
+    if tracking == 'flow' and detection_interval != '3':
+        raise HTTPException(422, 'invalid_input')
+    options = {**({'detection_interval': 3} if detection_interval == '3' else {}),
+               **({'tracking': 'flow'} if tracking == 'flow' else {})}
     fingerprint = request_fingerprint(kind="stream", source_kind="rtsp", source_digest=data.url,
                                       redaction_mode=data.redaction_mode, notification_target=target,
                                       profile_detection=False,
-                                      **({"publish_url": data.publish_url} if data.publish_url is not None else {}))
+                                      **({"publish_url": data.publish_url} if data.publish_url is not None else {}), **options)
     task = await replay(request, key, fingerprint)
     if task is not None:
         response.headers["Location"] = f"/v1/tasks/{task['id']}"
@@ -93,7 +101,7 @@ async def create_stream(data: StreamInput, request: Request, response: Response)
     await require_worker(request.app.state.redis, "stream", settings.lease_seconds)
     await require_media_capacity(settings)
     task = await request.app.state.store.create("stream", "rtsp", data.url, redaction_mode=data.redaction_mode,
-        idempotency_key=key, fingerprint=fingerprint, notification_target=target, publish_url=data.publish_url)
+        idempotency_key=key, fingerprint=fingerprint, notification_target=target, publish_url=data.publish_url, **options)
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)
 

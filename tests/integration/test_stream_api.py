@@ -8,7 +8,8 @@ from vision_shield.jobs import tasks
 
 
 @pytest.mark.parametrize("publish_url", [None, "rtsp://127.0.0.1/custom?token=secret", "rtmp://127.0.0.1/live/custom?sign=secret"])
-async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_path, publish_url):
+@pytest.mark.parametrize("cadence", [False, True])
+async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_path, publish_url, cadence):
     app = create_app(Settings(_env_file=None, redis_url=redis_url, media_root=tmp_path, source_allowlist=["127.0.0.1"]))
     async with app.router.lifespan_context(app), httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         redis = app.state.redis
@@ -18,16 +19,26 @@ async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_p
         body = {"url": "rtsp://127.0.0.1/source"}
         if publish_url:
             body["publish_url"] = publish_url
-        created = await client.post("/v1/stream-tasks", json=body, headers={"Idempotency-Key": "stream"})
+        headers = {"Idempotency-Key": "stream"}
+        if cadence:
+            headers.update({"X-Detection-Interval": "3", "X-Tracking-Mode": "flow"})
+        created = await client.post("/v1/stream-tasks", json=body, headers=headers)
         assert created.status_code == 202
         task = created.json()
         assert bool(task["playback_url"]) is (publish_url is None) and not task["ready"]
         assert "secret" not in created.text
         stored = await app.state.store.get(task["id"])
         assert stored.get("publish_url") == publish_url
-        assert (await client.post("/v1/stream-tasks", json=body, headers={"Idempotency-Key": "stream"})).json()["id"] == task["id"]
+        assert stored.get("detection_interval", 1) == (3 if cadence else 1)
+        assert stored.get("tracking", "template") == ("flow" if cadence else "template")
+        assert (await client.post("/v1/stream-tasks", json=body, headers=headers)).json()["id"] == task["id"]
+        if not cadence:
+            defaults = headers | {"X-Detection-Interval": "1", "X-Tracking-Mode": "template"}
+            assert (await client.post("/v1/stream-tasks", json=body, headers=defaults)).json()["id"] == task["id"]
+        other_headers = {"Idempotency-Key": "stream"} if cadence else headers | {"X-Detection-Interval": "3", "X-Tracking-Mode": "flow"}
+        assert (await client.post("/v1/stream-tasks", json=body, headers=other_headers)).status_code == 409
         changed = body | {"publish_url": "rtmp://127.0.0.1/live/other"}
-        assert (await client.post("/v1/stream-tasks", json=changed, headers={"Idempotency-Key": "stream"})).status_code == 409
+        assert (await client.post("/v1/stream-tasks", json=changed, headers=headers)).status_code == 409
         assert (await client.get(f"/v1/tasks/{task['id']}/result")).status_code == 409
         for _ in range(2):
             stopped = await client.patch(f"/v1/tasks/{task['id']}", json={"desired_state": "stopped"})
@@ -35,7 +46,8 @@ async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_p
 
 
 @pytest.mark.parametrize("scheme", ["rtsp", "rtmp"])
-async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, tmp_path, monkeypatch, scheme):
+@pytest.mark.parametrize("cadence", [False, True])
+async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, tmp_path, monkeypatch, scheme, cadence):
     import asyncio
     import time
 
@@ -46,12 +58,15 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
         await app.state.redis.flushdb()
         store = app.state.store
         target = f"{scheme}://127.0.0.1/app/camera?sign=secret"
-        task = await store.create("stream", "rtsp", "rtsp://127.0.0.1/source", publish_url=target)
+        options = dict(detection_interval=3, tracking="flow") if cadence else {}
+        task = await store.create("stream", "rtsp", "rtsp://127.0.0.1/source", publish_url=target, **options)
         owned = await store.claim(task["id"], "owner")
         cancel = asyncio.Event()
 
         async def run(command, payload, cancel, on_event, timeout, *, on_exit=None):
             assert payload["publish_url"] == target and payload["config"]["publish_url"] == target
+            assert payload["config"].get("detection_interval", 1) == (3 if cadence else 1)
+            assert payload["config"].get("tracking", "template") == ("flow" if cadence else "template")
             await on_event(dict(output=True, output_monotonic=time.monotonic(), ready=True))
             await on_event(dict(stats=dict(processed_frames=3, dropped_frames=0, elapsed_seconds=1),
                                 video_decoder="h264_nvdec", video_encoder="h264_nvenc",
@@ -71,3 +86,23 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
         current = await store.get(task["id"])
         assert current["state"] == "stopped" and not current["publish_allowed"]
         assert current["publish_url"] == target and not current["sessions"]
+
+
+@pytest.mark.parametrize("headers", [
+    {"X-Detection-Interval": "2"},
+    {"X-Tracking-Mode": "flow"},
+    {"X-Detection-Interval": "1", "X-Tracking-Mode": "flow"},
+    {"X-Detection-Interval": "3", "X-Tracking-Mode": "invalid"},
+])
+async def test_invalid_stream_cadence_is_rejected_before_admission(tmp_path, monkeypatch, headers):
+    from unittest.mock import AsyncMock
+
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, source_allowlist=["127.0.0.1"]))
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://test"
+    ) as client:
+        create = AsyncMock()
+        monkeypatch.setattr(app.state.store, "create", create)
+        response = await client.post("/v1/stream-tasks", json={"url": "rtsp://127.0.0.1/source"}, headers=headers)
+        assert response.status_code == 422
+        create.assert_not_awaited()

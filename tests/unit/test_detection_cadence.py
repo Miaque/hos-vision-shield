@@ -84,13 +84,14 @@ async def test_cadence_header_is_video_only_and_retains_private_counters(tmp_pat
             app.state.store.create.assert_not_called()
 
 
-async def test_store_cadence_defaults_to_every_frame_and_rejects_nonvideo_or_invalid_intervals():
+async def test_store_cadence_defaults_to_every_frame_and_rejects_image_or_invalid_intervals():
     from vision_shield.jobs.store import TaskStore
 
     store = TaskStore(AsyncMock())
     store._change = AsyncMock(side_effect=lambda task_id, operation, record, limit: record)
     assert 'detection_interval' not in await store.create('video', 'upload', 'local')
     assert (await store.create('video', 'upload', 'local', detection_interval=3))['detection_interval'] == 3
-    for kind, interval in [('image', 3), ('stream', 3), ('video', 0), ('video', True)]:
+    assert (await store.create('stream', 'rtsp', 'rtsp://camera', detection_interval=3))['detection_interval'] == 3
+    for kind, interval in [('image', 3), ('video', 0), ('video', True), ('stream', 2)]:
         with pytest.raises(ValueError):
             await store.create(kind, 'upload', 'local', detection_interval=interval)

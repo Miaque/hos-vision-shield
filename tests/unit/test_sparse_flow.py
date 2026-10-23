@@ -279,13 +279,14 @@ async def test_flow_request_is_explicit_and_restricted_to_third_frame_video(tmp_
             app.state.store.create.assert_not_called()
 
 
-async def test_store_rejects_flow_outside_video_interval_three():
+async def test_store_rejects_flow_outside_video_or_stream_interval_three():
     from vision_shield.jobs.store import TaskStore
 
     store = TaskStore(AsyncMock())
     store._change = AsyncMock(side_effect=lambda task_id, operation, record, limit: record)
     assert 'tracking' not in await store.create('video', 'upload', 'local')
     assert (await store.create('video', 'upload', 'local', detection_interval=3, tracking='flow'))['tracking'] == 'flow'
-    for kind, interval in [('video', 1), ('image', 3), ('stream', 3)]:
+    assert (await store.create('stream', 'rtsp', 'rtsp://camera', detection_interval=3, tracking='flow'))['tracking'] == 'flow'
+    for kind, interval in [('video', 1), ('image', 3), ('stream', 1)]:
         with pytest.raises(ValueError):
             await store.create(kind, 'upload', 'local', detection_interval=interval, tracking='flow')

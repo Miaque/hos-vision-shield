@@ -290,9 +290,9 @@ class TaskStore:
                                      'forward-detail-face', 'forward-detail-plate'):
             raise ValueError('Unsupported detection profile')
         if (type(detection_interval) is not int or detection_interval not in (1, 3)
-                or detection_interval != 1 and kind != 'video'):
+                or detection_interval != 1 and kind not in ('video', 'stream')):
             raise ValueError('Unsupported detection interval')
-        if tracking not in ('template', 'flow') or tracking == 'flow' and (kind != 'video' or detection_interval != 3):
+        if tracking not in ('template', 'flow') or tracking == 'flow' and (kind not in ('video', 'stream') or detection_interval != 3):
             raise ValueError('Unsupported tracking mode')
         if publish_url is not None and kind != "stream":
             raise ValueError("A publish URL requires a stream task")
