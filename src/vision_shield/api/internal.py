@@ -10,6 +10,7 @@ class MediaCheck(BaseModel):
     user: str = Field(default="", max_length=128)
     password: str = Field(default="", max_length=128)
     action: str = Field(max_length=32)
+    protocol: str = Field(default="", max_length=32)
     path: str = Field(max_length=256)
     id: str = Field(pattern=r"^[0-9a-fA-F-]{36}$")
 

@@ -221,7 +221,13 @@ uv run pytest -q
 
 Hub 收到通知只表示状态交接；完整结果仍由 Hub 下载、校验、上传 MinIO，随后更新 Platform 告警文件信息。该集成的业务闭环和浏览器播放仍须联调验收，单独通知成功不代表已交付。
 
-### 遮挡样式
+### Platform 内部 HLS 对接
+
+复用现有 MediaMTX 1.21.2，将 `HLS_CDN_SECRET` 配成至少 32 字符随机密钥，并与 Platform `VISION_SHIELD_HLS_CDN_SECRET` 一致；内部端口默认仅本机可达。任务固定 RTSP 路径继续为 `redacted/{task_id}`，Platform 按同一路径代理 HLS。API 转发地址与内部 HLS 地址分别配置，不向浏览器公开 CDN 密钥。
+
+CDN 密钥用于识别内部代理，不能单独禁止匿名 HLS 会话。配置已将 read 纳入原有媒体鉴权：内部 RTSP read 保持可用，普通 HLS read 拒绝，持 CDN 密钥的 Platform 请求绕过浏览器 cookieCheck 跳转；推流仍校验 worker 代次和租约。2026-10-23 用户指定转封装与媒体播放可用性由其他团队确保，本轮不再运行本地 MediaMTX 或浏览器播放验收；这些配置属于对接合同，不代表已部署。
+
+### 遮挡样式参数
 
 创建任务时传入 `redaction_mode`：`solid`（默认）为不透明深灰色矩形 RGB `(64, 64, 64)`，`mosaic` 为马赛克。此参数由接口请求控制，不使用环境变量。每个任务单独保存，查询响应会返回所选样式，流重连继续使用原值；未指定或历史任务缺少该字段时使用 `solid`。
 
