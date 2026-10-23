@@ -6,14 +6,16 @@ rtsp: yes
 rtspAddress: :8554
 rtspTransports: [tcp]
 rtmp: no
-hls: no
+hls: yes
+hlsAddress: :8888
+hlsAlwaysRemux: no
+hlsMuxerCloseAfter: 60s
 webrtc: no
 srt: no
 moq: no
 authMethod: http
 authHTTPAddress: http://api:8000/internal/media/publish-check
 authHTTPExclude:
-  - action: read
   - action: api
 pathDefaults:
   source: publisher

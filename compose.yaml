@@ -46,11 +46,17 @@ services:
     image: bluenviron/mediamtx:1.21.2@sha256:c7540465f868a02652118bea5a0daab12a29ac0f6cb8485abd535939ecddf886
     platform: linux/amd64
     restart: unless-stopped
+    environment:
+      MTX_HLSCDNSECRET: ${HLS_CDN_SECRET:?请设置至少32字符的内部HLS代理密钥}
     volumes:
       - ./deploy/mediamtx.compose.yml:/mediamtx.yml:ro
     ports:
       - target: 8554
         published: ${RTSP_PORT:-8554}
+        host_ip: ${BIND_ADDRESS:-127.0.0.1}
+        protocol: tcp
+      - target: 8888
+        published: ${HLS_PORT:-8888}
         host_ip: ${BIND_ADDRESS:-127.0.0.1}
         protocol: tcp
 

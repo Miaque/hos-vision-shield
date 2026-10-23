@@ -32,3 +32,9 @@ async def test_publisher_uses_internal_address_and_response_stays_public(interna
     assert address.password == "owner"
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)))
     assert public(request, record).playback_url == "rtsp://external:8554/redacted/job"
+
+
+@pytest.mark.parametrize("protocol,path,allowed", [("rtsp", "redacted/job", True), ("hls", "redacted/job", False), ("", "redacted/job", False), ("rtsp", "other/job", False)])
+async def test_hls_cannot_bypass_cdn_auth_through_anonymous_read(protocol, path, allowed):
+    publisher = Publisher(None, None)
+    assert await publisher.authorize(dict(action="read", protocol=protocol, path=path)) is allowed

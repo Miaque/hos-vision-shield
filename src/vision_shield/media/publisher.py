@@ -45,6 +45,9 @@ class Publisher:
         return str(url.copy_with(username=f"{task['id']}.{generation}", password=owner_id))
 
     async def authorize(self, payload: dict) -> bool:
+        # RTSP 仍只在受信网络读取；HLS 普通会话一律拒绝，代理使用内部 CDN 密钥。
+        if payload.get("action") == "read":
+            return payload.get("protocol") == "rtsp" and payload.get("path", "").startswith("redacted/")
         try:
             task_id, generation = payload["user"].rsplit(".", 1)
             if payload["action"] != "publish" or payload["path"] != f"redacted/{task_id}":
