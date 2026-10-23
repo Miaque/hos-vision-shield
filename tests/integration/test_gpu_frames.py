@@ -215,11 +215,12 @@ def test_flow_proposals_recover_entry_growth_and_profile_expiry():
     detector = load_detector(Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump())
     if not isinstance(detector.primary.models[1], _HalfPlate):
         detector.primary.models[1] = _HalfPlate(detector.primary.models[1])
-    cases = [("22-27-35车撞人.mp4", 42, 44.166, (1490, 505, 1530, 560)),
-             ("22-27-35车撞人.mp4", 50.8, 52.273, (90, 85, 215, 140)),
-             ("report/人脸视频1.mp4", 118.5, 120, (16, 214, 36, 244)),
-             ("report/人脸视频1.mp4", 102.5, 103.25, (1809, 202, 1828, 213))]
-    for filename, start, target, box in cases:
+    cases = [("22-27-35车撞人.mp4", 42, 44.166, (1490, 505, 1530, 560), True),
+             ("22-27-35车撞人.mp4", 50.8, 52.273, (90, 85, 215, 140), True),
+             ("report/人脸视频1.mp4", 118.5, 120, (16, 214, 36, 244), True),
+             ("report/人脸视频1.mp4", 102.5, 103.25, (1809, 202, 1828, 213), True),
+             ("22-27-35车撞人.mp4", 23, 24., (1556, 316, 1630, 345), False)]
+    for filename, start, target, box, masked in cases:
         frames = CUDAFrames()
         baseline = FrameRedactor(detector)
         candidate = FrameRedactor(detector, detection_interval=3, tracking="flow")
@@ -256,7 +257,11 @@ def test_flow_proposals_recover_entry_growth_and_profile_expiry():
                         planes = [torch.from_dlpack(plane.__dlpack__()) for plane in output.planes]
                         actual = rgb_pixels(*planes, output.colorspace, output.color_range == 2)
                         x, y, a, b = box
-                        assert ((actual[y:b, x:a].int() - 64).abs() <= 2).all(), (filename, moment, redactor.tracking)
+                        solid = (actual[y:b, x:a].int() - 64).abs() <= 2
+                        if masked:
+                            assert solid.all(), (filename, moment, redactor.tracking)
+                        else:
+                            assert solid.all(dim=2).float().mean() < .05, (filename, moment, redactor.tracking)
                         assert output.pts * output.time_base == frame.pts * frame.time_base
                         checked = True
         assert checked

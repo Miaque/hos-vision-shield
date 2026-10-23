@@ -100,6 +100,10 @@ class FrameRedactor:
                 if moment - track.seen > 0.5 or face_only and track.kind == "face":
                     continue
                 flow_boxes[old] = self._flow(gray, track.box, track.reference)
+                # Stale plate tracks can lock onto background after the original matcher has failed.
+                if (flow_boxes[old] is not None and track.kind == "plate" and moment - track.seen > 0.2
+                        and self._follow(gray, track.box, track.reference) is None):
+                    flow_boxes[old] = None
                 if flow_boxes[old] is None:
                     self.detection_stats["flow_failures"] += 1
                     recheck = True

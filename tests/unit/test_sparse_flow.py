@@ -57,6 +57,32 @@ def test_scene_reset_forces_detection_instead_of_publishing_an_unmasked_skip():
     assert redactor.detection_stats['full_frames'] == 2 and redactor.detection_stats['full_rechecks'] == 1
 
 
+@pytest.mark.parametrize('age,template_valid', [(.08, False), (.28, True), (.28, False)])
+def test_stale_plate_flow_rechecks_when_original_template_rejects_background(monkeypatch, age, template_valid):
+    class Plates:
+        visible = True
+
+        def detect_regions(self, pixels):
+            return [Detection('plate', (60, 50, 120, 80), .9)] if self.visible else []
+
+        def detect_faces(self, pixels):
+            return []
+
+    detector = Plates()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
+    monkeypatch.setattr(redactor, '_follow', lambda gray, box, reference=None: box if template_valid else None)
+    monkeypatch.setattr(redactor, '_recheck', lambda *a: None)
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    detector.visible = False
+    redactor.apply(pixels, age / 2)
+    actual = redactor.apply(pixels, age)
+    expired = age > .2 and not template_valid
+    assert redactor.detection_stats['full_rechecks'] == int(expired)
+    assert bool((actual[50:80, 60:120] == 64).all()) is not expired
+
+
 def test_good_flow_skips_inference_but_does_not_renew_detection_lifetime():
     detector = MovingTarget()
     detector.box = (60, 50, 120, 100)
