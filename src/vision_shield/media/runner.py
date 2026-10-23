@@ -49,12 +49,19 @@ async def run_process(command: list[str], payload: dict, cancel: asyncio.Event,
             read = asyncio.create_task(process.stdout.readline())
             done, _ = await asyncio.wait({read, stop}, return_when=asyncio.FIRST_COMPLETED)
             if stop in done:
-                read.cancel()
                 with contextlib.suppress(BrokenPipeError, ConnectionResetError):
                     process.stdin.write(b'{"stop":true}\n')
                     await process.stdin.drain()
                 try:
-                    await asyncio.wait_for(process.wait(), stop_timeout)
+                    # Keep consuming final flush/stats events, including a read already completed.
+                    async with asyncio.timeout(stop_timeout):
+                        line = await read
+                        while line:
+                            event = json.loads(line)
+                            result.update(event)
+                            await on_event(event)
+                            line = await process.stdout.readline()
+                        await process.wait()
                 except TimeoutError:
                     await kill_owned_process(process)
                 result["cancelled"] = True
