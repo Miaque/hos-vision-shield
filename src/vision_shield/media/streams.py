@@ -1,7 +1,6 @@
 """One RTSP input, a bounded latest-frame buffer, and one output mux owner."""
 
 from collections import deque
-from fractions import Fraction
 import threading
 import time
 from collections.abc import Callable
@@ -110,6 +109,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     reader.start()
     count, origin, previous = 0, None, None
     started = time.monotonic()
+    last_output_report = None
     frame_seconds = encode_seconds = 0.0
     try:
         with av.open(target, "w", format="rtsp", options={"rtsp_transport": "tcp"},
@@ -138,11 +138,15 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     packet.dts -= round(origin / packet.time_base)
                     packet.stream = audio
                     writer.mux(packet)
+                published = False
                 for packet in video.encode(output):
                     writer.mux(packet)
+                    published = True
                 encode_seconds += time.monotonic() - stage
-                if not count:
-                    emit({"ready": True})
+                # 只有视频包实际写入成功才证明输出；合并到至多每五秒一次。
+                if published and (last_output_report is None or time.monotonic() - last_output_report >= 5):
+                    emit({"output": True, "output_monotonic": time.monotonic(), "ready": True})
+                    last_output_report = time.monotonic()
                 count += 1
                 emit({"stats": {"processed_frames": count, "dropped_frames": buffer.dropped,
                                 "elapsed_seconds": time.monotonic() - started},

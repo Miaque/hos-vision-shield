@@ -22,6 +22,9 @@ x-app: &app
     RTSP_PUBLISH_BASE_URL: rtsp://mediamtx:8554
     RTSP_PUBLIC_BASE_URL: ${RTSP_PUBLIC_BASE_URL:?请设置客户端可达的 RTSP 播放地址}
     SOURCE_ALLOWLIST: ${SOURCE_ALLOWLIST:-[]}
+    NOTIFICATION_TARGETS: "${NOTIFICATION_TARGETS:-{}}"
+    NOTIFICATION_LIMIT: ${NOTIFICATION_LIMIT:-1000}
+    MEDIA_DISK_HIGH_WATERMARK: ${MEDIA_DISK_HIGH_WATERMARK:-0.95}
 
 x-media: &media
   type: bind
@@ -77,6 +80,10 @@ services:
     depends_on:
       mediamtx:
         condition: service_started
+
+  notifier:
+    <<: *app
+    command: [python, -m, vision_shield.jobs.notify]
 
   file-worker:
     <<: *app

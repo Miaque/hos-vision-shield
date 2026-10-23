@@ -3,6 +3,7 @@ import contextlib
 import logging
 from pathlib import Path
 import sys
+import time
 from uuid import uuid4
 
 import httpx
@@ -151,7 +152,13 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                     if event.get("failure_type"):
                         logging.getLogger(__name__).warning("task=%s media failure type=%s at=%s", task_id, event["failure_type"], event.get("failure_at"))
                     values = {}
-                    if event.get("ready"):
+                    if event.get("output"):
+                        # 父子进程共享单调时钟，管道积压不能把陈旧输出改成新鲜证明。
+                        age_ms = max(0, int((time.monotonic() - event["output_monotonic"]) * 1000))
+                        confirmed = await store.mark_output(task_id, owner, generation, age_ms=age_ms)
+                    else:
+                        confirmed = False
+                    if event.get("ready") and confirmed:
                         values.update(state="running", ready=True, error=None)
                     if "stats" in event:
                         values["stats"] = event["stats"]

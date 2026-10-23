@@ -1,6 +1,7 @@
 """Persistent task intent and atomic ownership transitions in one Redis instance."""
 
 import json
+import hashlib
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -12,14 +13,34 @@ local clock = redis.call('TIME')
 local now = tonumber(clock[1])*1000 + math.floor(tonumber(clock[2])/1000)
 local raw = redis.call('HGET', KEYS[1], 'payload')
 if op == 'create' then
+    arg._observed_ms = now
+    if arg.submission_key ~= cjson.null then
+        local binding = redis.call('GET', KEYS[4])
+        if binding then
+            local previous = redis.call('HGET', 'vs:task:'..binding, 'payload')
+            if not previous then return 'invalid' end
+            local replay = cjson.decode(previous)
+            if replay.fingerprint ~= arg.fingerprint then return 'conflict' end
+            replay._observed_ms = now
+            return cjson.encode(replay)
+        end
+    end
+    if raw then return 'conflict' end
     local pool = arg.kind == 'stream' and KEYS[3] or KEYS[2]
     if redis.call('SCARD', pool) >= tonumber(ARGV[4]) then return 'capacity' end
-    redis.call('HSET', KEYS[1], 'payload', ARGV[2])
+    if arg.notification_target ~= cjson.null then
+        if redis.call('SCARD', KEYS[5]) >= tonumber(ARGV[6]) then return 'capacity' end
+        redis.call('SADD', KEYS[5], arg.id)
+    end
+    local created = cjson.encode(arg)
+    redis.call('HSET', KEYS[1], 'payload', created)
     redis.call('SADD', pool, arg.id)
-    return ARGV[2]
+    if arg.submission_key ~= cjson.null then redis.call('SET', KEYS[4], arg.id) end
+    return created
 end
 if not raw then return false end
 local t = cjson.decode(raw)
+local old_state, old_ready, old_desired = t.state, t.ready, t.desired_state
 local pool = t.kind == 'stream' and KEYS[3] or KEYS[2]
 local terminal = t.state == 'succeeded' or t.state == 'failed' or t.state == 'cancelled' or t.state == 'stopped'
 local owned = t.owner_id == arg.owner_id and t.generation == arg.generation and t.lease_until > now
@@ -31,6 +52,7 @@ if op == 'claim' then
     t.lease_until = now + tonumber(ARGV[3])
     t.dispatch_pending = false
     t.publish_allowed = false
+    t.last_output_ms = cjson.null
     t.state = t.kind == 'stream' and 'connecting' or 'processing'
 elseif op == 'heartbeat' then
     if not owned or terminal then return false end
@@ -68,14 +90,121 @@ elseif op == 'recover' then
 elseif op == 'update' then
     if not owned or terminal or t.desired_state ~= 'run' then return false end
     for k,v in pairs(arg.values) do t[k] = v end
+elseif op == 'output' then
+    if not owned or terminal or t.desired_state ~= 'run' or not t.publish_allowed then return false end
+    if arg.age_ms < 0 or arg.age_ms >= 45000 then return false end
+    local output = now-arg.age_ms
+    if t.last_output_ms == nil or t.last_output_ms == cjson.null or output > t.last_output_ms then
+        t.last_output_ms = output
+    end
+elseif op == 'authorize' then
+    if not owned or not t.publish_allowed or t.desired_state ~= 'run' then return false end
+    t.sessions[arg.session_id] = t.generation
+elseif op == 'freeze' then
+    if not owned and t.desired_state ~= 'stopped' then return false end
+    t.publish_allowed, t.ready = false, false
+elseif op == 'clear' then
+    if not owned and t.desired_state ~= 'stopped' then return false end
+    for _,id in ipairs(arg.sessions) do t.sessions[id] = nil end
+    if t.desired_state == 'stopped' and t.lease_until <= now and next(t.sessions) == nil then
+        t.state, t.owner_id, t.lease_until = 'stopped', cjson.null, 0
+        redis.call('SREM',pool,t.id)
+    end
+elseif op == 'open' then
+    if not owned or t.desired_state ~= 'run' or next(t.sessions) ~= nil then return false end
+    t.publish_allowed = true
 else
     return redis.error_reply('Unknown task operation')
 end
+t.sequence = t.sequence or 1
+local changed = t.state ~= old_state or t.ready ~= old_ready or t.desired_state ~= old_desired
+if changed then t.sequence = t.sequence + 1 end
 t.updated_at = ARGV[5]
+t._observed_ms = now
 local result = cjson.encode(t)
 redis.call('HSET', KEYS[1], 'payload', result)
+local final = t.state == 'succeeded' or t.state == 'failed' or t.state == 'cancelled' or t.state == 'stopped'
+if changed and t.notification_target and t.notification_target ~= cjson.null and (t.kind == 'stream' or final) then
+    local key = 'vs:notification:'..t.id
+    local lease = tonumber(redis.call('HGET',key,'lease_until') or '0')
+    redis.call('HSET',key,'task',result,'sequence',t.sequence,'attempts',0)
+    redis.call('ZADD','vs:notifications:due:'..t.notification_target,math.max(now,lease),t.id)
+end
 return result
 """
+
+
+NOTIFICATION = """
+local clock = redis.call('TIME')
+local now = tonumber(clock[1])*1000 + math.floor(tonumber(clock[2])/1000)
+local op, arg = ARGV[1], cjson.decode(ARGV[2])
+local due = 'vs:notifications:due:'..arg.target
+local inflight = 'vs:notifications:inflight:'..arg.target
+local global = 'vs:notifications:inflight'
+redis.call('ZREMRANGEBYSCORE',inflight,'-inf',now)
+redis.call('ZREMRANGEBYSCORE',global,'-inf',now)
+if op == 'claim' then
+    local count = math.min(arg.limit,2-redis.call('ZCARD',inflight),4-redis.call('ZCARD',global))
+    if count <= 0 then return '[]' end
+    local ids = redis.call('ZRANGEBYSCORE',due,'-inf',now,'LIMIT',0,count)
+    local events = {}
+    for _,id in ipairs(ids) do
+        local key = 'vs:notification:'..id
+        local raw = redis.call('HGET',key,'task')
+        if raw then
+            local token = arg.token..':'..id
+            local lease = now+30000
+            redis.call('HSET',key,'token',token,'lease_until',lease)
+            redis.call('ZADD',due,lease,id)
+            redis.call('ZADD',inflight,lease,id)
+            redis.call('ZADD',global,lease,id)
+            table.insert(events,{task=cjson.decode(raw),token=token,
+                attempts=tonumber(redis.call('HGET',key,'attempts') or '0')})
+        else redis.call('ZREM',due,id) end
+    end
+    if #events == 0 then return '[]' end
+    return cjson.encode(events)
+end
+local key = 'vs:notification:'..arg.id
+if redis.call('HGET',key,'token') ~= arg.token then return 0 end
+redis.call('ZREM',inflight,arg.id)
+redis.call('ZREM',global,arg.id)
+redis.call('HSET',key,'lease_until',0,'token','')
+if tonumber(redis.call('HGET',key,'sequence')) ~= arg.sequence then
+    redis.call('ZADD',due,now,arg.id)
+    return 0
+end
+if arg.delivered then
+    local t = cjson.decode(redis.call('HGET',key,'task'))
+    redis.call('ZREM',due,arg.id)
+    redis.call('DEL',key)
+    if t.state == 'succeeded' or t.state == 'failed' or t.state == 'cancelled' or t.state == 'stopped' then
+        redis.call('SREM','vs:notifications:outstanding',arg.id)
+    end
+else
+    redis.call('HINCRBY',key,'attempts',1)
+    redis.call('ZADD',due,now+arg.delay_ms,arg.id)
+end
+return 1
+"""
+
+
+def request_fingerprint(**values) -> str:
+    """按有效参数和输入内容生成稳定指纹，不包含本地随机路径。"""
+    return hashlib.sha256(json.dumps(values, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def stream_health(record: dict, now_ms: int) -> dict | None:
+    """用当前 owner 租约和当前代次实际输出证明播放有效期。"""
+    if record["kind"] != "stream":
+        return None
+    output = record.get("last_output_ms")
+    lease_valid = bool(record.get("owner_id") and record["lease_until"] > now_ms)
+    valid_until = min(record["lease_until"], output + 45000) if lease_valid and output else None
+    def timestamp(value):
+        return datetime.fromtimestamp(value / 1000, timezone.utc).isoformat() if value else None
+    return dict(observed_at=timestamp(now_ms), last_output_at=timestamp(output),
+                valid_until=timestamp(valid_until), lease_valid=lease_valid, generation=record["generation"])
 
 
 class CapacityExceeded(Exception):
@@ -86,28 +215,39 @@ class InvalidTransition(Exception):
     pass
 
 
+class IdempotencyConflict(Exception):
+    """同一意图键禁止被不同输入复用。"""
+
+
 class TaskStore:
     """Atomic JSON records; ownership operations return None when their CAS loses."""
-    def __init__(self, client: Redis, file_limit=100, stream_limit=100, lease_seconds=20):
+    def __init__(self, client: Redis, file_limit=100, stream_limit=100, lease_seconds=20, *, notification_limit=1000):
         self.client = client
         self.file_limit, self.stream_limit = file_limit, stream_limit
         self.lease_ms = int(lease_seconds * 1000)
+        self.notification_limit = notification_limit
 
     async def _change(self, task_id, operation, arguments, limit=0):
         result = await self.client.eval(
-            TRANSITION, 3, f"vs:task:{task_id}", "vs:active:files", "vs:active:streams",
+            TRANSITION, 5, f"vs:task:{task_id}", "vs:active:files", "vs:active:streams",
+            self._binding_key(arguments.get("submission_key") or ""), "vs:notifications:outstanding",
             operation, json.dumps(arguments), self.lease_ms, limit,
             datetime.now(timezone.utc).isoformat(),
+            self.notification_limit,
         )
         if result in (b"capacity", "capacity"):
             raise CapacityExceeded
         if result in (b"invalid", "invalid"):
             raise InvalidTransition
+        if result in (b"conflict", "conflict"):
+            raise IdempotencyConflict
         return json.loads(result) if result else None
 
     async def create(self, kind: str, source_kind: str, source_ref: str, task_id: str | None = None,
                      *, redaction_mode: str = "solid", profile_detection: bool = False, detection_interval: int = 1,
-                     tracking: str = "template") -> dict:
+                     tracking: str = "template",
+                     idempotency_key: str | None = None, fingerprint: str | None = None,
+                     notification_target: str | None = None) -> dict:
         if redaction_mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
         if profile_detection and kind != 'video':
@@ -125,6 +265,8 @@ class TaskStore:
             result_ref=None, owner_id=None, generation=0, lease_until=0,
             dispatch_pending=True, dispatch_until=0, error=None, publish_allowed=False,
             sessions={}, stats=dict(processed_frames=0, dropped_frames=0, elapsed_seconds=0),
+            sequence=1, last_output_ms=None, submission_key=idempotency_key,
+            fingerprint=fingerprint, notification_target=notification_target,
         )
         if profile_detection:
             task['profile_detection'] = True
@@ -135,8 +277,70 @@ class TaskStore:
         return await self._change(task_id, "create", task, self.stream_limit if kind == "stream" else self.file_limit)
 
     async def get(self, task_id: str) -> dict | None:
-        payload = await self.client.hget(f"vs:task:{task_id}", "payload")
-        return json.loads(payload) if payload else None
+        async with self.client.pipeline(transaction=True) as commands:
+            commands.hget(f"vs:task:{task_id}", "payload")
+            commands.time()
+            payload, clock = await commands.execute()
+        return json.loads(payload) | {"_observed_ms": clock[0] * 1000 + clock[1] // 1000} if payload else None
+
+    @staticmethod
+    def _binding_key(key: str) -> str:
+        """键哈希避免外部文本成为 Redis 路径。"""
+        return "vs:idempotency:" + hashlib.sha256(key.encode()).hexdigest()
+
+    async def replay(self, key: str, fingerprint: str) -> dict | None:
+        """在 worker 可用性与新容量检查前找回已接纳任务。"""
+        task_id = await self.client.get(self._binding_key(key))
+        if not task_id:
+            return None
+        record = await self.get(task_id.decode() if isinstance(task_id, bytes) else task_id)
+        if not record or record.get("fingerprint") != fingerprint:
+            raise IdempotencyConflict
+        return record
+
+    async def query(self, task_ids: list[str]) -> list[dict]:
+        """单次 pipeline 有界读取，终态不依赖活跃集合。"""
+        if not 1 <= len(task_ids) <= 100:
+            raise ValueError("任务查询数量必须在 1 到 100 之间")
+        async with self.client.pipeline(transaction=False) as commands:
+            for task_id in dict.fromkeys(task_ids):
+                commands.hget(f"vs:task:{task_id}", "payload")
+            values = await commands.execute()
+        return [json.loads(raw) for raw in values if raw]
+
+    async def health(self, record: dict) -> dict | None:
+        """只读 Redis 时间，不延长 owner 租约或输出有效期。"""
+        if record["kind"] != "stream":
+            return None
+        seconds, micros = await self.client.time()
+        return stream_health(record, seconds * 1000 + micros // 1000)
+
+    async def mark_output(self, task_id: str, owner_id: str, generation: int, *, age_ms=0):
+        """只接受当前发布者实际写出画面后的合并心跳。"""
+        return await self._change(task_id, "output", dict(owner_id=owner_id, generation=generation, age_ms=age_ms))
+
+    async def publisher_change(self, task_id: str, operation: str, **arguments):
+        """媒体侧变更复用统一 Lua，避免绕过公共序号与通知。"""
+        return await self._change(task_id, operation, arguments)
+
+    async def claim_notifications(self, *, limit=4, targets=("event-hub", "platform")) -> list[dict]:
+        """全局四项、每目标两项，租约到期后其他 notifier 可接管。"""
+        events = []
+        for target in targets:
+            if len(events) >= limit:
+                break
+            raw = await self.client.eval(NOTIFICATION, 0, "claim", json.dumps(
+                dict(target=target, limit=min(4, limit - len(events)), token=str(uuid4()))))
+            events.extend(json.loads(raw))
+        return events
+
+    async def complete_notification(self, event: dict, *, delivered: bool, delay_seconds=1) -> bool:
+        """旧 token/序号不能清除新状态；确认仅交接责任，不删除成品。"""
+        task = event["task"]
+        result = await self.client.eval(NOTIFICATION, 0, "complete", json.dumps(dict(
+            target=task["notification_target"], id=task["id"], token=event["token"],
+            sequence=task["sequence"], delivered=delivered, delay_ms=int(delay_seconds * 1000))))
+        return bool(result)
 
     async def active(self) -> list[dict]:
         ids = await self.client.sunion("vs:active:files", "vs:active:streams")

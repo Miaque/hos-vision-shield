@@ -9,7 +9,7 @@ from redis.exceptions import RedisError
 from starlette.exceptions import HTTPException
 
 from vision_shield.config import Settings
-from vision_shield.jobs.store import CapacityExceeded, InvalidTransition, TaskStore
+from vision_shield.jobs.store import CapacityExceeded, IdempotencyConflict, InvalidTransition, TaskStore
 from vision_shield.media.source import SourceError
 from vision_shield.api.routes import router
 from vision_shield.api.internal import router as internal_router
@@ -54,7 +54,8 @@ def create_app(settings=None):
         client = Redis.from_url(settings.redis_url.get_secret_value(), socket_connect_timeout=2, socket_timeout=2)
         app.state.redis = client
         app.state.settings = settings
-        app.state.store = TaskStore(client, settings.file_task_limit, settings.stream_task_limit, settings.lease_seconds)
+        app.state.store = TaskStore(client, settings.file_task_limit, settings.stream_task_limit, settings.lease_seconds,
+                                    notification_limit=settings.notification_limit)
         try:
             yield
         finally:
@@ -88,6 +89,11 @@ def create_app(settings=None):
     @app.exception_handler(InvalidTransition)
     async def transition_error(request, exc):
         return error_response("invalid_transition", 409)
+
+    @app.exception_handler(IdempotencyConflict)
+    async def idempotency_error(request, exc):
+        """相同提交键不能更换输入内容。"""
+        return error_response("idempotency_conflict", 409)
 
     @app.exception_handler(RedisError)
     async def dependency_error(request, exc):
