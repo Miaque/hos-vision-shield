@@ -599,3 +599,37 @@ def test_cuda_probe_never_reuses_another_frame_or_failed_probe():
     seen.clear()
     assert detector.detect_faces(first) == []
     assert len(seen) == 2
+
+
+@pytest.mark.parametrize("backend", ["quality", "detail"])
+def test_model_thread_is_reused_across_frames_and_detail_views(monkeypatch, backend):
+    from concurrent.futures import ThreadPoolExecutor
+    from types import SimpleNamespace
+    from vision_shield.detection import cpu, quality
+
+    executors = []
+    def pool(*a, **kw):
+        executor = ThreadPoolExecutor(*a, **kw)
+        executors.append(executor)
+        return executor
+
+    module = quality if backend == "quality" else cpu
+    monkeypatch.setattr(module, "ThreadPoolExecutor", pool)
+    detector = module.Detector.__new__(module.Detector)
+    if backend == "quality":
+        detector.inference_device, detector.box_padding = "cuda", 0
+        model = SimpleNamespace(prepare=lambda rgb: rgb, candidates=lambda rgb, **kw: [])
+        detector.primary = detector.detail = model
+        detect = detector.detect_regions
+    else:
+        detector.parallel = True
+        detector._faces = lambda pixels: None
+        detector._plate_forward = lambda blob: np.zeros((1, 6300, 15), np.float32)
+        detect = detector._detect_view
+    try:
+        pixels = np.zeros((100, 100, 3), np.uint8)
+        assert detect(pixels) == detect(pixels) == []
+        assert len(executors) == 1
+    finally:
+        for executor in executors:
+            executor.shutdown(wait=True)

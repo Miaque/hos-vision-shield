@@ -2,6 +2,7 @@
 
 import math
 from concurrent.futures import ThreadPoolExecutor
+from functools import cached_property
 
 import cv2
 import numpy as np
@@ -14,6 +15,10 @@ PLATE_THRESHOLD = 0.25
 
 
 class Detector:
+    @cached_property
+    def _pool(self):
+        return ThreadPoolExecutor(max_workers=1)
+
     def __init__(self, face_path, plate_path, max_side=1280, box_padding=0.15, *, face_threshold=FACE_THRESHOLD,
                  parallel=False, tile_side=640):
         cv2.setNumThreads(2)
@@ -100,10 +105,12 @@ class Detector:
     def _detect_view(self, bgr: np.ndarray, *, kind: str | None = None) -> list[Detection]:
         if self.parallel and kind is None:
             # 两个独立模型各占一路；退出时等待后台结束，仍按人脸、车牌顺序返回。
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                faces = pool.submit(self._detect_view, bgr, kind="face")
+            faces = self._pool.submit(self._detect_view, bgr, kind="face")
+            try:
                 plates = self._detect_view(bgr, kind="plate")
-                return faces.result() + plates
+            finally:
+                face_regions = faces.result()
+            return face_regions + plates
         height, width = bgr.shape[:2]
         detections = []
         # 局部复核不运行无关类别；全图默认仍执行两类检测。

@@ -3,6 +3,7 @@
 import math
 import time
 from concurrent.futures import ThreadPoolExecutor
+from functools import cached_property
 
 import cv2
 import numpy as np
@@ -21,6 +22,10 @@ def _timed_candidates(model, pixels, *, kind=None, full_frame=False):
 
 
 class Detector:
+    @cached_property
+    def _pool(self):
+        return ThreadPoolExecutor(max_workers=1)
+
     def __init__(self, config: dict):
         self.max_side, self.box_padding = config["detection_max_side"], config["detection_box_padding"]
         self.inference_device = config.get("inference_device", "cpu")
@@ -53,9 +58,10 @@ class Detector:
         if getattr(self, "inference_device", "cpu") != "cuda":
             return self.detail.candidates(pixels, kind="plate")
         # Both outcomes need full faces; share detail views and overlap the independent models.
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            pending = pool.submit(_timed_candidates, self.primary, pixels, kind="face", full_frame=True)
+        pending = self._pool.submit(_timed_candidates, self.primary, pixels, kind="face", full_frame=True)
+        try:
             detail, detail_seconds = _timed_candidates(self.detail, pixels)
+        finally:
             primary, primary_seconds = pending.result()
         self._proposal_candidates = (rgb, primary, primary_seconds, detail, detail_seconds)
         return [detection for detection in detail if detection.kind == "plate"]
@@ -78,9 +84,10 @@ class Detector:
             prepare = getattr(self.primary, "prepare", None)
             pixels = prepare(rgb) if prepare else rgb
             # 两路全图检测互不依赖；等待两路结束后再复核，异常不返回部分结果。
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                pending = pool.submit(_timed_candidates, self.primary, pixels, kind=kind, full_frame=full_frame)
+            pending = self._pool.submit(_timed_candidates, self.primary, pixels, kind=kind, full_frame=full_frame)
+            try:
                 detail, detail_seconds = _timed_candidates(self.detail, pixels, kind=kind)
+            finally:
                 primary, primary_seconds = pending.result()
         else:
             primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind, full_frame=full_frame)
