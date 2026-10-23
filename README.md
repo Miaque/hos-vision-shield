@@ -5,7 +5,7 @@ Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP 流�
 项目以 `main` 分支作为主干。
 
 当前进度见 [任务清单](specs/001-media-redaction/tasks.md) 与 [验证记录](specs/001-media-redaction/validation/gates.md)。
-已接通上传/URL文件任务、结果下载、取消、RTSP输出及断流/worker重启恢复。API与任务控制使用异步I/O；模型推理、编解码在受控子进程中执行。
+已接通上传/URL文件任务、结果下载、取消、默认 RTSP 输出、可选 RTMP 输出及断流/worker重启恢复。API与任务控制使用异步I/O；模型推理、编解码在受控子进程中执行。
 
 ## 安装 Python 依赖
 
@@ -136,6 +136,21 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)"
 # ready=true 后使用响应中的playback_url播放（例如ffplay -rtsp_transport tcp <地址>）
 Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -ContentType application/json -Body '{"desired_state":"stopped"}'
 ```
+
+`POST /v1/stream-tasks` 可选 `publish_url` 指定完整推流地址，协议由地址决定：
+
+```json
+{
+  "url": "rtsp://camera.example/live?token=INPUT_TOKEN",
+  "publish_url": "rtmp://media.example/app/camera?sign=PUBLISH_SIGN"
+}
+```
+
+- 不传或传 `null`：保持默认 MediaMTX RTSP 输出和 `playback_url`；完整 RTSP 地址也可用于直接推流。
+- 指定地址：保留路径、查询参数和鉴权信息，推流到外部服务，不拼接 `/redacted/{task_id}` 或注入内部 owner 凭据。输入与推流目标都必须在 `SOURCE_ALLOWLIST` 中授权；worker 每次重连重新校验并固定到授权 IP，RTMP `tcUrl` 保留原域名。
+- 流输入支持 H.264，音频可为 AAC、G711A、G711U 或无音轨。RTSP 保留音频编码；RTMP 使用 FLV，AAC 直接转封装、G711 转 AAC。文件视频仍只接受 AAC 或无音轨。
+- 外部推流的 `playback_url` 为 `null`，播放地址由接收平台提供；接口和通知不回显推流地址及密钥。`ready`/health 证明本 worker 已写出数据，不证明接收平台可播放。同一幂等键不能更换推流地址。
+- 外部推流复用子进程停止与失租约退出，不具备 MediaMTX 管理接口的远程踢流保证；接收平台需限制同一路径重复发布，不应让多个任务同时使用同一地址。默认部署及 `/health/ready` 仍保留 MediaMTX 依赖。
 
 PATCH返回202表示停止意图已保存；查询到cancelled/stopped才表示资源清理完成。已成功文件不能再取消（409）。流自动重连并保留停止意图，文件worker崩溃则标记worker_lost，不自动续跑。
 

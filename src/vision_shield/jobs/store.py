@@ -247,7 +247,7 @@ class TaskStore:
                      *, redaction_mode: str = "solid", profile_detection: bool | str = False, detection_interval: int = 1,
                      tracking: str = "template",
                      idempotency_key: str | None = None, fingerprint: str | None = None,
-                     notification_target: str | None = None) -> dict:
+                     notification_target: str | None = None, publish_url: str | None = None) -> dict:
         if redaction_mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
         if profile_detection and kind != 'video':
@@ -260,6 +260,8 @@ class TaskStore:
             raise ValueError('Unsupported detection interval')
         if tracking not in ('template', 'flow') or tracking == 'flow' and (kind != 'video' or detection_interval != 3):
             raise ValueError('Unsupported tracking mode')
+        if publish_url is not None and kind != "stream":
+            raise ValueError("A publish URL requires a stream task")
         task_id = task_id or str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
         task = dict(
@@ -277,6 +279,8 @@ class TaskStore:
             task['detection_interval'] = detection_interval
         if tracking != 'template':
             task['tracking'] = tracking
+        if publish_url is not None:
+            task["publish_url"] = publish_url
         return await self._change(task_id, "create", task, self.stream_limit if kind == "stream" else self.file_limit)
 
     async def get(self, task_id: str) -> dict | None:

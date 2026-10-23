@@ -19,6 +19,16 @@ async def test_explicit_loopback_can_be_used_for_authorized_local_media():
     assert original.host == "127.0.0.1"
 
 
+async def test_rtmp_validation_uses_default_port_and_pins_authorized_ip(monkeypatch):
+    async def resolve(host, port, **kwargs):
+        assert host == "media.test" and port == 1935
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", port))]
+
+    monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", resolve)
+    original, address = await validate_source("rtmp://media.test/live/camera?sign=secret", ["media.test"], ("rtsp", "rtmp"))
+    assert original.host == "media.test" and address == "8.8.8.8"
+
+
 async def test_all_resolved_addresses_must_be_authorized(monkeypatch):
     async def resolve(*args, **kwargs):
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 80)) for ip in ["8.8.8.8", "127.0.0.1"]]

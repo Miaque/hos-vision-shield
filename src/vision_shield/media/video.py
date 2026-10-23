@@ -23,15 +23,15 @@ def check_dimensions(width: int, height: int, config: dict) -> None:
         raise ValueError("Video dimensions exceed limit")
 
 
-def check_streams(reader, config):
+def check_streams(reader, config, *, audio_codecs=("aac",)):
     if len(reader.streams.video) != 1 or len(reader.streams.audio) > 1:
         raise ValueError("Exactly one video and at most one audio track are supported")
     video = reader.streams.video[0]
     if video.codec_context.name != "h264":
         raise ValueError("H.264 required")
     check_dimensions(video.width, video.height, config)
-    if reader.streams.audio and reader.streams.audio[0].codec_context.name != "aac":
-        raise ValueError("AAC required")
+    if reader.streams.audio and reader.streams.audio[0].codec_context.name not in audio_codecs:
+        raise ValueError("Unsupported audio codec")
     return video
 
 

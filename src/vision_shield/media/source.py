@@ -21,9 +21,9 @@ async def validate_source(value: str, allowlist: list[str], schemes: tuple[str, 
         url = httpx.URL(value)
         if url.scheme not in schemes or not url.host or url.fragment:
             raise SourceError()
-        if url.scheme != "rtsp" and url.userinfo:
+        if url.scheme not in {"rtsp", "rtmp"} and url.userinfo:
             raise SourceError()
-        addresses = await asyncio.get_running_loop().getaddrinfo(url.host, url.port or (443 if url.scheme == "https" else 554 if url.scheme == "rtsp" else 80), type=socket.SOCK_STREAM)
+        addresses = await asyncio.get_running_loop().getaddrinfo(url.host, url.port or {"https": 443, "rtsp": 554, "rtmp": 1935}.get(url.scheme, 80), type=socket.SOCK_STREAM)
         networks = []
         for item in allowlist:
             try:
