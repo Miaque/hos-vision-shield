@@ -1,5 +1,8 @@
 import asyncio
-from pathlib import Path
+import hashlib
+import re
+import shutil
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from typing import Literal
 
@@ -9,9 +12,11 @@ from starlette.datastructures import UploadFile
 from pydantic import ValidationError
 
 from vision_shield.api.schemas import (DesiredStateInput, FileUrlInput, StreamInput, TaskResponse, TaskListResponse,
+                                      TaskQueryInput, TaskQueryResponse,
                                       ResourceSnapshot, ResourcesResponse)
 from vision_shield.jobs.diagnostics import STALE_SECONDS
 from vision_shield.jobs.service import require_worker
+from vision_shield.jobs.store import IdempotencyConflict, CapacityExceeded, request_fingerprint, stream_health
 from vision_shield.media.source import SourceError, validate_source
 from vision_shield.detection.timing import STAGES
 from vision_shield.detection.device_profile import CHECKPOINTS
@@ -19,8 +24,29 @@ from vision_shield.detection.device_profile import CHECKPOINTS
 router = APIRouter(prefix="/v1")
 
 
-def public(request, task):
+def public(request, task, now_ms=None):
+    """只暴露公共字段，健康只依据共享存储中的实际输出和租约。"""
+    if task["kind"] == "stream" and "generation" in task:
+        observed = now_ms if now_ms is not None else task.get("_observed_ms", int(datetime.now(timezone.utc).timestamp() * 1000))
+        health = stream_health(task, observed)
+        task = task | {"health": health}
     return TaskResponse.from_record(task, request.app.state.settings.rtsp_public_base_url)
+
+
+def creation_headers(request):
+    """在任何外部 I/O 前验证可选幂等键和受限通知目标。"""
+    key = request.headers.get("Idempotency-Key")
+    target = request.headers.get("X-Notification-Target")
+    if key is not None and (not re.fullmatch(r"[\x20-\x7e]{1,128}", key) or not key.strip()):
+        raise HTTPException(422, "invalid_input")
+    if target is not None and (not key or target not in request.app.state.settings.notification_targets):
+        raise HTTPException(422, "invalid_input")
+    return key, target
+
+
+async def replay(request, key, fingerprint):
+    """已接纳意图不受当前 worker 或新任务容量影响。"""
+    return await request.app.state.store.replay(key, fingerprint) if key else None
 
 
 @router.get('/diagnostics/resources', response_model=ResourcesResponse)
@@ -50,20 +76,40 @@ async def resources(request: Request):
 
 @router.post("/stream-tasks", response_model=TaskResponse, status_code=202)
 async def create_stream(data: StreamInput, request: Request, response: Response):
+    key, target = creation_headers(request)
     settings = request.app.state.settings
+    fingerprint = request_fingerprint(kind="stream", source_kind="rtsp", source_digest=data.url,
+                                      redaction_mode=data.redaction_mode, notification_target=target,
+                                      profile_detection=False)
+    task = await replay(request, key, fingerprint)
+    if task is not None:
+        response.headers["Location"] = f"/v1/tasks/{task['id']}"
+        return public(request, task)
     await validate_source(data.url, settings.source_allowlist, ("rtsp",))
     await require_worker(request.app.state.redis, "stream", settings.lease_seconds)
-    task = await request.app.state.store.create("stream", "rtsp", data.url, redaction_mode=data.redaction_mode)
+    await require_media_capacity(settings)
+    task = await request.app.state.store.create("stream", "rtsp", data.url, redaction_mode=data.redaction_mode,
+        idempotency_key=key, fingerprint=fingerprint, notification_target=target)
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)
 
 
 @router.post("/file-tasks", response_model=TaskResponse, status_code=202)
 async def file_url(data: FileUrlInput, request: Request, response: Response):
+    key, target = creation_headers(request)
     settings = request.app.state.settings
+    fingerprint = request_fingerprint(kind=data.kind, source_kind="url", source_digest=data.url,
+                                      redaction_mode=data.redaction_mode, notification_target=target,
+                                      profile_detection=False)
+    task = await replay(request, key, fingerprint)
+    if task is not None:
+        response.headers["Location"] = f"/v1/tasks/{task['id']}"
+        return public(request, task)
     await validate_source(data.url, settings.source_allowlist)
     await require_worker(request.app.state.redis, data.kind, settings.lease_seconds)
-    task = await request.app.state.store.create(data.kind, "url", data.url, redaction_mode=data.redaction_mode)
+    await require_media_capacity(settings)
+    task = await request.app.state.store.create(data.kind, "url", data.url, redaction_mode=data.redaction_mode,
+        idempotency_key=key, fingerprint=fingerprint, notification_target=target)
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)
 
@@ -78,39 +124,78 @@ async def file_url(data: FileUrlInput, request: Request, response: Response):
 async def upload(request: Request, response: Response,
                  profile_detection: Literal['1'] | None = Header(default=None, alias='X-Detection-Profile',
                      description='仅视频：显式采集三个主车牌CUDA时间线样本，会增加诊断开销')):
+    key, target_id = creation_headers(request)
     settings = request.app.state.settings
-    await require_worker(request.app.state.redis, "image", settings.lease_seconds)
-    async with asyncio.timeout(settings.upload_timeout):
-        async with request.form(max_files=1, max_fields=2) as form:
-            if (not {"kind", "file"} <= set(form) or set(form) - {"kind", "file", "redaction_mode"}
-                    or len(form.multi_items()) != len(form)):
-                raise HTTPException(422, "invalid_input")
-            kind, file = form["kind"], form["file"]
-            if kind not in {"image", "video"} or not isinstance(file, UploadFile):
-                raise HTTPException(422, "invalid_input")
-            if profile_detection is not None and kind != 'video':
-                raise HTTPException(422, 'invalid_input')
-            redaction_mode = form.get("redaction_mode", "solid")
-            if redaction_mode not in ("solid", "mosaic"):
-                raise HTTPException(422, "invalid_input")
-            task_id = str(uuid4())
-            directory = settings.media_root.resolve() / task_id
-            await asyncio.to_thread(directory.mkdir, parents=True)
-            target = directory / "source.bin"
-            output = await asyncio.to_thread(target.open, "wb")
-            size = 0
-            try:
-                while block := await file.read(65536):
-                    size += len(block)
-                    if size > (settings.max_image_bytes if kind == "image" else settings.max_video_bytes):
-                        raise SourceError("media_too_large", 413)
-                    await asyncio.to_thread(output.write, block)
-            finally:
-                await asyncio.to_thread(output.close)
-    task = await request.app.state.store.create(kind, "upload", str(target), task_id, redaction_mode=redaction_mode,
-        **({'profile_detection': True} if profile_detection is not None else {}))
-    response.headers["Location"] = f"/v1/tasks/{task['id']}"
-    return public(request, task)
+    directory, keep_input, submission_unknown = None, False, False
+    try:
+        async with asyncio.timeout(settings.upload_timeout):
+            async with request.form(max_files=1, max_fields=2) as form:
+                if (not {"kind", "file"} <= set(form) or set(form) - {"kind", "file", "redaction_mode"}
+                        or len(form.multi_items()) != len(form)):
+                    raise HTTPException(422, "invalid_input")
+                kind, file = form["kind"], form["file"]
+                if kind not in {"image", "video"} or not isinstance(file, UploadFile):
+                    raise HTTPException(422, "invalid_input")
+                if profile_detection is not None and kind != 'video':
+                    raise HTTPException(422, 'invalid_input')
+                redaction_mode = form.get("redaction_mode", "solid")
+                if redaction_mode not in ("solid", "mosaic"):
+                    raise HTTPException(422, "invalid_input")
+                task_id = str(uuid4())
+                directory = settings.media_root.resolve() / task_id
+                await asyncio.to_thread(directory.mkdir, parents=True)
+                source = directory / "source.bin"
+                digest = await save_upload(file, source,
+                    settings.max_image_bytes if kind == "image" else settings.max_video_bytes)
+        fingerprint = request_fingerprint(kind=kind, source_kind="upload", source_digest=digest,
+            redaction_mode=redaction_mode, notification_target=target_id, profile_detection=profile_detection is not None)
+        task = await replay(request, key, fingerprint)
+        if task is None:
+            await require_worker(request.app.state.redis, kind, settings.lease_seconds)
+            await require_media_capacity(settings)
+            # Redis 超时可能已经提交，保留输入供同键恢复，不能盲删。
+            submission_unknown = True
+            task = await request.app.state.store.create(kind, "upload", str(source), task_id,
+                redaction_mode=redaction_mode, idempotency_key=key, fingerprint=fingerprint,
+                notification_target=target_id, **({'profile_detection': True} if profile_detection is not None else {}))
+            submission_unknown = False
+        keep_input = task["id"] == task_id
+        response.headers["Location"] = f"/v1/tasks/{task['id']}"
+        return public(request, task)
+    except (IdempotencyConflict, CapacityExceeded):
+        submission_unknown = False
+        raise
+    finally:
+        if directory is not None and not keep_input and not submission_unknown:
+            await asyncio.to_thread(shutil.rmtree, directory)
+
+
+async def save_upload(file, source, limit):
+    """有界写入并计算真实文件摘要，失败也确保关闭句柄。"""
+    output = await asyncio.to_thread(source.open, "wb")
+    digest, size = hashlib.sha256(), 0
+    try:
+        while block := await file.read(65536):
+            size += len(block)
+            if size > limit:
+                raise SourceError("media_too_large", 413)
+            await asyncio.to_thread(output.write, block)
+            digest.update(block)
+    finally:
+        await asyncio.to_thread(output.close)
+    return digest.hexdigest()
+
+
+async def require_media_capacity(settings):
+    """磁盘高水位拒绝新接纳，旧幂等意图仍可恢复，不自动删结果。"""
+    def available():
+        root = settings.media_root.resolve()
+        while not root.exists():
+            root = root.parent
+        usage = shutil.disk_usage(root)
+        return usage.used / usage.total < settings.media_disk_high_watermark
+    if not await asyncio.to_thread(available):
+        raise CapacityExceeded
 
 
 @router.get("/tasks", response_model=TaskListResponse)
@@ -125,6 +210,17 @@ async def list_tasks(request: Request):
         )
         groups["queued" if waiting else "current"].append(public(request, task))
     return groups
+
+
+@router.post("/tasks/query", response_model=TaskQueryResponse)
+async def query_tasks(data: TaskQueryInput, request: Request):
+    """只查询给定的至多一百项，支持已退出活跃集合的终态。"""
+    ids = list(dict.fromkeys(str(value) for value in data.task_ids))
+    records = await request.app.state.store.query(ids)
+    seconds, micros = await request.app.state.redis.time()
+    items = [public(request, task, seconds * 1000 + micros // 1000) for task in records]
+    found = {task.id for task in items}
+    return dict(items=items, missing_ids=[value for value in ids if value not in found])
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)

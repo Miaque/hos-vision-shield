@@ -6,11 +6,27 @@ from pathlib import Path
 from typing import Annotated, Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PositiveSeconds = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 PositiveCount = Annotated[int, Field(gt=0)]
+
+
+class NotificationTarget(BaseModel):
+    """由部署方登记回调地址与独立签名密钥，不接受请求指定地址。"""
+
+    url: str
+    secret: SecretStr = Field(min_length=32)
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        """回调只允许固定 HTTP 地址，禁止重定向所需的凭据和片段。"""
+        url = urlsplit(value)
+        if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.query or url.fragment:
+            raise ValueError("通知目标必须是无凭据、查询或片段的 HTTP 地址")
+        return value
 
 
 class Settings(BaseSettings):
@@ -36,6 +52,9 @@ class Settings(BaseSettings):
     file_task_limit: PositiveCount = 100
     stream_task_limit: PositiveCount = 100
     message_limit: PositiveCount = 100
+    notification_limit: PositiveCount = 1000
+    media_disk_high_watermark: Annotated[float, Field(gt=0, lt=1, allow_inf_nan=False)] = 0.95
+    notification_targets: dict[Literal["event-hub", "platform"], NotificationTarget] = Field(default_factory=dict)
     frame_buffer_size: PositiveCount = 2
     audio_buffer_seconds: PositiveSeconds = 16
     audio_buffer_bytes: PositiveCount = 4 * 1024 * 1024

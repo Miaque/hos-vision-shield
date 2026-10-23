@@ -1,5 +1,6 @@
 from datetime import timedelta, timezone
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer, WithJsonSchema
 
@@ -95,7 +96,19 @@ class ResourcesResponse(BaseModel):
     workers: list[WorkerResources]
 
 
+class StreamHealth(BaseModel):
+    """健康期限由服务端租约和实际输出计算，不能按查询时刻续期。"""
+
+    observed_at: ResponseDatetime
+    last_output_at: ResponseDatetime | None
+    valid_until: ResponseDatetime | None
+    lease_valid: bool
+    generation: int
+
+
 class TaskResponse(BaseModel):
+    sequence: int = Field(default=1, ge=1)
+    health: StreamHealth | None = None
     redaction_mode: Literal["solid", "mosaic"] = "solid"
     id: str
     kind: Literal["image", "video", "stream"]
@@ -113,6 +126,8 @@ class TaskResponse(BaseModel):
     def from_record(cls, record, rtsp_base):
         fields = {key: record[key] for key in ("id", "kind", "state", "desired_state", "ready", "created_at", "updated_at", "error", "stats")}
         fields["redaction_mode"] = record.get("redaction_mode", "solid")
+        fields["sequence"] = record.get("sequence", 1)
+        fields["health"] = record.get("health")
         fields["result_url"] = f"/v1/tasks/{record['id']}/result" if record["state"] == "succeeded" else None
         fields["playback_url"] = f"{rtsp_base}/redacted/{record['id']}" if record["kind"] == "stream" else None
         return cls(**fields)
@@ -121,3 +136,15 @@ class TaskResponse(BaseModel):
 class TaskListResponse(BaseModel):
     current: list[TaskResponse]
     queued: list[TaskResponse]
+
+
+class TaskQueryInput(BaseModel):
+    """限制单次查询工作量，UUID 验证发生在读取 Redis 之前。"""
+
+    model_config = ConfigDict(extra="forbid")
+    task_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class TaskQueryResponse(BaseModel):
+    items: list[TaskResponse]
+    missing_ids: list[UUID]

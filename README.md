@@ -203,6 +203,24 @@ uv run pytest -q
 
 当前没有用户鉴权或自动文件删除，原音频不脱敏；检测效果、完整故障恢复与容量以各阶段实测为准。
 
+### 可靠任务交接
+
+创建三个入口均支持可选 `Idempotency-Key`（1—128 个可打印 ASCII 字符，不能全为空白）。同键同有效参数与上传内容返回同一任务的当前状态，终态也可恢复；同键不同输入返回 409。上传指纹使用文件 SHA256，不包含随机目录。旧调用不传新请求头时保持原接纳方式。
+
+需要通知时再传 `X-Notification-Target: event-hub` 或 `platform`，且必须同时传幂等键。部署通过 `NOTIFICATION_TARGETS` JSON 注册固定内部地址和独立密钥，例如下面的占位配置；实际地址必须能从服务器访问，不能使用浏览器的本地转发地址作为服务器回调目标。
+
+```json
+{"event-hub":{"url":"http://hub.internal/api/v1/internal/media-redaction/task-events","secret":"REPLACE_WITH_AT_LEAST_32_RANDOM_CHARS"},"platform":{"url":"http://platform.internal/api/v1/device/external/media-redaction/task-events","secret":"REPLACE_WITH_ANOTHER_RANDOM_SECRET"}}
+```
+
+独立运行 `python -m vision_shield.jobs.notify`（Compose 已提供 notifier）。任务状态与通知责任原子登记，HTTP 仅 2xx 才确认；重试重新签名，超时 5 秒，指数退避 1—300 秒。多个 notifier 共享全局最多 4 个在途通知、每目标最多 2 个和可接管租约。通知头为 `X-Vision-Shield-Timestamp` Unix 秒及 `X-Vision-Shield-Signature`，签名为 HMAC-SHA256(secret, timestamp + "." + 原始正文)。正文只含 schema_version、event_id、sequence、task_id、submission_key、kind、state、desired_state、ready、occurred_at、health 和安全 error_code，不含媒体或来源凭据。
+
+新增 `POST /v1/tasks/query`，正文 `{"task_ids":["任务UUID"]}`，每批 1—100 项，返回 `items` 与 `missing_ids`，包含已退出活跃集合的终态。创建、查询及通知均带单调 `sequence`；接收方必须按序合并，不能让旧查询覆盖新通知。直播 `health` 由当前 Worker 租约和实际脱敏输出计算，`valid_until` 不晚于最后输出后 45 秒；查询成功不能延长健康。
+
+`NOTIFICATION_LIMIT` 默认 1000，任务创建时预留通知责任额度；文件终态确认后释放，直播保持至最终 stopped/failed 确认。容量满返回 429/Retry-After，已存在幂等键仍可恢复。`MEDIA_DISK_HIGH_WATERMARK` 默认 0.95，磁盘达到高水位拒绝新任务。Redis 必须持久化并配置 noeviction；部署前核验 Redis 与媒体盘容量。通知确认不会删除输入或成品，本期没有自动清理。
+
+Hub 收到通知只表示状态交接；完整结果仍由 Hub 下载、校验、上传 MinIO，随后更新 Platform 告警文件信息。该集成的业务闭环和浏览器播放仍须联调验收，单独通知成功不代表已交付。
+
 ### 遮挡样式
 
 创建任务时传入 `redaction_mode`：`solid`（默认）为不透明深灰色矩形 RGB `(64, 64, 64)`，`mosaic` 为马赛克。此参数由接口请求控制，不使用环境变量。每个任务单独保存，查询响应会返回所选样式，流重连继续使用原值；未指定或历史任务缺少该字段时使用 `solid`。
