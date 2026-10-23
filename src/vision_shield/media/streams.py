@@ -29,9 +29,10 @@ class StreamBuffer:
             if value.pts is None or value.time_base is None:
                 self.dropped += 1
                 return
-            if len(self.frames) == self.frame_limit:
-                self.frames.popleft()
-                self.dropped += 1
+            while len(self.frames) == self.frame_limit and not self.stop.is_set():
+                self.condition.wait(0.2)
+            if self.stop.is_set():
+                return
             self.frames.append(value)
             self.condition.notify()
 
@@ -54,9 +55,8 @@ class StreamBuffer:
                 raise self.error
             if self.stop.is_set() or not self.frames:
                 return None
-            frame = self.frames.pop()
-            self.dropped += len(self.frames)
-            self.frames.clear()
+            frame = self.frames.popleft()
+            self.condition.notify()
             if frame.pts is None or frame.time_base is None:
                 raise BufferError("Invalid video clock")
             moment = frame.pts * frame.time_base

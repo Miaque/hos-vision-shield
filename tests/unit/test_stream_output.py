@@ -88,7 +88,7 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
         if audio_codec:
             assert output_audio[0].codec_context.name == ("aac" if scheme == "rtmp" else audio_codec)
         frames = list(reader.decode(video=0))
-        assert frames and frames[-1].to_ndarray(format="rgb24").mean() < 100
+        assert len(frames) == 12 and frames[-1].to_ndarray(format="rgb24").mean() < 100
         assert any(event.get("output") for event in events)
     if audio_codec:
         with original_open(str(target)) as reader:
