@@ -92,9 +92,9 @@ async def execute(task_id, broker, context):
             log_model_timing(event, task_id, generation)
             if event.get("failure_type"):
                 logger.warning("task=%s media failure type=%s", task_id, event["failure_type"])
-            if "stats" in event or "device_profile" in event:
+            if "stats" in event or "device_profile" in event or "detection_stats" in event:
                 await store.update_owned(task_id, owner, generation,
-                                         **{key: event[key] for key in ("stats", "timings", "video_encoder", "video_decoder", "device_profile") if key in event})
+                                         **{key: event[key] for key in ("stats", "timings", "video_encoder", "video_decoder", "device_profile", "detection_stats") if key in event})
 
         result = {}
         if not cancel.is_set():
@@ -102,6 +102,10 @@ async def execute(task_id, broker, context):
                            config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid")})
             if record.get('profile_detection'):
                 payload['profile_detection'] = True
+            if record.get('detection_interval'):
+                payload['config']['detection_interval'] = record['detection_interval']
+            if record.get('tracking'):
+                payload['config']['tracking'] = record['tracking']
             result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                        payload, cancel, event_received, settings.process_stop_timeout)
         current = await store.get(task_id)

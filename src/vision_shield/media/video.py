@@ -91,7 +91,8 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
     """Write complete MP4, preserving frame clocks and AAC packets; return frame count."""
     count, started = 0, time.monotonic()
     frame_seconds = encode_seconds = 0.0
-    redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"))
+    redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
+                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"))
     with ExitStack() as stack:
         reader = stack.enter_context(av.open(source))
         brand = reader.metadata.get("major_brand", "").lower().strip()
@@ -151,6 +152,7 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                     count += 1
                     emit({"video_decoder": "h264_nvdec" if frames else "h264",
                           "video_encoder": video.codec_context.name,
+                          "detection_stats": redactor.detection_stats.copy(),
                           "stats": {"processed_frames": count, "dropped_frames": 0,
                                     "elapsed_seconds": time.monotonic() - started},
                           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
@@ -163,6 +165,7 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
     encode_seconds += time.monotonic() - stage
     emit({"video_decoder": "h264_nvdec" if frames else "h264",
           "video_encoder": video.codec_context.name,
+          "detection_stats": redactor.detection_stats.copy(),
           "stats": {"processed_frames": count, "dropped_frames": 0, "elapsed_seconds": time.monotonic() - started},
           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
                           encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})

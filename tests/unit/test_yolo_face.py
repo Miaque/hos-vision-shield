@@ -95,6 +95,15 @@ def test_plate_confirmation_does_not_run_face_session(monkeypatch):
     assert inputs == [] and plates == ["plate"]
 
 
+def test_flow_proposals_keep_full_frame_face_resolution_without_running_plates(monkeypatch):
+    output = np.zeros((1, 20, 1), np.float32)
+    output[0, :5, 0] = [100, 100, 20, 20, .8]
+    instance, inputs, plates = detector(monkeypatch, output)
+    assert instance.proposals(np.zeros((1080, 1920, 3), np.uint8))[0].kind == 'face'
+    assert inputs[0].shape == (1, 3, 736, 1280)
+    assert not plates
+
+
 @pytest.mark.parametrize("provider", ["CUDAExecutionProvider", "CPUExecutionProvider"])
 def test_session_cache_is_bounded_and_rejects_cpu_fallback(monkeypatch, tmp_path, provider):
     import sys

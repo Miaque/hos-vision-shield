@@ -77,3 +77,19 @@ async def test_stopped_queued_stream_never_claims_and_history_is_retained(store)
     assert not await store.claim(task["id"], "worker")
     assert await store.active() == []
     assert await store.get(task["id"]) is not None
+
+
+async def test_stream_publish_and_video_tracking_contracts_survive_merge(store):
+    publish_url = "rtmp://approved/app/camera?sign=test"
+    stream = await store.create("stream", "rtsp", "rtsp://approved/live", publish_url=publish_url)
+    video = await store.create("video", "upload", "source.mp4", profile_detection=True,
+                               detection_interval=3, tracking="flow")
+    stored_stream = await store.get(stream["id"])
+    stored_video = await store.get(video["id"])
+    assert stored_stream["publish_url"] == publish_url and stored_stream["publisher_owner_id"] is None
+    assert stored_video["profile_detection"] and stored_video["detection_interval"] == 3
+    assert stored_video["tracking"] == "flow" and "publish_url" not in stored_video
+    for kind, options in [("video", {"publish_url": publish_url}),
+                          ("stream", {"detection_interval": 3}), ("video", {"tracking": "flow"})]:
+        with pytest.raises(ValueError):
+            await store.create(kind, "upload", "source", **options)

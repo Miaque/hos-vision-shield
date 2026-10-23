@@ -503,3 +503,133 @@ def test_typed_quality_recheck_does_not_run_unrelated_models(kind):
     detector.box_padding = 0
     regions = detector.detect_regions(np.zeros((100, 100, 3), np.uint8), kind=kind)
     assert regions and all(region.kind == kind for region in regions)
+def test_plate_proposals_share_gpu_input_and_skip_expensive_primary_plate():
+    from types import SimpleNamespace
+    from vision_shield.detection.quality import Detector
+
+    pixels, prepared, calls = object(), object(), []
+    plate = Detection("plate", (90, 50, 150, 80), .3)
+    detector = Detector.__new__(Detector)
+    detector.primary = SimpleNamespace(prepare=lambda rgb: prepared if rgb is pixels else None)
+    detector.detail = SimpleNamespace(candidates=lambda rgb, *, kind: calls.append((kind, rgb)) or [plate])
+    assert detector.plate_proposals(pixels) == [plate]
+    assert calls == [("plate", prepared)]
+
+
+def test_full_frame_face_recheck_keeps_primary_resolution_and_original_quality_gate():
+    from types import SimpleNamespace
+    from vision_shield.detection.quality import Detector
+
+    calls = []
+    strong = Detection("face", (20, 30, 50, 70), .8)
+    detector = Detector.__new__(Detector)
+    detector.inference_device, detector.box_padding = "cuda", .15
+    detector.primary = SimpleNamespace(prepare=lambda rgb: rgb,
+        proposals=lambda rgb: calls.append("full-frame-face") or [strong],
+        candidates=lambda *a, **kw: pytest.fail("must not run primary plates or local-sized faces"))
+    detector.detail = SimpleNamespace(candidates=lambda rgb, *, kind: calls.append(kind) or [])
+    regions = detector.detect_faces(np.zeros((100, 100, 3), np.uint8))
+    assert regions == [Detection('face', (15.5, 24., 54.5, 76.), .8)]
+    assert calls.count('full-frame-face') == 1 and calls.count('face') == 1
+
+
+@pytest.mark.parametrize("joint", [False, True])
+def test_cuda_plate_probe_reuses_same_frame_candidates_through_original_quality_gate(joint):
+    from types import SimpleNamespace
+    from vision_shield.detection.quality import Detector
+
+    calls = []
+    face = Detection("face", (20, 20, 40, 50), .8)
+    plate = Detection("plate", (50, 60, 80, 75), .8)
+    weak = Detection("plate", (1, 1, 5, 5), .3)
+
+    def primary(rgb, *, kind=None):
+        calls.append(("primary", kind))
+        return [d for d in (face, plate) if kind is None or d.kind == kind]
+
+    def detail(rgb, *, kind=None):
+        calls.append(("detail", kind))
+        return [d for d in (face, plate, weak) if kind is None or d.kind == kind]
+
+    detector = Detector.__new__(Detector)
+    detector.inference_device, detector.box_padding = "cuda", 0
+    detector.primary = SimpleNamespace(prepare=lambda rgb: rgb, candidates=primary,
+                                      proposals=lambda rgb: primary(rgb, kind="face"))
+    detector.detail = SimpleNamespace(candidates=detail)
+    detector._confirmed = lambda *a, **kw: False
+    pixels = np.zeros((100, 100, 3), np.uint8)
+    expected = detector.detect_regions(pixels) if joint else detector.detect_faces(pixels)
+    calls.clear()
+    assert detector.plate_proposals(pixels) == [plate, weak]
+    actual = detector.detect_regions(pixels) if joint else detector.detect_faces(pixels)
+    assert actual == expected
+    assert calls.count(("primary", "face")) == 1
+    assert calls.count(("primary", "plate")) == int(joint)
+    assert calls.count(("detail", None)) == 1
+    assert len(calls) == 2 + int(joint)
+    # Candidate results are consumed once, even if the same object is used again.
+    calls.clear()
+    assert detector.detect_faces(pixels) == [face, face]
+    assert ("detail", "face") in calls and ("primary", "face") in calls
+
+
+def test_cuda_probe_never_reuses_another_frame_or_failed_probe():
+    from types import SimpleNamespace
+    from vision_shield.detection.quality import Detector
+
+    seen = []
+    def candidates(rgb, *, kind=None):
+        seen.append(rgb)
+        return []
+
+    detector = Detector.__new__(Detector)
+    detector.inference_device, detector.box_padding = "cuda", 0
+    detector.primary = SimpleNamespace(prepare=lambda rgb: rgb, candidates=candidates)
+    detector.detail = SimpleNamespace(candidates=candidates)
+    first, second = [np.zeros((10, 10, 3), np.uint8) for _ in range(2)]
+    detector.plate_proposals(first)
+    seen.clear()
+    assert detector.detect_faces(second) == []
+    assert len(seen) == 2 and all(rgb is second for rgb in seen)
+    detector.plate_proposals(first)
+    detector.detail.candidates = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("probe failed"))
+    with pytest.raises(RuntimeError, match="probe failed"):
+        detector.plate_proposals(second)
+    detector.detail.candidates = candidates
+    seen.clear()
+    assert detector.detect_faces(first) == []
+    assert len(seen) == 2
+
+
+@pytest.mark.parametrize("backend", ["quality", "detail"])
+def test_model_thread_is_reused_across_frames_and_detail_views(monkeypatch, backend):
+    from concurrent.futures import ThreadPoolExecutor
+    from types import SimpleNamespace
+    from vision_shield.detection import cpu, quality
+
+    executors = []
+    def pool(*a, **kw):
+        executor = ThreadPoolExecutor(*a, **kw)
+        executors.append(executor)
+        return executor
+
+    module = quality if backend == "quality" else cpu
+    monkeypatch.setattr(module, "ThreadPoolExecutor", pool)
+    detector = module.Detector.__new__(module.Detector)
+    if backend == "quality":
+        detector.inference_device, detector.box_padding = "cuda", 0
+        model = SimpleNamespace(prepare=lambda rgb: rgb, candidates=lambda rgb, **kw: [])
+        detector.primary = detector.detail = model
+        detect = detector.detect_regions
+    else:
+        detector.parallel = True
+        detector._faces = lambda pixels: None
+        detector._plate_forward = lambda blob: np.zeros((1, 6300, 15), np.float32)
+        detect = detector._detect_view
+    try:
+        pixels = np.zeros((100, 100, 3), np.uint8)
+        assert detect(pixels) == detect(pixels) == []
+        assert len(executors) == 1
+    finally:
+        for executor in executors:
+            executor.shutdown(wait=True)

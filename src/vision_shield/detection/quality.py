@@ -3,6 +3,7 @@
 import math
 import time
 from concurrent.futures import ThreadPoolExecutor
+from functools import cached_property
 
 import cv2
 import numpy as np
@@ -13,13 +14,18 @@ from vision_shield.detection import Detection
 from vision_shield.detection.timing import StageTimes, measure, timed
 
 
-def _timed_candidates(model, pixels, *, kind=None):
+def _timed_candidates(model, pixels, *, kind=None, full_frame=False):
     started = time.monotonic()
-    candidates = model.candidates(pixels, kind=kind)
+    faces = getattr(model, "proposals", None) if full_frame and kind == "face" else None
+    candidates = faces(pixels) if faces else model.candidates(pixels, kind=kind)
     return candidates, time.monotonic() - started
 
 
 class Detector:
+    @cached_property
+    def _pool(self):
+        return ThreadPoolExecutor(max_workers=1)
+
     def __init__(self, config: dict):
         self.max_side, self.box_padding = config["detection_max_side"], config["detection_box_padding"]
         self.inference_device = config.get("inference_device", "cpu")
@@ -44,18 +50,47 @@ class Detector:
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         return [detection.box for detection in self.detect_regions(rgb)]
 
-    def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
+    def plate_proposals(self, rgb):
+        self._proposal_candidates = None
+        prepare = getattr(self.primary, "prepare", None)
+        pixels = prepare(rgb) if prepare else rgb
+        # Proposals trigger the unchanged quality gate; they never create or renew masks.
+        if getattr(self, "inference_device", "cpu") != "cuda":
+            return self.detail.candidates(pixels, kind="plate")
+        # Both outcomes need full faces; share detail views and overlap the independent models.
+        pending = self._pool.submit(_timed_candidates, self.primary, pixels, kind="face", full_frame=True)
+        try:
+            detail, detail_seconds = _timed_candidates(self.detail, pixels)
+        finally:
+            primary, primary_seconds = pending.result()
+        self._proposal_candidates = (rgb, primary, primary_seconds, detail, detail_seconds)
+        return [detection for detection in detail if detection.kind == "plate"]
+
+    def detect_faces(self, rgb):
+        return self.detect_regions(rgb, kind="face", full_frame=True)
+
+    def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None, full_frame=False) -> list[Detection]:
         """Retain strong primary detections and confirmed complementary masks."""
-        if self.inference_device == "cuda":
+        cached = getattr(self, "_proposal_candidates", None)
+        self._proposal_candidates = None
+        if cached is not None and cached[0] is rgb and (kind is None or kind == "face" and full_frame):
+            _, primary, primary_seconds, detail, detail_seconds = cached
+            if kind is None:
+                plates, seconds = _timed_candidates(self.primary, self.primary.prepare(rgb), kind="plate")
+                primary, primary_seconds = primary + plates, primary_seconds + seconds
+            else:
+                detail = [detection for detection in detail if detection.kind == "face"]
+        elif self.inference_device == "cuda":
             prepare = getattr(self.primary, "prepare", None)
             pixels = prepare(rgb) if prepare else rgb
             # 两路全图检测互不依赖；等待两路结束后再复核，异常不返回部分结果。
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                pending = pool.submit(_timed_candidates, self.primary, pixels, kind=kind)
+            pending = self._pool.submit(_timed_candidates, self.primary, pixels, kind=kind, full_frame=full_frame)
+            try:
                 detail, detail_seconds = _timed_candidates(self.detail, pixels, kind=kind)
+            finally:
                 primary, primary_seconds = pending.result()
         else:
-            primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind)
+            primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind, full_frame=full_frame)
             detail, detail_seconds = _timed_candidates(self.detail, rgb, kind=kind)
         height, width = rgb.shape[:2]
         boxes = []

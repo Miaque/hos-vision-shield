@@ -45,7 +45,10 @@ class Detector(EgoBlurDetector):
             self.sessions[key] = session
         return self.sessions[key]
 
-    def candidates(self, rgb, *, kind=None):
+    def proposals(self, rgb):
+        return self.candidates(rgb, kind="face", full_frame=True)
+
+    def candidates(self, rgb, *, kind=None, full_frame=False):
         if isinstance(rgb, torch.Tensor):
             rgb = self.prepare(rgb)
         elif rgb.ndim != 3 or rgb.shape[2] != 3 or rgb.dtype != np.uint8 or not rgb.size:
@@ -54,7 +57,7 @@ class Detector(EgoBlurDetector):
         if kind != "plate":
             height, width = rgb.shape[:2]
             # Larger enlarged views miss the reviewed side profile; keep local confirmation at 160px.
-            side = 160 if kind == "face" else max(32, ((min(self.max_side, max(height, width)) + 31) // 32) * 32)
+            side = 160 if kind == "face" and not full_frame else max(32, ((min(self.max_side, max(height, width)) + 31) // 32) * 32)
             scale = side / max(height, width)
             rw, rh = max(1, round(width * scale)), max(1, round(height * scale))
             dx, dy = (side - rw) % 32, (side - rh) % 32

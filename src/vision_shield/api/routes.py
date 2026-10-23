@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import re
 import shutil
 from datetime import datetime, timezone
@@ -125,6 +126,10 @@ async def file_url(data: FileUrlInput, request: Request, response: Response):
                      "redaction_mode": {"type": "string", "enum": ["solid", "mosaic"], "default": "solid"},
                  }}}}}})
 async def upload(request: Request, response: Response,
+                 tracking: Literal['template', 'flow'] | None = Header(default=None, alias='X-Tracking-Mode',
+                     description='仅离线视频顺序验证：flow 须配合检测间隔 3，跟踪失效立即全图复核'),
+                 detection_interval: Literal['1', '3'] | None = Header(default=None, alias='X-Detection-Interval',
+                     description='仅离线视频顺序验证：全图检测间隔，省略时保持逐帧；解码、跟踪、遮罩和编码仍逐帧执行'),
                  profile_detection: Literal['1'] | None = Header(default=None, alias='X-Detection-Profile',
                      description='仅视频：显式采集三个主车牌CUDA时间线样本，会增加诊断开销')):
     key, target_id = creation_headers(request)
@@ -139,7 +144,9 @@ async def upload(request: Request, response: Response,
                 kind, file = form["kind"], form["file"]
                 if kind not in {"image", "video"} or not isinstance(file, UploadFile):
                     raise HTTPException(422, "invalid_input")
-                if profile_detection is not None and kind != 'video':
+                if (profile_detection is not None or detection_interval is not None or tracking is not None) and kind != 'video':
+                    raise HTTPException(422, 'invalid_input')
+                if tracking == 'flow' and detection_interval != '3':
                     raise HTTPException(422, 'invalid_input')
                 redaction_mode = form.get("redaction_mode", "solid")
                 if redaction_mode not in ("solid", "mosaic"):
@@ -151,7 +158,9 @@ async def upload(request: Request, response: Response,
                 digest = await save_upload(file, source,
                     settings.max_image_bytes if kind == "image" else settings.max_video_bytes)
         fingerprint = request_fingerprint(kind=kind, source_kind="upload", source_digest=digest,
-            redaction_mode=redaction_mode, notification_target=target_id, profile_detection=profile_detection is not None)
+            redaction_mode=redaction_mode, notification_target=target_id, profile_detection=profile_detection is not None,
+            **({'detection_interval': 3} if detection_interval == '3' else {}),
+            **({'tracking': 'flow'} if tracking == 'flow' else {}))
         task = await replay(request, key, fingerprint)
         if task is None:
             await require_worker(request.app.state.redis, kind, settings.lease_seconds)
@@ -160,7 +169,10 @@ async def upload(request: Request, response: Response,
             submission_unknown = True
             task = await request.app.state.store.create(kind, "upload", str(source), task_id,
                 redaction_mode=redaction_mode, idempotency_key=key, fingerprint=fingerprint,
-                notification_target=target_id, **({'profile_detection': True} if profile_detection is not None else {}))
+                notification_target=target_id,
+                **({'tracking': tracking} if tracking is not None else {}),
+                **({'detection_interval': int(detection_interval)} if detection_interval is not None else {}),
+                **({'profile_detection': True} if profile_detection is not None else {}))
             submission_unknown = False
         keep_input = task["id"] == task_id
         response.headers["Location"] = f"/v1/tasks/{task['id']}"
@@ -235,6 +247,8 @@ async def get_task(task_id: UUID, request: Request, response: Response):
         response.headers["X-Video-Encoder"] = task["video_encoder"]
     if task.get("video_decoder") in {"h264", "h264_nvdec"}:
         response.headers["X-Video-Decoder"] = task["video_decoder"]
+    if task.get('detection_stats'):
+        response.headers['X-Detection-Counts'] = json.dumps(task['detection_stats'], separators=(',', ':'))
     if task.get("timings"):
         response.headers["Server-Timing"] = ", ".join(
             f"task-{name};dur={task['timings'][name] * 1000:.3f}"
