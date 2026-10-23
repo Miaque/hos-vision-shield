@@ -82,6 +82,38 @@ def test_statistics_keep_first_and_warmup_separate():
     assert summary["steady_after_10_calls"]["p50_ms"] == 15.5
 
 
+def test_batched_view_forward_is_not_attributed_to_the_last_tile(tmp_path):
+    from itertools import batched
+
+    collector = profile.ProfileTimes(tmp_path)
+    bounds = [(0, 0, 3840, 1080), (0, 0, 1920, 1080),
+              (960, 0, 2880, 1080), (1920, 0, 3840, 1080)]
+
+    class Model:
+        parallel, tile_side, _plate_session = True, 1920, object()
+
+        def _views(self, *args):
+            yield from bounds
+
+        def candidates(self, pixels, **kwargs):
+            for group in batched(self._views(*pixels.shape[:2][::-1], self.tile_side), 4):
+                assert list(group) == bounds
+                with collector.measure("forward-detail-plate"):
+                    pass
+            return []
+
+    model = Model()
+    profile.instrument_candidates(model, "detail", collector)
+    with profile.scope(frame=17, purpose="discovery"):
+        assert model.candidates(SimpleNamespace(shape=(1080, 3840, 3), is_cuda=True)) == []
+    collector.close()
+    rows = [json.loads(line) for line in (tmp_path / "calls.jsonl").read_text().splitlines()]
+    assert len(rows) == 1 and rows[0]["frame"] == 17
+    assert rows[0]["view"] == "mixed" and rows[0]["source_region"] is None
+    assert rows[0]["batched_candidate_regions"] == [list(b) for b in bounds]
+    assert collector.report(1)["views"]["discovery"] == {"global": 1, "tile": 3}
+
+
 def test_diagnostic_budget_stops_before_running_more_model_work(tmp_path, monkeypatch):
     monkeypatch.setattr(profile, "MAX_MEASUREMENTS", 1)
     collector = profile.ProfileTimes(tmp_path)

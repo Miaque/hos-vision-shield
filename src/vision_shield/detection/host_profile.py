@@ -185,7 +185,14 @@ def instrument_candidates(model, name, collector):
         if calls is not None:
             calls[name] = calls.get(name, 0) + 1
             mirror = calls[name] > 1
-        with scope(model_group=name, source_shape=list(pixels.shape), mirror=mirror, view="global"):
+        batched_views = (hasattr(model, "_plate_session") and getattr(pixels, "is_cuda", False)
+                         and model.parallel and kwargs.get("kind") != "face"
+                         and max(pixels.shape[:2]) > model.tile_side)
+        regions = list(original_views(*pixels.shape[:2][::-1], model.tile_side)) if batched_views else None
+        mixed = {"source_region": None, "tile_index": None} if batched_views else {}
+        # Collection leaves the final tile scope active; a batch cannot inherit that tile's identity.
+        with scope(model_group=name, source_shape=list(pixels.shape), mirror=mirror,
+                   view="mixed" if batched_views else "global", batched_candidate_regions=regions, **mixed):
             with collector.measure(f"candidate-{name}"):
                 return original(pixels, *args, **kwargs)
 
@@ -198,7 +205,9 @@ def instrument_candidates(model, name, collector):
                 view = "global" if index == 0 else "tile"
                 with collector.lock:
                     collector.views[CONTEXT.get().get("purpose", "discovery")][view] += 1
-                with scope(view=view, tile_index=index, source_region=list(box)):
+                mixed = bool(CONTEXT.get().get("batched_candidate_regions"))
+                with scope(view="mixed" if mixed else view, tile_index=None if mixed else index,
+                           source_region=None if mixed else list(box)):
                     yield box
 
         model._views = views
