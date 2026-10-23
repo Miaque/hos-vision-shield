@@ -204,3 +204,19 @@ P50/P95/P99=0.206141/0.478318/0.580929 秒；完整十秒窗口 16.0/15.3/15.1/1
 保留租约、generation、终态检查，混入 state/ready 等字段整次拒绝，不能恢复发布权限。
 相关检查 49 通过，1 个已有契约测试失败：它仍假设 stream 不支持 detection_interval，实际现有 create 已支持；
 该旧断言未随本次存储修复更改。新修复尚未服务器验证，不宣称尾帧问题解决。
+
+## 收尾统计与转发播放验证（metrics-04）
+
+用户提供现有转发 `127.0.0.1:18554 -> 192.168.1.104:8554`，未修改隧道。
+`exp-20261024-a-live-metrics-04` / `220fde3` 首次 GitHub TLS 拉取失败，原命令重试成功，各服务健康。
+任务 `983a5b00-581f-4b8f-a5ff-b49f1e005b2f` 已 stopped，API 活动任务为空。
+证据目录 `data/validation/route-a-live-metrics-20261024-bringup-04/`。
+
+最终 47.090 秒：input=718、processed=717、encoded=717、dropped=1、pending_encoder=0、queue=0，
+failed/protected/missing_receive/unmatched 均为零；717 个输出序号连续。
+P50/P95/P99=0.241449/0.470794/0.523212 秒。此次实测支持收尾统计修复有效，
+仍有一帧输入无 PTS 被丢弃；源约 15 FPS，非双路容量或三十分钟验收。
+
+通过替换 API playback_url 的主机端口为上述转发，播放端实际解码 150 帧 3840×1080 H.264，
+SDP/解复用识别 AAC 音轨，未验证音频播放。首帧缺少 PTS，其余 149 帧 PTS 严格递增、跨度 11.886 秒。
+保存 playback.json 与首帧图；证明输出可访问、可解码，不证明整片质量或采集至播放延迟。
