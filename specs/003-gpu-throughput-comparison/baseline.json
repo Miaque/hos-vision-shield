@@ -1,0 +1,31 @@
+{
+  "route_a": {
+    "commit": "581c175a0fad21efe10a0caf08a01e37b25fd3ad",
+    "detection_backend": "quality_yolo",
+    "inference_device": "cuda",
+    "detection_interval": 3,
+    "tracking": "flow",
+    "primary_face_sha256": "2e7af8694e93862be6a81c13b197ef766e8ab7e10af230bc19bc94d045dedb2b"
+  },
+  "route_b": {
+    "commit": "d577ee7c5460afe18ca4efa310400e7554c70c12",
+    "branch": "feature/gpu-throughput-optimization",
+    "detection_backend": "quality",
+    "inference_device": "cuda",
+    "detection_interval": 1,
+    "tracking": "template",
+    "forbidden_runtime": ["YOLO", "route-A cadence and optical-flow scheduler"]
+  },
+  "common": {"detection_max_side": 1280, "detection_box_padding": 0.15, "detail_tile_side": 1920, "redaction_mode": "solid"},
+  "weights": {
+    "face.jit": "6eb2f6eb51fd1193d29b048aa7d1750a74fc5673d6e803231e25501cbf51567c",
+    "license_plate.jit": "d0be72e015e30f0123a9194419bbb2fdcb6916faf81096e3fa2b50bcd1a85ade",
+    "yunet_face.onnx": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+    "hyperlpr_plate.onnx": "2a985dc63a5cc947ec36d18503d6fc0fd54525b9dba17f2fe29a71e86b44456d"
+  },
+  "sources": [
+    {"path": "tests/test_assets/report/人脸视频1.mp4", "frames": 2450, "sha256": "353b197db4262615cf44691ddf827daeb9682e8c4c9f879aa3c9529c9d79a299"},
+    {"path": "tests/test_assets/report/车牌视频.mp4", "frames": 1776, "sha256": "85603d67df868485201f3273efb090b73425f2c779de185c918ab2fa8580c3e3"},
+    {"path": "tests/test_assets/22-27-35车撞人.mp4", "frames": 1511, "sha256": "cabf8422c27600b89ac2e36fb90f33990dc820ecb7ec3c4b146af1c63b7809b2"}
+  ]
+}
