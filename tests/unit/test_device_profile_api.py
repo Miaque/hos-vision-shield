@@ -16,7 +16,12 @@ def test_profile_header_and_sample_choices_are_described_in_openapi():
     assert sample['schema']['enum'] == [64, 424, 768]
 
 
-@pytest.mark.parametrize('kind,header,status', [('video', '1', 202), ('image', '1', 422),
+@pytest.mark.parametrize('kind,header,status', [('video', '1', 202), ('video', 'host', 202),
+                                               ('video', 'forward-primary-face', 202),
+                                               ('video', 'forward-primary-plate', 202),
+                                               ('video', 'forward-detail-face', 202),
+                                               ('video', 'forward-detail-plate', 202),
+                                               ('image', '1', 422), ('image', 'host', 422),
                                                ('video', '0', 422), ('video', 'yes', 422)])
 async def test_only_explicit_video_profile_request_reaches_worker(tmp_path, monkeypatch, kind, header, status):
     from vision_shield.api import routes
@@ -34,7 +39,7 @@ async def test_only_explicit_video_profile_request_reaches_worker(tmp_path, monk
                                      data={'kind': kind}, files={'file': ('input.mp4', b'video', 'video/mp4')})
         assert response.status_code == status
         if status == 202:
-            assert app.state.store.create.call_args.kwargs['profile_detection'] is True
+            assert app.state.store.create.call_args.kwargs['profile_detection'] == (True if header == '1' else header)
             assert 'profile_detection' not in response.json()
         else:
             app.state.store.create.assert_not_called()
@@ -72,6 +77,8 @@ async def test_profile_request_is_private_store_metadata_and_video_only():
     assert 'profile_detection' not in plain
     profiled = await store.create('video', 'upload', 'local', profile_detection=True)
     assert profiled['profile_detection'] is True
+    host = await store.create('video', 'upload', 'local', profile_detection='host')
+    assert host['profile_detection'] == 'host'
     with pytest.raises(ValueError):
         await store.create('image', 'upload', 'local', profile_detection=True)
 
@@ -93,3 +100,21 @@ async def test_trace_resolved_outside_task_is_not_downloadable(tmp_path, monkeyp
         app.state.store.get = AsyncMock(return_value=dict(generation=1, device_profile={}))
         response = await client.get(f'/v1/tasks/{task_id}/diagnostics?sample=64')
         assert response.status_code == 409 and 'private' not in response.text
+
+
+@pytest.mark.parametrize('mode', ['forward-primary-face', 'forward-detail-plate'])
+async def test_named_model_trace_uses_validated_task_relative_path(tmp_path, mode):
+    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    task_id = '00000000-0000-0000-0000-000000000001'
+    directory = tmp_path / task_id / 'attempt-1/host-profile'
+    directory.mkdir(parents=True)
+    (directory / f'{mode}-64.json').write_text('{"traceEvents":[]}', 'utf-8')
+    record = dict(id=task_id, generation=1, device_profile=dict(state='complete', mode=mode))
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url='http://test'
+    ) as client:
+        app.state.store.get = AsyncMock(return_value=record)
+        url = f'/v1/tasks/{task_id}/diagnostics?sample=64'
+        assert (await client.get(url)).json() == dict(traceEvents=[])
+        record['device_profile']['mode'] = '../../private'
+        assert (await client.get(url)).status_code == 409

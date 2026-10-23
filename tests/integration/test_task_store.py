@@ -93,3 +93,20 @@ async def test_stream_publish_and_video_tracking_contracts_survive_merge(store):
                           ("stream", {"detection_interval": 3}), ("video", {"tracking": "flow"})]:
         with pytest.raises(ValueError):
             await store.create(kind, "upload", "source", **options)
+
+
+@pytest.mark.parametrize("profile", ["host", "forward-detail-plate"])
+async def test_external_output_preserves_video_diagnostic_modes(store, profile):
+    publish_url = "rtmp://approved/app/camera?sign=test"
+    stream = await store.create("stream", "rtsp", "rtsp://approved/live", publish_url=publish_url)
+    stored_stream = await store.get(stream["id"])
+    assert stored_stream["publish_url"] == publish_url
+    assert stored_stream["publisher_owner_id"] is None
+
+    video = await store.create("video", "upload", "data/test/source.mp4", profile_detection=profile)
+    assert (await store.get(video["id"]))["profile_detection"] == profile
+
+    with pytest.raises(ValueError, match="video"):
+        await store.create("stream", "rtsp", "rtsp://approved/live", profile_detection=profile)
+    with pytest.raises(ValueError, match="stream"):
+        await store.create("video", "upload", "data/test/source.mp4", publish_url=publish_url)

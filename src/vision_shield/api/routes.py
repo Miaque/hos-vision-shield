@@ -130,10 +130,13 @@ async def upload(request: Request, response: Response,
                      description='仅离线视频顺序验证：flow 须配合检测间隔 3，跟踪失效立即全图复核'),
                  detection_interval: Literal['1', '3'] | None = Header(default=None, alias='X-Detection-Interval',
                      description='仅离线视频顺序验证：全图检测间隔，省略时保持逐帧；解码、跟踪、遮罩和编码仍逐帧执行'),
-                 profile_detection: Literal['1'] | None = Header(default=None, alias='X-Detection-Profile',
-                     description='仅视频：显式采集三个主车牌CUDA时间线样本，会增加诊断开销')):
+                 profile_detection: Literal['1', 'host', 'forward-primary-face', 'forward-primary-plate',
+                                            'forward-detail-face', 'forward-detail-plate'] | None = Header(
+                     default=None, alias='X-Detection-Profile',
+                     description='仅视频：1沿用主车牌全图CUDA采样；host记录调用分布；forward-*按真实前向序号采样指定模型。诊断FPS不作吞吐验收')):
     key, target_id = creation_headers(request)
     settings = request.app.state.settings
+    profile_mode = True if profile_detection == '1' else profile_detection or False
     directory, keep_input, submission_unknown = None, False, False
     try:
         async with asyncio.timeout(settings.upload_timeout):
@@ -158,7 +161,7 @@ async def upload(request: Request, response: Response,
                 digest = await save_upload(file, source,
                     settings.max_image_bytes if kind == "image" else settings.max_video_bytes)
         fingerprint = request_fingerprint(kind=kind, source_kind="upload", source_digest=digest,
-            redaction_mode=redaction_mode, notification_target=target_id, profile_detection=profile_detection is not None,
+            redaction_mode=redaction_mode, notification_target=target_id, profile_detection=profile_mode,
             **({'detection_interval': 3} if detection_interval == '3' else {}),
             **({'tracking': 'flow'} if tracking == 'flow' else {}))
         task = await replay(request, key, fingerprint)
@@ -172,7 +175,7 @@ async def upload(request: Request, response: Response,
                 notification_target=target_id,
                 **({'tracking': tracking} if tracking is not None else {}),
                 **({'detection_interval': int(detection_interval)} if detection_interval is not None else {}),
-                **({'profile_detection': True} if profile_detection is not None else {}))
+                **({'profile_detection': profile_mode} if profile_detection is not None else {}))
             submission_unknown = False
         keep_input = task["id"] == task_id
         response.headers["Location"] = f"/v1/tasks/{task['id']}"
@@ -270,8 +273,11 @@ async def detection_diagnostics(task_id: UUID, request: Request,
     if sample is None:
         return task['device_profile']
     root = request.app.state.settings.media_root.resolve()
-    target = await asyncio.to_thread((root / str(task_id) / f"attempt-{task['generation']}" /
-                                     f'plate-profile-{sample}.json').resolve)
+    mode = task['device_profile'].get('mode')
+    path = (f'host-profile/{mode}-{sample}.json' if mode in (
+        'forward-primary-face', 'forward-primary-plate', 'forward-detail-face', 'forward-detail-plate')
+        else f'plate-profile-{sample}.json')
+    target = await asyncio.to_thread((root / str(task_id) / f"attempt-{task['generation']}" / path).resolve)
     if not target.is_relative_to(root / str(task_id)) or not await asyncio.to_thread(target.is_file):
         raise HTTPException(409, 'diagnostics_not_ready')
     return FileResponse(target, media_type='application/json', filename=target.name)

@@ -26,8 +26,17 @@ def summarize(trace):
     if len(scopes) != 1:
         raise RuntimeError('Missing primary plate trace scope')
     scope = scopes[0]
+    owners = [scope, *(event for event in events if event.get('cat') == 'cpu_op'
+                      and event['tid'] == scope['tid'] and scope['ts'] <= event['ts'] < scope['ts'] + scope['dur'])]
+    external_ids = {event['args']['External id'] for event in owners if 'External id' in event.get('args', {})}
+
+    def owned(event):
+        # CUPTI may retain an old tid when executor threads are recreated; PyTorch External ids remain scoped.
+        external = event.get('args', {}).get('External id')
+        return external in external_ids if external is not None else event['tid'] == scope['tid']
+
     runtime = [event for event in events if event.get('cat') in {'cuda_runtime', 'cuda_driver'}
-               and event['tid'] == scope['tid'] and scope['ts'] <= event['ts'] < scope['ts'] + scope['dur']]
+               and owned(event) and scope['ts'] <= event['ts'] < scope['ts'] + scope['dur']]
     correlations = {event['args']['correlation'] for event in runtime if 'correlation' in event.get('args', {})}
     gpu = [event for event in events if event.get('cat') in {'kernel', 'gpu_memcpy', 'gpu_memset'}
            and event.get('args', {}).get('correlation') in correlations]

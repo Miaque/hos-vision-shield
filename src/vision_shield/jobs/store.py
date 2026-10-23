@@ -278,7 +278,7 @@ class TaskStore:
         return json.loads(result) if result else None
 
     async def create(self, kind: str, source_kind: str, source_ref: str, task_id: str | None = None,
-                     *, redaction_mode: str = "solid", profile_detection: bool = False, detection_interval: int = 1,
+                     *, redaction_mode: str = "solid", profile_detection: bool | str = False, detection_interval: int = 1,
                      tracking: str = "template",
                      idempotency_key: str | None = None, fingerprint: str | None = None,
                      notification_target: str | None = None, publish_url: str | None = None) -> dict:
@@ -286,13 +286,16 @@ class TaskStore:
             raise ValueError("Unsupported redaction mode")
         if profile_detection and kind != 'video':
             raise ValueError('Detection profiling requires a video task')
-        if publish_url is not None and kind != "stream":
-            raise ValueError("A publish URL requires a stream task")
+        if profile_detection not in (False, True, 'host', 'forward-primary-face', 'forward-primary-plate',
+                                     'forward-detail-face', 'forward-detail-plate'):
+            raise ValueError('Unsupported detection profile')
         if (type(detection_interval) is not int or detection_interval not in (1, 3)
                 or detection_interval != 1 and kind != 'video'):
             raise ValueError('Unsupported detection interval')
         if tracking not in ('template', 'flow') or tracking == 'flow' and (kind != 'video' or detection_interval != 3):
             raise ValueError('Unsupported tracking mode')
+        if publish_url is not None and kind != "stream":
+            raise ValueError("A publish URL requires a stream task")
         task_id = task_id or str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
         task = dict(
@@ -305,14 +308,14 @@ class TaskStore:
             fingerprint=fingerprint, notification_target=notification_target,
         )
         if profile_detection:
-            task['profile_detection'] = True
-        if publish_url is not None:
-            task["publish_url"] = publish_url
-            task["publisher_owner_id"] = None
+            task['profile_detection'] = profile_detection
         if detection_interval != 1:
             task['detection_interval'] = detection_interval
         if tracking != 'template':
             task['tracking'] = tracking
+        if publish_url is not None:
+            task["publish_url"] = publish_url
+            task["publisher_owner_id"] = None
         return await self._change(task_id, "create", task, self.stream_limit if kind == "stream" else self.file_limit)
 
     async def get(self, task_id: str) -> dict | None:

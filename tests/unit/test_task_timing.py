@@ -139,3 +139,44 @@ def test_inference_timing_includes_local_rechecks(monkeypatch):
     assert detector.calls == 3, "两次全图和一次局部确认都应实际运行"
     assert redactor.inference_seconds == pytest.approx(0.15)
     assert redactor.candidate_timings == pytest.approx({"candidate-primary": 0.09, "candidate-detail": 0.03})
+
+
+@pytest.mark.parametrize('fails', [False, True])
+@pytest.mark.parametrize('mode', ['host', 'forward-detail-face'])
+def test_child_host_profile_is_opt_in_and_failure_does_not_publish_output(tmp_path, monkeypatch, capsys, fails, mode):
+    from pathlib import Path
+    from vision_shield import detection
+    from vision_shield.media import video
+    # Import numerical libraries before replacing the private control-pipe thread.
+    from vision_shield.detection import host_profile, egoblur, cuda_detail, quality
+
+    primary = SimpleNamespace(candidates=lambda pixels, **kw: [])
+    detail = SimpleNamespace(candidates=lambda pixels, **kw: [])
+    detector = SimpleNamespace(primary=primary, detail=detail)
+    payload = dict(kind='video', source='private-source', directory=str(tmp_path / 'attempt'),
+                   profile_detection=mode, config=Settings(_env_file=None, inference_device='cuda', detection_backend='quality_yolo').model_dump(mode='json'))
+    monkeypatch.setattr(child.sys, 'stdin', io.StringIO(json.dumps(payload) + '\n'))
+    monkeypatch.setattr(child.threading, 'Thread', lambda **kw: SimpleNamespace(start=lambda: None))
+    monkeypatch.setattr(detection, 'load_detector', lambda cfg: detector)
+    monkeypatch.setattr(host_profile, 'runtime_metadata', lambda *args: dict(backend='quality'))
+    original = video.av.open
+
+    def process(source, target, actual, config, stop, emit):
+        assert actual is detector and video.av.open is not original
+        assert not hasattr(primary, 'device_samples')
+        if fails:
+            raise RuntimeError('private-source')
+        Path(target).write_bytes(b'processed-video')
+    monkeypatch.setattr(video, 'process_video', process)
+    if fails:
+        with pytest.raises(SystemExit):
+            child.main()
+    else:
+        child.main()
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    report, = [event['device_profile'] for event in events if 'device_profile' in event]
+    assert report['state'] == ('failed' if fails else 'complete' if mode == 'host' else 'partial')
+    assert report['mode'] == mode
+    assert any('result_ref' in event for event in events) is not fails
+    assert (tmp_path / 'attempt/result.mp4').exists() is not fails
+    assert video.av.open is original
