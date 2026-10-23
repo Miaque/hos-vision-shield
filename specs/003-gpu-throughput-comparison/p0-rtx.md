@@ -40,7 +40,8 @@
 两份 EgoBlur 参数/设备均为 CUDA FP32，ORT 均 CUDAExecutionProvider，GPU capability 8.9。
 PyTorch 2.14.1+cu126 / CUDA 12.6 / ORT 1.20.2；cuDNN 卷积精度策略为 tf32，
 其他全局/matmul 策略报告为 none，不能仅从 dtype 推断实际每个内核的数值路径。
-加载模型 1.595 秒；2450 帧全部 PTS/尺寸保持，完整输出 SHA256 与两路普通基线逐字节一致。
+模型加载段 1.595 秒（诊断观察器已先导入依赖，不含 PyTorch/ORT 等依赖导入，不能视为完整冷启动）；
+2450 帧全部 PTS/尺寸保持，完整输出 SHA256 与两路普通基线逐字节一致。
 
 | 模型 | 真实调用 | 次/帧 | host 累计秒 | host P50/P95 ms |
 | --- | ---: | ---: | ---: | --- |
