@@ -70,3 +70,6 @@ flow 必须显式配合 3，非法值在接纳前拒绝。图片仍不接受该�
 扩大本地兼容性回归后：`tests/unit` 与 `tests/integration/test_stream_api.py`
 共 511 项通过、24 项真实硬件用例跳过，日志
 `data/validation/route-a-live-gpu-local-regression.log`。本机没有 CUDA，未以模拟设备选择测试代替硬件验证。
+
+接线实验 tag `exp-20261024-a-live-gpu-01` 指向 `9feb9f7`，已推送，尚未部署。
+当前服务器保持 batch2 离线 tag；人脸／夜间队列结束且输出归档前不切换版本。
