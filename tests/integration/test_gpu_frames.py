@@ -147,7 +147,7 @@ def test_nvdec_runtime_failure_is_not_retried_with_cpu(generated_media, tmp_path
 
 
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual CUDA models and NVDEC")
-@pytest.mark.parametrize("precision", ["automatic", "half"])
+@pytest.mark.parametrize("precision", ["automatic", "half", "half-flow"])
 @pytest.mark.parametrize("filename,start,end", [("人脸视频1.mp4", 79.5, 80.5), ("人脸视频2.mp4", 9.8, 10.5)])
 def test_nvdec_keeps_real_moving_tracks_and_gray_references(filename, start, end, precision):
     from pathlib import Path
@@ -157,10 +157,11 @@ def test_nvdec_keeps_real_moving_tracks_and_gray_references(filename, start, end
     from vision_shield.redaction import FrameRedactor
 
     detector = load_detector(Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump())
-    if precision == "half" and not isinstance(detector.primary.models[1], _HalfPlate):
+    if precision.startswith("half") and not isinstance(detector.primary.models[1], _HalfPlate):
         detector.primary.models[1] = _HalfPlate(detector.primary.models[1])
     frames = CUDAFrames()
-    old, new = FrameRedactor(detector), FrameRedactor(detector)
+    options = dict(detection_interval=3, tracking='flow') if precision == 'half-flow' else {}
+    old, new = FrameRedactor(detector, **options), FrameRedactor(detector, **options)
     source = Path("tests/test_assets/report") / filename
     with av.open(source) as software, av.open(source, hwaccel=hwaccel(frames.device)) as hardware:
         for reader in (software, hardware):
