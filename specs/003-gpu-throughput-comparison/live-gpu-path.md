@@ -66,3 +66,7 @@ flow 必须显式配合 3，非法值在接纳前拒绝。图片仍不接受该�
 修复 API、存储校验及流任务负载后，独立 Redis 和相关调度/推流地址检查 70 项通过。
 包含两种外部输出协议、默认输出、默认调度及 3/flow 的接纳、重放、配置传递和停止确认，
 以及非法调度接纳前拒绝。该配置在真实实时质量和吞吐上尚未验收，不能仅凭请求成功判定通过。
+
+扩大本地兼容性回归后：`tests/unit` 与 `tests/integration/test_stream_api.py`
+共 511 项通过、24 项真实硬件用例跳过，日志
+`data/validation/route-a-live-gpu-local-regression.log`。本机没有 CUDA，未以模拟设备选择测试代替硬件验证。
