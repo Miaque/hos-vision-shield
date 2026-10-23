@@ -10,7 +10,7 @@ from uuid import uuid4
 from redis.asyncio import Redis
 
 from vision_shield.config import Settings
-from vision_shield.jobs.store import TaskStore
+from vision_shield.jobs.store import TaskStore, publisher_exit_pending
 
 
 async def reconcile_once(store, dispatch, stop_stream=None):
@@ -20,6 +20,8 @@ async def reconcile_once(store, dispatch, stop_stream=None):
             if stop_stream:
                 await stop_stream(task)
         elif task["state"] in {"queued", "recovering"} and task["desired_state"] == "run":
+            if publisher_exit_pending(task):
+                continue
             await dispatch(task)
 
 

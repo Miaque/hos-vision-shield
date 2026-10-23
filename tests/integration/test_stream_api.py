@@ -35,7 +35,7 @@ async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_p
 
 
 @pytest.mark.parametrize("scheme", ["rtsp", "rtmp"])
-async def test_direct_publisher_runs_and_stops_without_mediamtx(redis_url, tmp_path, monkeypatch, scheme):
+async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, tmp_path, monkeypatch, scheme):
     import asyncio
     import time
 
@@ -50,13 +50,15 @@ async def test_direct_publisher_runs_and_stops_without_mediamtx(redis_url, tmp_p
         owned = await store.claim(task["id"], "owner")
         cancel = asyncio.Event()
 
-        async def run(command, payload, cancel, on_event, timeout):
+        async def run(command, payload, cancel, on_event, timeout, *, on_exit=None):
             assert payload["publish_url"] == target and payload["config"]["publish_url"] == target
             await on_event(dict(output=True, output_monotonic=time.monotonic(), ready=True))
             current = await store.get(task["id"])
             assert current["ready"] and current["state"] == "running"
             await store.request_stop(task["id"], "stopped")
             cancel.set()
+            if on_exit:
+                await on_exit()
             return dict(cancelled=True, returncode=0)
 
         monkeypatch.setattr(tasks, "run_process", run)
