@@ -62,7 +62,7 @@ class FrameRedactor:
         self.detection_stats = dict(full_frames=0, skipped_frames=0, local_rechecks=0)
         if tracking == "flow":
             self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0,
-                                        proposal_frames=0, proposal_rechecks=0)
+                                        proposal_frames=0, proposal_rechecks=0, face_rechecks=0)
         self.detector = detector
         self.stage_times = getattr(detector, "stage_times", None)
         self.history = deque(maxlen=128)
@@ -92,28 +92,34 @@ class FrameRedactor:
         self.frame_index += 1
         if gray is None:
             gray = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
-        flow_boxes, recheck = {}, False
+        flow_boxes, recheck, face_only = {}, False, False
         if self.tracking == "flow" and not detect:
+            face_only = bool(getattr(self.detector, "detect_faces", None))
             recheck = reset
             for old, track in enumerate(self.history):
-                if moment - track.seen > 0.5:
+                if moment - track.seen > 0.5 or face_only and track.kind == "face":
                     continue
                 flow_boxes[old] = self._flow(gray, track.box, track.reference)
                 if flow_boxes[old] is None:
                     self.detection_stats["flow_failures"] += 1
                     recheck = True
-            if not recheck and getattr(self.detector, "proposals", None):
-                recheck = self._proposal_recheck(pixels, flow_boxes, elapsed)
+            if not recheck and getattr(self.detector, "plate_proposals", None):
+                recheck = self._proposal_recheck(pixels, flow_boxes)
                 if recheck:
                     self.detection_stats["proposal_rechecks"] += 1
             if recheck:
+                face_only = False
                 self.detection_stats["full_rechecks"] += 1
                 detect = True
             else:
                 self.detection_stats["flow_updates"] += len(flow_boxes)
-        with measure(self, "track-recheck") if recheck else nullcontext():
-            detections = self._merge_detections(self._detections(pixels)) if detect else []
-        self.detection_stats["full_frames" if detect else "skipped_frames"] += 1
+                if face_only:
+                    self.detection_stats["face_rechecks"] += 1
+                    detect = True
+        with measure(self, "track-face-recheck" if face_only else "track-recheck") if recheck or face_only else nullcontext():
+            detections = (self._merge_detections(self._detections(pixels, face_only=True) if face_only
+                                               else self._detections(pixels)) if detect else [])
+        self.detection_stats["full_frames" if detect and not face_only else "skipped_frames"] += 1
         boxes = [detection.box for detection in detections]
         retained, history = [], []
         pairs = sorted(((self._overlap(track.box, detection.box), old, new)
@@ -131,7 +137,8 @@ class FrameRedactor:
         for old, (seen, checked, box, kind, reference) in enumerate(self.history):
             if moment - seen > 0.5 or old in matched_old:
                 continue
-            predicted = flow_boxes[old] if self.tracking == "flow" and not detect else self._follow(gray, box, reference)
+            use_flow = self.tracking == "flow" and (not detect or face_only and kind == "plate")
+            predicted = flow_boxes[old] if use_flow else self._follow(gray, box, reference)
             if predicted is None:
                 confirmed = self._recheck(pixels, box, kind) if kind else self._recheck(pixels, box)
                 if confirmed is not None:
@@ -163,9 +170,9 @@ class FrameRedactor:
         self.gray = gray
         return boxes + retained
 
-    def _detections(self, pixels, kind=None):
+    def _detections(self, pixels, kind=None, *, face_only=False):
         started = time.monotonic()
-        regions = getattr(self.detector, "detect_regions", None)
+        regions = self.detector.detect_faces if face_only else getattr(self.detector, "detect_regions", None)
         if regions:
             detections = regions(pixels, kind=kind) if kind else regions(pixels)
         else:
@@ -299,10 +306,10 @@ class FrameRedactor:
         return result if result[2] - result[0] >= 2 and result[3] - result[1] >= 2 else None
 
     @timed("track-probe")
-    def _proposal_recheck(self, pixels, flow_boxes, elapsed):
+    def _proposal_recheck(self, pixels, flow_boxes):
         self.detection_stats["proposal_frames"] += 1
         started = time.monotonic()
-        proposals = self.detector.proposals(pixels)
+        proposals = self.detector.plate_proposals(pixels)
         self.inference_seconds += time.monotonic() - started
         for candidate in proposals:
             x, y, a, b = candidate.box
@@ -311,9 +318,7 @@ class FrameRedactor:
             covered = False
             for old, track in enumerate(self.history):
                 predicted = flow_boxes.get(old)
-                # Reconfirm a visible target before a second skipped observation delays its expiry.
-                if (predicted is None or track.kind != candidate.kind
-                        or self.moment - track.seen > 1.5 * elapsed):
+                if predicted is None or track.kind != candidate.kind:
                     continue
                 left, top, right, bottom = predicted
                 intersection = max(0, min(a, right) - max(x, left)) * max(0, min(b, bottom) - max(y, top))

@@ -10,7 +10,8 @@ STAGES = (
     "prepare-primary", "prepare-detail", "forward-primary-face", "forward-primary-plate",
     "forward-detail-face", "forward-detail-plate",
     "post-primary", "post-detail", "local-confirm", "input-copy", "output-copy", "explicit-sync",
-    "track-confirm", "track-update", "track-flow", "track-probe", "track-recheck", "color-convert", "gray-copy", "mask-gpu",
+    "track-confirm", "track-update", "track-flow", "track-probe", "track-recheck", "track-face-recheck",
+    "color-convert", "gray-copy", "mask-gpu",
 )
 
 

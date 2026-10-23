@@ -87,15 +87,14 @@ def test_forward_backward_inconsistency_cannot_be_accepted_as_motion(monkeypatch
 
 @pytest.mark.parametrize('first,current', [(None, (60, 50, 120, 100)),
                                           ((60, 0, 120, 28), (50, 0, 125, 60))])
-def test_skipped_frame_proposal_rechecks_new_or_partially_entering_target(monkeypatch, first, current):
+def test_face_recheck_covers_new_or_partially_entering_target(monkeypatch, first, current):
     class Proposals:
         box = first
 
         def detect_regions(self, pixels, **kwargs):
             return [Detection('face', self.box, .8)] if self.box else []
 
-        def proposals(self, pixels):
-            return [Detection('face', self.box, .4)] if self.box else []
+        detect_faces = detect_regions
 
     detector = Proposals()
     redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
@@ -106,26 +105,25 @@ def test_skipped_frame_proposal_rechecks_new_or_partially_entering_target(monkey
     actual = redactor.apply(pixels, .04)
     x,y,a,b = current
     assert (actual[y:b, x:a] == 64).all()
-    assert redactor.detection_stats['proposal_frames'] == 1
-    assert redactor.detection_stats['proposal_rechecks'] == 1
+    assert redactor.detection_stats['face_rechecks'] == 1
 
 
-def test_visible_proposal_rechecks_before_missing_a_detection_lifetime_refresh(monkeypatch):
+def test_full_frame_face_detection_renews_lifetime_on_each_frame(monkeypatch):
     class Proposals:
         def detect_regions(self, pixels, **kwargs):
             return [Detection('face', (60, 50, 120, 100), .8)]
 
-        proposals = detect_regions
+        detect_faces = detect_regions
 
     redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow')
     monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
     pixels = np.full((160, 220, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
     redactor.apply(pixels, .04)
-    assert redactor.history[0].seen == 0
+    assert redactor.history[0].seen == .04
     redactor.apply(pixels, .08)
     assert redactor.history[0].seen == .08
-    assert redactor.detection_stats['proposal_rechecks'] == 1
+    assert redactor.detection_stats['face_rechecks'] == 2
 
 
 def test_unconfirmed_proposal_never_creates_a_mask():
@@ -133,8 +131,8 @@ def test_unconfirmed_proposal_never_creates_a_mask():
         def detect_regions(self, pixels, **kwargs):
             return []
 
-        def proposals(self, pixels):
-            return [Detection('face', (60, 50, 120, 100), .4)]
+        def plate_proposals(self, pixels):
+            return [Detection('plate', (60, 50, 120, 100), .4)]
 
     redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow')
     pixels = np.full((160, 220, 3), 180, np.uint8)
@@ -153,7 +151,7 @@ def test_proposal_inference_is_included_in_the_existing_inference_time(monkeypat
         def detect_regions(self, pixels):
             return []
 
-        def proposals(self, pixels):
+        def plate_proposals(self, pixels):
             clock[0] += .01
             return []
 
@@ -162,6 +160,64 @@ def test_proposal_inference_is_included_in_the_existing_inference_time(monkeypat
     redactor.apply(pixels, 0)
     redactor.apply(pixels, .04)
     assert redactor.inference_seconds == pytest.approx(.01)
+
+
+@pytest.mark.parametrize('uncovered_plate', [False, True])
+def test_face_proposal_rechecks_only_faces_unless_a_plate_also_needs_confirmation(monkeypatch, uncovered_plate):
+    class Proposals:
+        global_calls = face_calls = 0
+        face = False
+
+        def detect_regions(self, pixels):
+            self.global_calls += 1
+            return self.proposals(pixels)
+
+        def detect_faces(self, pixels):
+            self.face_calls += 1
+            return [c for c in self.proposals(pixels) if c.kind == 'face']
+
+        def proposals(self, pixels):
+            return ([Detection('face', (60, 50, 120, 100), .8)] if self.face else []) + (
+                [Detection('plate', (140, 50, 200, 75), .8)] if self.face and uncovered_plate else [])
+
+        def plate_proposals(self, pixels):
+            return [c for c in self.proposals(pixels) if c.kind == 'plate']
+
+    detector = Proposals()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    detector.face = True
+    output = redactor.apply(pixels, .04)
+    assert (output[50:100, 60:120] == 64).all()
+    assert detector.global_calls == (2 if uncovered_plate else 1)
+    assert detector.face_calls == (0 if uncovered_plate else 1)
+    assert redactor.detection_stats['face_rechecks'] == (0 if uncovered_plate else 1)
+    assert redactor.detection_stats['full_frames'] == (2 if uncovered_plate else 1)
+    assert redactor.detection_stats['full_rechecks'] == int(uncovered_plate)
+    if uncovered_plate:
+        assert (output[50:75, 140:200] == 64).all()
+
+
+def test_auxiliary_only_face_extent_is_checked_on_every_non_joint_frame(monkeypatch):
+    class PartialPrimary:
+        def detect_regions(self, pixels):
+            return [Detection('face', (60, 70, 100, 105), .8)]
+
+        proposals = detect_regions
+
+        def plate_proposals(self, pixels):
+            return []
+
+        def detect_faces(self, pixels):
+            return [Detection('face', (60, 50, 100, 105), .8)]
+
+    redactor = FrameRedactor(PartialPrimary(), detection_interval=3, tracking='flow')
+    monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    assert (redactor.apply(pixels, .04)[50:105, 60:100] == 64).all()
+    assert redactor.detection_stats['face_rechecks'] == 1
 
 
 @pytest.mark.parametrize('tracking,interval', [('bad', 3), ('flow', 1)])

@@ -13,9 +13,10 @@ from vision_shield.detection import Detection
 from vision_shield.detection.timing import StageTimes, measure, timed
 
 
-def _timed_candidates(model, pixels, *, kind=None):
+def _timed_candidates(model, pixels, *, kind=None, full_frame=False):
     started = time.monotonic()
-    candidates = model.candidates(pixels, kind=kind)
+    faces = getattr(model, "proposals", None) if full_frame and kind == "face" else None
+    candidates = faces(pixels) if faces else model.candidates(pixels, kind=kind)
     return candidates, time.monotonic() - started
 
 
@@ -44,26 +45,27 @@ class Detector:
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
         return [detection.box for detection in self.detect_regions(rgb)]
 
-    def proposals(self, rgb):
+    def plate_proposals(self, rgb):
         prepare = getattr(self.primary, "prepare", None)
         pixels = prepare(rgb) if prepare else rgb
-        faces = getattr(self.primary, "proposals", None)
         # Proposals trigger the unchanged quality gate; they never create or renew masks.
-        return ((faces(pixels) if faces else self.primary.candidates(pixels, kind="face"))
-                + self.detail.candidates(pixels, kind="plate"))
+        return self.detail.candidates(pixels, kind="plate")
 
-    def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None) -> list[Detection]:
+    def detect_faces(self, rgb):
+        return self.detect_regions(rgb, kind="face", full_frame=True)
+
+    def detect_regions(self, rgb: np.ndarray, *, kind: str | None = None, full_frame=False) -> list[Detection]:
         """Retain strong primary detections and confirmed complementary masks."""
         if self.inference_device == "cuda":
             prepare = getattr(self.primary, "prepare", None)
             pixels = prepare(rgb) if prepare else rgb
             # 两路全图检测互不依赖；等待两路结束后再复核，异常不返回部分结果。
             with ThreadPoolExecutor(max_workers=1) as pool:
-                pending = pool.submit(_timed_candidates, self.primary, pixels, kind=kind)
+                pending = pool.submit(_timed_candidates, self.primary, pixels, kind=kind, full_frame=full_frame)
                 detail, detail_seconds = _timed_candidates(self.detail, pixels, kind=kind)
                 primary, primary_seconds = pending.result()
         else:
-            primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind)
+            primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind, full_frame=full_frame)
             detail, detail_seconds = _timed_candidates(self.detail, rgb, kind=kind)
         height, width = rgb.shape[:2]
         boxes = []

@@ -217,7 +217,8 @@ def test_flow_proposals_recover_entry_growth_and_profile_expiry():
         detector.primary.models[1] = _HalfPlate(detector.primary.models[1])
     cases = [("22-27-35车撞人.mp4", 42, 44.166, (1490, 505, 1530, 560)),
              ("22-27-35车撞人.mp4", 50.8, 52.273, (90, 85, 215, 140)),
-             ("report/人脸视频1.mp4", 118.5, 120, (16, 214, 36, 244))]
+             ("report/人脸视频1.mp4", 118.5, 120, (16, 214, 36, 244)),
+             ("report/人脸视频1.mp4", 102.5, 103.25, (1809, 202, 1828, 213))]
     for filename, start, target, box in cases:
         frames = CUDAFrames()
         baseline = FrameRedactor(detector)
@@ -230,6 +231,14 @@ def test_flow_proposals_recover_entry_growth_and_profile_expiry():
                     continue
                 if moment > target + 1e-6:
                     break
+                if abs(moment - target) < 1e-6:
+                    planes = [torch.from_dlpack(plane.__dlpack__()) for plane in frame.planes]
+                    pixels = rgb_pixels(*planes, frame.colorspace, frame.color_range == 2)
+                    joint = sorted((d for d in detector.detect_regions(pixels) if d.kind == "face"), key=lambda d: d.box)
+                    faces = sorted(detector.detect_faces(pixels), key=lambda d: d.box)
+                    assert all(d.kind == "face" for d in faces)
+                    np.testing.assert_allclose([(*d.box, d.score) for d in faces],
+                                               [(*d.box, d.score) for d in joint], rtol=0, atol=.001)
                 candidate.frame_index = index
                 for redactor in (baseline, candidate):
                     output = frames.masked(frame, redactor)
@@ -241,5 +250,5 @@ def test_flow_proposals_recover_entry_growth_and_profile_expiry():
                         assert output.pts * output.time_base == frame.pts * frame.time_base
                         checked = True
         assert checked
-        assert candidate.detection_stats["proposal_rechecks"] > 0
+        assert candidate.detection_stats["face_rechecks"] > 0
     assert detector.stage_times.snapshot()["track-probe"] > 0

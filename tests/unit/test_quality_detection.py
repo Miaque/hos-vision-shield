@@ -503,16 +503,31 @@ def test_typed_quality_recheck_does_not_run_unrelated_models(kind):
     detector.box_padding = 0
     regions = detector.detect_regions(np.zeros((100, 100, 3), np.uint8), kind=kind)
     assert regions and all(region.kind == kind for region in regions)
-def test_flow_proposals_share_gpu_input_and_skip_expensive_primary_plate():
+def test_plate_proposals_share_gpu_input_and_skip_expensive_primary_plate():
     from types import SimpleNamespace
     from vision_shield.detection.quality import Detector
 
     pixels, prepared, calls = object(), object(), []
-    face = Detection("face", (20, 30, 50, 70), .4)
     plate = Detection("plate", (90, 50, 150, 80), .3)
     detector = Detector.__new__(Detector)
-    detector.primary = SimpleNamespace(prepare=lambda rgb: prepared if rgb is pixels else None,
-                                       proposals=lambda rgb: calls.append(("face", rgb)) or [face])
+    detector.primary = SimpleNamespace(prepare=lambda rgb: prepared if rgb is pixels else None)
     detector.detail = SimpleNamespace(candidates=lambda rgb, *, kind: calls.append((kind, rgb)) or [plate])
-    assert detector.proposals(pixels) == [face, plate]
-    assert calls == [("face", prepared), ("plate", prepared)]
+    assert detector.plate_proposals(pixels) == [plate]
+    assert calls == [("plate", prepared)]
+
+
+def test_full_frame_face_recheck_keeps_primary_resolution_and_original_quality_gate():
+    from types import SimpleNamespace
+    from vision_shield.detection.quality import Detector
+
+    calls = []
+    strong = Detection("face", (20, 30, 50, 70), .8)
+    detector = Detector.__new__(Detector)
+    detector.inference_device, detector.box_padding = "cuda", .15
+    detector.primary = SimpleNamespace(prepare=lambda rgb: rgb,
+        proposals=lambda rgb: calls.append("full-frame-face") or [strong],
+        candidates=lambda *a, **kw: pytest.fail("must not run primary plates or local-sized faces"))
+    detector.detail = SimpleNamespace(candidates=lambda rgb, *, kind: calls.append(kind) or [])
+    regions = detector.detect_faces(np.zeros((100, 100, 3), np.uint8))
+    assert regions == [Detection('face', (15.5, 24., 54.5, 76.), .8)]
+    assert calls.count('full-frame-face') == 1 and calls.count('face') == 1
