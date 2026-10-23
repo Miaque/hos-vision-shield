@@ -239,6 +239,16 @@ def test_flow_proposals_recover_entry_growth_and_profile_expiry():
                     assert all(d.kind == "face" for d in faces)
                     np.testing.assert_allclose([(*d.box, d.score) for d in faces],
                                                [(*d.box, d.score) for d in joint], rtol=0, atol=.001)
+                    expected = sorted(detector.detect_regions(pixels), key=lambda d: (d.kind, d.box))
+                    detector.plate_proposals(pixels)
+                    reused = sorted(detector.detect_regions(pixels), key=lambda d: (d.kind, d.box))
+                    assert [d.kind for d in reused] == [d.kind for d in expected]
+                    np.testing.assert_allclose([(*d.box, d.score) for d in reused],
+                                               [(*d.box, d.score) for d in expected], rtol=0, atol=.001)
+                    detector.plate_proposals(pixels)
+                    reused = sorted(detector.detect_faces(pixels), key=lambda d: d.box)
+                    np.testing.assert_allclose([(*d.box, d.score) for d in reused],
+                                               [(*d.box, d.score) for d in joint], rtol=0, atol=.001)
                 candidate.frame_index = index
                 for redactor in (baseline, candidate):
                     output = frames.masked(frame, redactor)
