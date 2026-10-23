@@ -103,6 +103,8 @@ async def execute(task_id, broker, context):
                 payload['profile_detection'] = True
             if record.get('detection_interval'):
                 payload['config']['detection_interval'] = record['detection_interval']
+            if record.get('tracking'):
+                payload['config']['tracking'] = record['tracking']
             result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                        payload, cancel, event_received, settings.process_stop_timeout)
         current = await store.get(task_id)

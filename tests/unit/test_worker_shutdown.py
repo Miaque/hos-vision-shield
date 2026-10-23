@@ -42,11 +42,11 @@ async def test_stopping_worker_does_not_claim_another_task(monkeypatch):
     await tasks.execute("job", broker, None)
 
 
-@pytest.mark.parametrize('interval', [1, 3])
-async def test_requested_device_profile_passes_to_child_and_is_stored_without_stats(tmp_path, monkeypatch, interval):
+@pytest.mark.parametrize('interval,tracking', [(1, 'template'), (3, 'template'), (3, 'flow')])
+async def test_requested_device_profile_passes_to_child_and_is_stored_without_stats(tmp_path, monkeypatch, interval, tracking):
     broker = SimpleNamespace(connection_pool=None, state=SimpleNamespace(), ack_message=AsyncMock())
     record = dict(id='job', kind='video', generation=1, source_kind='upload', source_ref='local',
-                  desired_state='run', profile_detection=True, detection_interval=interval)
+                  desired_state='run', profile_detection=True, detection_interval=interval, tracking=tracking)
     store = SimpleNamespace(claim=AsyncMock(return_value=record), get=AsyncMock(return_value=record),
                             heartbeat=AsyncMock(return_value=True), finish=AsyncMock(), update_owned=AsyncMock())
     monkeypatch.setattr(tasks, 'Settings', lambda: Settings(_env_file=None, media_root=tmp_path))
@@ -57,6 +57,7 @@ async def test_requested_device_profile_passes_to_child_and_is_stored_without_st
     async def run(command, payload, cancel, on_event, timeout):
         assert payload['profile_detection'] is True and 'profile_detection' not in payload['config']
         assert payload['config']['detection_interval'] == interval
+        assert payload['config']['tracking'] == tracking
         await on_event(dict(device_profile=profile))
         await on_event(dict(detection_stats=counts))
         return dict(returncode=0, result_ref=str(tmp_path / 'job/attempt-1/result.mp4'))

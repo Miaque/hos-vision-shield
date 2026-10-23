@@ -17,11 +17,11 @@ class FixedDetector:
 
 
 @pytest.mark.parametrize("name", ["silent.mp4", "aac.mp4", "vfr.mp4"])
-@pytest.mark.parametrize("interval", [1, 3])
-def test_video_preserves_frames_clocks_and_audio(generated_media, tmp_path, name, interval):
+@pytest.mark.parametrize("interval,tracking", [(1, 'template'), (3, 'template'), (3, 'flow')])
+def test_video_preserves_frames_clocks_and_audio(generated_media, tmp_path, name, interval, tracking):
     source, target = generated_media / name, tmp_path / name
     events = []
-    config = {**Settings(_env_file=None).model_dump(), 'detection_interval': interval}
+    config = {**Settings(_env_file=None).model_dump(), 'detection_interval': interval, 'tracking': tracking}
     process_video(str(source), str(target), FixedDetector(), config, threading.Event(), events.append)
     with av.open(str(source)) as a:
         expected = [frame.pts * frame.time_base for frame in a.decode(video=0)]
@@ -31,7 +31,11 @@ def test_video_preserves_frames_clocks_and_audio(generated_media, tmp_path, name
         assert all(abs(int(v) - 64) < 10 for v in frames[0].to_ndarray(format="rgb24")[20, 20])
     if name == "aac.mp4":
         assert audio_payloads(source) == audio_payloads(target)
-    assert events[-1]['detection_stats']['full_frames'] == (len(expected) + interval - 1) // interval
+    if tracking == 'template':
+        assert events[-1]['detection_stats']['full_frames'] == (len(expected) + interval - 1) // interval
+    else:
+        assert events[-1]['detection_stats']['full_frames'] >= (len(expected) + interval - 1) // interval
+        assert 'full_rechecks' in events[-1]['detection_stats']
     assert events[-1]['detection_stats']['skipped_frames'] == len(expected) - events[-1]['detection_stats']['full_frames']
 
 

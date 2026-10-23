@@ -4,6 +4,7 @@ import math
 import time
 from collections.abc import Iterable
 from collections import deque
+from contextlib import nullcontext
 from typing import NamedTuple
 
 import cv2
@@ -48,14 +49,19 @@ class _Track(NamedTuple):
 class FrameRedactor:
     """Follow confirmed masks briefly; only actual detections may renew their lifetime."""
 
-    def __init__(self, detector, *, mode="solid", detection_interval=1):
+    def __init__(self, detector, *, mode="solid", detection_interval=1, tracking="template"):
         if mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
         if type(detection_interval) is not int or detection_interval not in (1, 3):
             raise ValueError("Unsupported detection interval")
+        if tracking not in ("template", "flow") or tracking == "flow" and detection_interval != 3:
+            raise ValueError("Unsupported tracking mode")
         self.mode = mode
+        self.tracking = tracking
         self.detection_interval, self.frame_index = detection_interval, 0
         self.detection_stats = dict(full_frames=0, skipped_frames=0, local_rechecks=0)
+        if tracking == "flow":
+            self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0)
         self.detector = detector
         self.stage_times = getattr(detector, "stage_times", None)
         self.history = deque(maxlen=128)
@@ -83,11 +89,27 @@ class FrameRedactor:
         # shortcut: new entries can wait two frames; keep interval 1 unless offline quality review passes.
         detect = self.frame_index % self.detection_interval == 0
         self.frame_index += 1
-        detections = self._merge_detections(self._detections(pixels)) if detect else []
-        self.detection_stats["full_frames" if detect else "skipped_frames"] += 1
-        boxes = [detection.box for detection in detections]
         if gray is None:
             gray = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
+        flow_boxes, recheck = {}, False
+        if self.tracking == "flow" and not detect:
+            recheck = reset
+            for old, track in enumerate(self.history):
+                if moment - track.seen > 0.5:
+                    continue
+                flow_boxes[old] = self._flow(gray, track.box, track.reference)
+                if flow_boxes[old] is None:
+                    self.detection_stats["flow_failures"] += 1
+                    recheck = True
+            if recheck:
+                self.detection_stats["full_rechecks"] += 1
+                detect = True
+            else:
+                self.detection_stats["flow_updates"] += len(flow_boxes)
+        with measure(self, "track-recheck") if recheck else nullcontext():
+            detections = self._merge_detections(self._detections(pixels)) if detect else []
+        self.detection_stats["full_frames" if detect else "skipped_frames"] += 1
+        boxes = [detection.box for detection in detections]
         retained, history = [], []
         pairs = sorted(((self._overlap(track.box, detection.box), old, new)
                         for old, track in enumerate(self.history) for new, detection in enumerate(detections)
@@ -104,7 +126,7 @@ class FrameRedactor:
         for old, (seen, checked, box, kind, reference) in enumerate(self.history):
             if moment - seen > 0.5 or old in matched_old:
                 continue
-            predicted = self._follow(gray, box, reference)
+            predicted = flow_boxes[old] if self.tracking == "flow" and not detect else self._follow(gray, box, reference)
             if predicted is None:
                 confirmed = self._recheck(pixels, box, kind) if kind else self._recheck(pixels, box)
                 if confirmed is not None:
@@ -220,6 +242,56 @@ class FrameRedactor:
             return None
         dx, dy = sx + location[0] - left, sy + location[1] - top
         return max(0, x1 + dx), max(0, y1 + dy), min(width, x2 + dx), min(height, y2 + dy)
+
+    @timed("track-flow")
+    def _flow(self, gray, box, reference=None):
+        previous = self.gray if reference is None else reference
+        if previous is None:
+            return None
+        height, width = gray.shape
+        x1, y1, x2, y2 = box
+        left, top = max(0, math.floor(x1)), max(0, math.floor(y1))
+        right, bottom = min(width, math.ceil(x2)), min(height, math.ceil(y2))
+        inset_x, inset_y = (right - left) // 5, (bottom - top) // 5
+        patch = previous[top + inset_y:bottom - inset_y, left + inset_x:right - inset_x]
+        if min(patch.shape) < 5:
+            return None
+        points = cv2.goodFeaturesToTrack(patch, 48, 0.01, 3, blockSize=3)
+        if points is None or len(points) < 6:
+            return None
+        sx, sy = max(0, left - 96), max(0, top - 96)
+        previous_view = previous[sy:min(height, bottom + 96), sx:min(width, right + 96)]
+        current_view = gray[sy:sy + previous_view.shape[0], sx:sx + previous_view.shape[1]]
+        points += np.float32([left + inset_x - sx, top + inset_y - sy])
+        following, status, _ = cv2.calcOpticalFlowPyrLK(previous_view, current_view, points, None,
+                                                       winSize=(21, 21), maxLevel=3)
+        if following is None:
+            return None
+        backward, reverse_status, _ = cv2.calcOpticalFlowPyrLK(current_view, previous_view, following, None,
+                                                               winSize=(21, 21), maxLevel=3)
+        if backward is None:
+            return None
+        valid = ((status.ravel() != 0) & (reverse_status.ravel() != 0)
+                 & np.isfinite(following).all(axis=(1, 2))
+                 & (np.linalg.norm(points - backward, axis=2).ravel() <= 1.5))
+        if valid.sum() < 6 or valid.mean() < 0.65:
+            return None
+        source, target = points[valid, 0], following[valid, 0]
+        if np.any(np.ptp(source, axis=0) < np.array([x2 - x1, y2 - y1]) * 0.15):
+            return None
+        transform, inliers = cv2.estimateAffinePartial2D(source, target, method=cv2.RANSAC,
+                                                         ransacReprojThreshold=1.5, maxIters=100)
+        if transform is None or not np.isfinite(transform).all() or inliers.mean() < 0.7:
+            return None
+        scale = math.hypot(transform[0, 0], transform[1, 0])
+        if not 0.75 <= scale <= 1.35 or abs(math.atan2(transform[1, 0], transform[0, 0])) > math.pi / 6:
+            return None
+        # Transform all corners to cover rotation as well as translation and scale.
+        corners = np.array([[x1 - sx, y1 - sy, 1], [x2 - sx, y1 - sy, 1],
+                            [x2 - sx, y2 - sy, 1], [x1 - sx, y2 - sy, 1]]) @ transform.T
+        lower, upper = corners.min(axis=0) + (sx, sy), corners.max(axis=0) + (sx, sy)
+        result = max(0, float(lower[0])), max(0, float(lower[1])), min(width, float(upper[0])), min(height, float(upper[1]))
+        return result if result[2] - result[0] >= 2 and result[3] - result[1] >= 2 else None
 
     @timed("track-confirm")
     def _recheck(self, pixels, box, kind=""):

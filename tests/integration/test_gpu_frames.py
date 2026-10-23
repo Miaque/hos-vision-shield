@@ -14,7 +14,8 @@ from tests.integration.test_video_pipeline import FixedDetector
 
 
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
-def test_every_third_gpu_detection_preserves_all_frames_clocks_and_audio(generated_media, tmp_path):
+@pytest.mark.parametrize('tracking', ['template', 'flow'])
+def test_every_third_gpu_detection_preserves_all_frames_clocks_and_audio(generated_media, tmp_path, tracking):
     from tests.integration.test_media_probe import audio_payloads
 
     class NoTargets:
@@ -27,16 +28,44 @@ def test_every_third_gpu_detection_preserves_all_frames_clocks_and_audio(generat
 
     source, target = generated_media / 'aac.mp4', tmp_path / 'cadence.mp4'
     detector, events = NoTargets(), []
-    config = {**Settings(_env_file=None, inference_device='cuda').model_dump(), 'detection_interval': 3}
+    config = {**Settings(_env_file=None, inference_device='cuda').model_dump(), 'detection_interval': 3, 'tracking': tracking}
     process_video(source, target, detector, config, threading.Event(), events.append)
     with av.open(source) as reader:
         expected = [f.pts * f.time_base for f in reader.decode(video=0)]
     with av.open(target) as reader:
         assert [f.pts * f.time_base for f in reader.decode(video=0)] == expected
-    assert detector.calls == 8 and len(expected) == 24
-    assert events[-1]['detection_stats'] == dict(full_frames=8, skipped_frames=16, local_rechecks=0)
+    assert len(expected) == 24
+    counts = events[-1]['detection_stats']
+    assert counts['local_rechecks'] == 0 and counts['full_frames'] == detector.calls
+    assert counts['skipped_frames'] == len(expected) - detector.calls
+    assert detector.calls == 8 + counts.get('full_rechecks', 0)
     assert events[-1]['video_decoder'] == 'h264_nvdec' and events[-1]['video_encoder'] == 'h264_nvenc'
     assert audio_payloads(source) == audio_payloads(target)
+
+
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
+def test_failed_flow_rechecks_cuda_frame_before_masking(generated_media, tmp_path):
+    class Target:
+        def detect(self, pixels):
+            assert pixels.is_cuda
+            return [(50, 50, 100, 100)]
+
+    events = []
+    config = {**Settings(_env_file=None, inference_device='cuda').model_dump(), 'detection_interval': 3, 'tracking': 'flow'}
+    source, target = tmp_path / 'flat-target.mp4', tmp_path / 'tracked.mp4'
+    # A featureless target forces real LK failure; the moving test pattern is not a stationary target.
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(generated_media / 'aac.mp4'),
+                    '-vf', 'drawbox=x=40:y=40:w=70:h=70:color=gray:t=fill', '-c:v', 'libx264',
+                    '-c:a', 'copy', str(source)], check=True, capture_output=True, creationflags=NO_WINDOW)
+    process_video(source, target, Target(), config, threading.Event(), events.append)
+    with av.open(target) as reader:
+        frames = list(reader.decode(video=0))
+    assert len(frames) == 24
+    assert all((np.abs(f.to_ndarray(format='rgb24')[55:95, 55:95].astype(int) - 64) < 10).all() for f in frames)
+    counts = events[-1]['detection_stats']
+    assert counts['flow_updates'] + counts['flow_failures'] > 0
+    assert counts['flow_failures'] > 0 and counts['full_rechecks'] > 0
+    assert counts['full_frames'] == 8 + counts['full_rechecks']
 
 
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
