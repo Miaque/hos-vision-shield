@@ -62,8 +62,8 @@ def deployment(tmp_path):
                PATH=os.pathsep.join([str(binaries), str(Path(bash).parent),
                                      str(Path(bash).parents[1] / "usr/bin"), env["PATH"]]))
 
-    def run():
-        return subprocess.run([bash, (server / "scripts/deploy-server.sh").as_posix()],
+    def run(*args):
+        return subprocess.run([bash, (server / "scripts/deploy-server.sh").as_posix(), *args],
                               cwd=tmp_path, env=env, capture_output=True, text=True,
                               encoding="utf-8", timeout=30)
 
@@ -124,3 +124,138 @@ def test_server_deployment_survives_updating_its_own_script(deployment):
     result = d.run()
     assert result.returncode == 0, result.stdout + result.stderr
     assert "部署完成" in result.stdout
+
+
+@pytest.mark.parametrize("existing_branch", [False, True])
+def test_server_deployment_selects_and_fast_forwards_an_explicit_branch(deployment, existing_branch):
+    d = deployment
+    branch = "feature/gpu-throughput-optimization"
+    d.git("switch", "-c", branch, cwd=d.remote)
+    if existing_branch:
+        d.git("fetch", "origin", cwd=d.server)
+        d.git("branch", branch, f"origin/{branch}", cwd=d.server)
+    (d.remote / "app.txt").write_text("experiment", encoding="utf-8")
+    d.commit(d.remote)
+    original_main = d.git("rev-parse", "main", cwd=d.server)
+
+    result = d.run(branch)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert d.git("branch", "--show-current", cwd=d.server) == branch
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == d.git("rev-parse", "HEAD", cwd=d.remote)
+    assert d.git("rev-parse", "main", cwd=d.server) == original_main
+    assert (d.server / "app.txt").read_text("utf-8") == "experiment"
+    assert (d.server / ".env.compose").read_text("utf-8") == "server settings"
+    assert (d.server / "data/result.bin").read_bytes() == b"media"
+    assert (d.server / "models/face.jit").read_bytes() == b"weights"
+    assert branch in result.stdout
+
+    experiment_head = d.git("rev-parse", branch, cwd=d.server)
+    result = d.run("main")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert d.git("branch", "--show-current", cwd=d.server) == "main"
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == d.git("rev-parse", "main", cwd=d.remote)
+    assert d.git("rev-parse", branch, cwd=d.server) == experiment_head
+
+
+@pytest.mark.parametrize("problem", ["dirty", "ahead", "diverged", "untracked"])
+def test_server_deployment_preserves_conflicting_experiment_work(deployment, problem):
+    d = deployment
+    branch = "feature/experiment"
+    d.git("switch", "-c", branch, cwd=d.remote)
+    d.git("fetch", "origin", cwd=d.server)
+    if problem in {"ahead", "diverged"}:
+        d.git("switch", "-c", branch, f"origin/{branch}", cwd=d.server)
+        (d.server / "app.txt").write_text("local commit", encoding="utf-8")
+        d.commit(d.server)
+        d.git("switch", "main", cwd=d.server)
+    elif problem == "dirty":
+        (d.server / "app.txt").write_text("uncommitted", encoding="utf-8")
+    else:
+        (d.server / "experiment.txt").write_text("local untracked", encoding="utf-8")
+        (d.remote / "experiment.txt").write_text("remote tracked", encoding="utf-8")
+        d.commit(d.remote)
+    if problem == "diverged":
+        (d.remote / "app.txt").write_text("remote commit", encoding="utf-8")
+        d.commit(d.remote)
+    original_head = d.git("rev-parse", "HEAD", cwd=d.server)
+
+    result = d.run(branch)
+
+    assert result.returncode != 0
+    assert d.git("branch", "--show-current", cwd=d.server) == "main"
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == original_head
+    assert " build" not in d.log.read_text("utf-8")
+    assert " up " not in d.log.read_text("utf-8")
+    if problem == "untracked":
+        assert (d.server / "experiment.txt").read_text("utf-8") == "local untracked"
+
+
+@pytest.mark.parametrize("args", [("feature/missing",), ("--force",), ("bad..branch",), ("main", "extra")])
+def test_server_deployment_rejects_unknown_or_invalid_branch(deployment, args):
+    d = deployment
+    original_head = d.git("rev-parse", "HEAD", cwd=d.server)
+    result = d.run(*args)
+    assert result.returncode != 0
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == original_head
+    if d.log.exists():
+        assert " build" not in d.log.read_text("utf-8")
+
+
+@pytest.mark.parametrize("annotated", [False, True])
+def test_server_deployment_selects_an_exact_tag_without_moving_branches(deployment, annotated):
+    d = deployment
+    tag = "exp-test-p0-01"
+    if annotated:
+        d.git("-c", "user.name=Test", "-c", "user.email=test@example.com",
+              "tag", "-a", tag, "-m", "固定实验版本", cwd=d.remote)
+    else:
+        d.git("tag", tag, cwd=d.remote)
+    original_main = d.git("rev-parse", "main", cwd=d.server)
+
+    result = d.run("--tag", tag)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert d.git("branch", "--show-current", cwd=d.server) == ""
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == d.git("rev-parse", "HEAD", cwd=d.remote)
+    assert d.git("rev-parse", "main", cwd=d.server) == original_main
+    assert (d.server / ".env.compose").read_text("utf-8") == "server settings"
+    assert (d.server / "data/result.bin").read_bytes() == b"media"
+    assert (d.server / "models/face.jit").read_bytes() == b"weights"
+    assert tag in result.stdout
+
+    # A remote branch can advance independently; repeating the tag keeps the fixed version.
+    fixed_commit = d.git("rev-parse", "HEAD", cwd=d.server)
+    (d.remote / "app.txt").write_text("next release", encoding="utf-8")
+    d.commit(d.remote)
+    result = d.run("--tag", tag)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == fixed_commit
+    result = d.run("main")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (d.server / "app.txt").read_text("utf-8") == "next release"
+
+
+def test_server_deployment_rejects_replaced_tag(deployment):
+    d = deployment
+    tag = "exp-immutable"
+    d.git("tag", tag, cwd=d.server)
+    d.git("tag", tag, cwd=d.remote)
+    original = d.git("rev-parse", tag, cwd=d.server)
+    result = d.run("--tag", tag)
+    assert result.returncode != 0
+    assert d.git("rev-parse", tag, cwd=d.server) == original
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == original
+    assert " build" not in d.log.read_text("utf-8")
+
+
+@pytest.mark.parametrize("args", [("--tag",), ("--tag", "missing"), ("--tag", "bad..tag"),
+                                  ("--tag", "ok", "extra")])
+def test_server_deployment_rejects_unknown_or_invalid_tag(deployment, args):
+    d = deployment
+    original = d.git("rev-parse", "HEAD", cwd=d.server)
+    result = d.run(*args)
+    assert result.returncode != 0
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == original
+    if d.log.exists():
+        assert " build" not in d.log.read_text("utf-8")
