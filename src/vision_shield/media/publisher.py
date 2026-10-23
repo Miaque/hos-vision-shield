@@ -4,6 +4,8 @@ import asyncio
 
 import httpx
 
+from vision_shield.media.source import validate_source
+
 class Publisher:
     def __init__(self, store, settings):
         self.store, self.settings = store, settings
@@ -36,10 +38,17 @@ class Publisher:
         return True
 
     async def prepare(self, task: dict, owner_id: str, generation: int) -> str:
+        target = None
+        if task.get("publish_url"):
+            original, address = await validate_source(task["publish_url"], self.settings.source_allowlist, ("rtsp", "rtmp"))
+            target = str(original.copy_with(host=address))
         if not await self.close(task, owner_id, generation):
             raise RuntimeError("Media ownership was lost")
         if not await self._change(task["id"], "open", owner_id=owner_id, generation=generation):
             raise RuntimeError("Media ownership was lost")
+        if target is not None:
+            # shortcut: 外部推流依赖子进程退出，需跨 worker 强隔离时接入接收平台踢流接口。
+            return target
         base = self.settings.rtsp_publish_base_url or self.settings.rtsp_public_base_url
         url = httpx.URL(f"{base}/redacted/{task['id']}")
         return str(url.copy_with(username=f"{task['id']}.{generation}", password=owner_id))
