@@ -26,6 +26,8 @@ class FileUrlInput(BaseModel):
 class StreamInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     url: Annotated[str, Field(min_length=1, max_length=4096)]
+    publish_url: Annotated[str | None, Field(min_length=1, max_length=4096,
+        description="可选完整 RTSP/RTMP 推流地址；省略时使用默认 RTSP 输出")] = None
     redaction_mode: Literal["solid", "mosaic"] = "solid"
 
 
@@ -129,7 +131,7 @@ class TaskResponse(BaseModel):
         fields["sequence"] = record.get("sequence", 1)
         fields["health"] = record.get("health")
         fields["result_url"] = f"/v1/tasks/{record['id']}/result" if record["state"] == "succeeded" else None
-        fields["playback_url"] = f"{rtsp_base}/redacted/{record['id']}" if record["kind"] == "stream" else None
+        fields["playback_url"] = f"{rtsp_base}/redacted/{record['id']}" if record["kind"] == "stream" and not record.get("publish_url") else None
         return cls(**fields)
 
 

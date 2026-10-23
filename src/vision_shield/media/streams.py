@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import av
+import httpx
 
 from vision_shield.media.video import add_video, check_streams, check_dimensions, masked_frame
 from vision_shield.redaction import FrameRedactor
@@ -69,7 +70,10 @@ class StreamBuffer:
 
 def process_stream(source: str, target: str, detector: "Detector", config: dict,
                    stop: threading.Event, emit: Callable[[dict], None]) -> None:
-    """Read/publish RTSP until stop or failure; emit only processed frames and bounded stats."""
+    """Read RTSP and publish RTSP/RTMP; emit only processed frames and bounded stats."""
+    protocol = httpx.URL(target).scheme
+    if protocol not in {"rtsp", "rtmp"}:
+        raise ValueError("Unsupported output protocol")
     buffer = StreamBuffer(config["frame_buffer_size"], config["audio_buffer_seconds"], config["audio_buffer_bytes"], stop)
     writer_done = threading.Event()
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"))
@@ -80,7 +84,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             # RTSP SDP supplies codec parameters; long probing creates an audio burst.
             source_reader = av.open(source, options={"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768"},
                                     timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]))
-            video = check_streams(source_reader, config)
+            video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"))
             with buffer.condition:
                 buffer.input_video = video
                 buffer.input_audio = source_reader.streams.audio[0] if source_reader.streams.audio else None
@@ -112,9 +116,17 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     last_output_report = None
     frame_seconds = encode_seconds = 0.0
     try:
-        with av.open(target, "w", format="rtsp", options={"rtsp_transport": "tcp"},
+        options = {"rtsp_transport": "tcp"}
+        if protocol == "rtmp":
+            original = httpx.URL(config.get("publish_url") or target)
+            # DNS 固定到授权 IP，RTMP tcUrl 仍保留平台用于虚拟主机路由的原域名。
+            options = {"rtmp_tcurl": str(original.copy_with(path=original.path.rsplit("/", 1)[0],
+                       query=None, username="", password="")),
+                       "rw_timeout": str(round(config["rtsp_read_timeout"] * 1_000_000))}
+        with av.open(target, "w", format="flv" if protocol == "rtmp" else "rtsp", options=options,
                      timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"])) as writer:
             video, audio = None, None
+            transcode_audio = False
             while sample := buffer.take():
                 frame, packets = sample
                 moment = frame.pts * frame.time_base
@@ -130,14 +142,24 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 if video is None:
                     video = add_video(writer, output, buffer.input_video, live=True)
                     if buffer.input_audio:
-                        audio = writer.add_stream_from_template(buffer.input_audio)
+                        transcode_audio = protocol == "rtmp" and buffer.input_audio.codec_context.name != "aac"
+                        if transcode_audio:
+                            audio = writer.add_stream("aac", rate=48000)
+                            audio.layout = "mono" if buffer.input_audio.codec_context.channels == 1 else "stereo"
+                        else:
+                            audio = writer.add_stream_from_template(buffer.input_audio)
                 if (output.width, output.height) != (video.width, video.height):
                     raise BufferError("Stream dimensions changed")
                 for packet in packets:
                     packet.pts -= round(origin / packet.time_base)
                     packet.dts -= round(origin / packet.time_base)
-                    packet.stream = audio
-                    writer.mux(packet)
+                    if transcode_audio:
+                        for frame in packet.decode():
+                            for encoded in audio.encode(frame):
+                                writer.mux(encoded)
+                    else:
+                        packet.stream = audio
+                        writer.mux(packet)
                 published = False
                 for packet in video.encode(output):
                     writer.mux(packet)
@@ -156,6 +178,9 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     break
             if video:
                 for packet in video.encode():
+                    writer.mux(packet)
+            if transcode_audio:
+                for packet in audio.encode():
                     writer.mux(packet)
     finally:
         stop.set()

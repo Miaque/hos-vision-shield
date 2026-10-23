@@ -246,7 +246,7 @@ class TaskStore:
     async def create(self, kind: str, source_kind: str, source_ref: str, task_id: str | None = None,
                      *, redaction_mode: str = "solid", profile_detection: bool | str = False,
                      idempotency_key: str | None = None, fingerprint: str | None = None,
-                     notification_target: str | None = None) -> dict:
+                     notification_target: str | None = None, publish_url: str | None = None) -> dict:
         if redaction_mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
         if profile_detection and kind != 'video':
@@ -254,6 +254,8 @@ class TaskStore:
         if profile_detection not in (False, True, 'host', 'forward-primary-face', 'forward-primary-plate',
                                      'forward-detail-face', 'forward-detail-plate'):
             raise ValueError('Unsupported detection profile')
+        if publish_url is not None and kind != "stream":
+            raise ValueError("A publish URL requires a stream task")
         task_id = task_id or str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
         task = dict(
@@ -267,6 +269,8 @@ class TaskStore:
         )
         if profile_detection:
             task['profile_detection'] = profile_detection
+        if publish_url is not None:
+            task["publish_url"] = publish_url
         return await self._change(task_id, "create", task, self.stream_limit if kind == "stream" else self.file_limit)
 
     async def get(self, task_id: str) -> dict | None:
