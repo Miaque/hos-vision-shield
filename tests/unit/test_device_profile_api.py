@@ -16,7 +16,8 @@ def test_profile_header_and_sample_choices_are_described_in_openapi():
     assert sample['schema']['enum'] == [64, 424, 768]
 
 
-@pytest.mark.parametrize('kind,header,status', [('video', '1', 202), ('image', '1', 422),
+@pytest.mark.parametrize('kind,header,status', [('video', '1', 202), ('video', 'host', 202),
+                                               ('image', '1', 422), ('image', 'host', 422),
                                                ('video', '0', 422), ('video', 'yes', 422)])
 async def test_only_explicit_video_profile_request_reaches_worker(tmp_path, monkeypatch, kind, header, status):
     from vision_shield.api import routes
@@ -34,7 +35,7 @@ async def test_only_explicit_video_profile_request_reaches_worker(tmp_path, monk
                                      data={'kind': kind}, files={'file': ('input.mp4', b'video', 'video/mp4')})
         assert response.status_code == status
         if status == 202:
-            assert app.state.store.create.call_args.kwargs['profile_detection'] is True
+            assert app.state.store.create.call_args.kwargs['profile_detection'] == ('host' if header == 'host' else True)
             assert 'profile_detection' not in response.json()
         else:
             app.state.store.create.assert_not_called()
@@ -72,6 +73,8 @@ async def test_profile_request_is_private_store_metadata_and_video_only():
     assert 'profile_detection' not in plain
     profiled = await store.create('video', 'upload', 'local', profile_detection=True)
     assert profiled['profile_detection'] is True
+    host = await store.create('video', 'upload', 'local', profile_detection='host')
+    assert host['profile_detection'] == 'host'
     with pytest.raises(ValueError):
         await store.create('image', 'upload', 'local', profile_detection=True)
 

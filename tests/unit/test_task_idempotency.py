@@ -20,6 +20,8 @@ def test_fingerprint_tracks_content_and_effective_parameters():
     for key, value in (("source_digest", "def"), ("redaction_mode", "mosaic"),
                        ("notification_target", "platform"), ("profile_detection", True)):
         assert digest != request_fingerprint(**(values | {key: value}))
+    assert request_fingerprint(**(values | {'profile_detection': 'host'})) not in (
+        digest, request_fingerprint(**(values | {'profile_detection': True})))
 
 
 def test_batch_is_bounded_and_rejects_invalid_identifiers():

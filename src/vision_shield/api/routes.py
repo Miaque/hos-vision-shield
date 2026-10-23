@@ -122,8 +122,8 @@ async def file_url(data: FileUrlInput, request: Request, response: Response):
                      "redaction_mode": {"type": "string", "enum": ["solid", "mosaic"], "default": "solid"},
                  }}}}}})
 async def upload(request: Request, response: Response,
-                 profile_detection: Literal['1'] | None = Header(default=None, alias='X-Detection-Profile',
-                     description='仅视频：显式采集三个主车牌CUDA时间线样本，会增加诊断开销')):
+                 profile_detection: Literal['1', 'host'] | None = Header(default=None, alias='X-Detection-Profile',
+                     description='仅视频：1采集三个主车牌CUDA时间线，host记录实际模型调用和阶段分布；诊断FPS不作吞吐验收')):
     key, target_id = creation_headers(request)
     settings = request.app.state.settings
     directory, keep_input, submission_unknown = None, False, False
@@ -148,7 +148,8 @@ async def upload(request: Request, response: Response,
                 digest = await save_upload(file, source,
                     settings.max_image_bytes if kind == "image" else settings.max_video_bytes)
         fingerprint = request_fingerprint(kind=kind, source_kind="upload", source_digest=digest,
-            redaction_mode=redaction_mode, notification_target=target_id, profile_detection=profile_detection is not None)
+            redaction_mode=redaction_mode, notification_target=target_id,
+            profile_detection='host' if profile_detection == 'host' else profile_detection is not None)
         task = await replay(request, key, fingerprint)
         if task is None:
             await require_worker(request.app.state.redis, kind, settings.lease_seconds)
@@ -157,7 +158,8 @@ async def upload(request: Request, response: Response,
             submission_unknown = True
             task = await request.app.state.store.create(kind, "upload", str(source), task_id,
                 redaction_mode=redaction_mode, idempotency_key=key, fingerprint=fingerprint,
-                notification_target=target_id, **({'profile_detection': True} if profile_detection is not None else {}))
+                notification_target=target_id,
+                **({'profile_detection': 'host' if profile_detection == 'host' else True} if profile_detection is not None else {}))
             submission_unknown = False
         keep_input = task["id"] == task_id
         response.headers["Location"] = f"/v1/tasks/{task['id']}"

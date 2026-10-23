@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 import traceback
+from contextlib import ExitStack
 
 from av.error import FFmpegError
 
@@ -21,6 +22,8 @@ def emit(event):
 def main():
     payload = json.loads(sys.stdin.readline())
     stop = threading.Event()
+    observers = ExitStack()
+    collector = None
 
     def watch_parent():
         for line in sys.stdin:
@@ -49,16 +52,31 @@ def main():
         from vision_shield.media.streams import process_stream
         from PIL import Image
 
+        directory = Path(payload["directory"])
+        directory.mkdir(parents=True, exist_ok=True)
+        if payload.get('profile_detection') == 'host':
+            from vision_shield.detection.host_profile import ProfileTimes, instrument
+
+            if cfg['inference_device'] != 'cuda' or cfg['detection_backend'] != 'quality':
+                raise ValueError('Host profiling requires quality/CUDA')
+            collector = ProfileTimes(directory / 'host-profile')
+            observers.callback(collector.close)
+            instrument(observers, collector)
         loading = time.monotonic()
         detector = load_detector(cfg)
         Image.init()
-        emit({"model_load_seconds": time.monotonic() - loading})
+        load_seconds = time.monotonic() - loading
+        emit({"model_load_seconds": load_seconds})
+        if collector:
+            from vision_shield.detection.host_profile import instrument_candidates, runtime_metadata
+
+            instrument_candidates(detector.primary, 'primary', collector)
+            instrument_candidates(detector.detail, 'detail', collector)
+            metadata = runtime_metadata(detector, cfg)
         # Windows numerical DLL initialization can deadlock against a blocking
         # CRT stdin reader. Load dependencies before starting the control thread.
         if os.name == "nt":
             threading.Thread(target=watch_parent, daemon=True).start()
-        directory = Path(payload["directory"])
-        directory.mkdir(parents=True, exist_ok=True)
         started = time.monotonic()
         if stop.is_set():
             return
@@ -76,7 +94,7 @@ def main():
                                                        "elapsed_seconds": time.monotonic() - started}})
         elif payload["kind"] == "video":
             sampler = None
-            if payload.get('profile_detection'):
+            if payload.get('profile_detection') and collector is None:
                 from vision_shield.detection.device_profile import DeviceSamples
 
                 primary = getattr(detector, 'primary', detector)
@@ -86,6 +104,11 @@ def main():
             temporary = directory / "result.mp4.part"
             process_video(payload["source"], str(temporary), detector, cfg, stop, emit)
             if not stop.is_set():
+                if collector:
+                    report = dict(state='complete', mode='host', model_load_seconds=load_seconds,
+                                  runtime=metadata, profile=collector.report(collector.frames))
+                    (directory / 'host-profile/report.json').write_text(json.dumps(report), 'utf-8')
+                    emit({'device_profile': report})
                 if sampler is not None:
                     sampler.finish()
                 result = directory / "result.mp4"
@@ -97,6 +120,8 @@ def main():
         else:
             raise ValueError("Unsupported task kind")
     except Exception as error:
+        if collector:
+            emit({'device_profile': dict(state='failed', mode='host', reason=type(error).__name__)})
         if payload["kind"] == "probe":
             from vision_shield.detection.preflight import PreflightError
             emit({"preflight_error": str(error) if isinstance(error, PreflightError) else "模型预检失败：内部异常"})
@@ -107,6 +132,8 @@ def main():
               "failure_at": [f"{frame.name}:{frame.lineno}" for frame in traceback.extract_tb(error.__traceback__)],
               "error": {"code": code, "message": code.replace("_", " ")}})
         sys.exit(1)
+    finally:
+        observers.close()
 
 
 if __name__ == "__main__":

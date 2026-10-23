@@ -5,15 +5,18 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar, copy_context
 from functools import wraps
+import hashlib
 import json
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
 from unittest.mock import patch
+import sys
 
 
 CONTEXT = ContextVar("video_profile_context", default={})
 FORWARDS = tuple(f"forward-{model}-{kind}" for model in ("primary", "detail") for kind in ("face", "plate"))
+MAX_MEASUREMENTS = 250_000
 
 
 @contextmanager
@@ -46,6 +49,38 @@ def statistics(values):
                 steady_after_10_calls=summary(values[10:]))
 
 
+def runtime_metadata(detector, config):
+    import cv2
+    import torch
+    import onnxruntime as ort
+
+    if 'vision_shield.detection.yolo' in sys.modules:
+        raise RuntimeError('B diagnostic must not load YOLO')
+    device = detector.primary.device
+    weights = {}
+    for key in ('egoblur_face_model_path', 'egoblur_plate_model_path', 'face_model_path', 'plate_model_path'):
+        with Path(config[key]).open('rb') as handle:
+            weights[key] = hashlib.file_digest(handle, 'sha256').hexdigest()
+    source = {}
+    for name in ('detection.quality', 'detection.egoblur', 'detection.cuda_detail', 'detection.cpu',
+                 'detection.host_profile', 'redaction', 'media.video'):
+        with Path(sys.modules['vision_shield.' + name].__file__).open('rb') as handle:
+            source[name] = hashlib.file_digest(handle, 'sha256').hexdigest()
+    return dict(torch=torch.__version__, cuda=torch.version.cuda, ort=ort.__version__,
+                gpu=torch.cuda.get_device_name(device),
+                gpu_uuid=str(getattr(torch.cuda.get_device_properties(device), 'uuid', 'unavailable')),
+                capability=list(torch.cuda.get_device_capability(device)),
+                primary_parameter_dtypes=[sorted({str(p.dtype) for p in model.parameters()}) for model in detector.primary.models],
+                primary_parameter_devices=[sorted({str(p.device) for p in model.parameters()}) for model in detector.primary.models],
+                detail_providers=detector.detail.providers, torch_threads=torch.get_num_threads(), opencv_threads=cv2.getNumThreads(),
+                global_fp32_precision=torch.backends.fp32_precision,
+                matmul_fp32_precision=torch.backends.cuda.matmul.fp32_precision,
+                cudnn_conv_fp32_precision=torch.backends.cudnn.conv.fp32_precision,
+                config={key: config[key] for key in ('detection_backend', 'inference_device', 'detection_max_side',
+                                                     'detection_box_padding')} | {'redaction_mode': config.get('redaction_mode', 'solid')},
+                weights_sha256=weights, source_sha256=source)
+
+
 class ProfileTimes:
     def __init__(self, directory, *, clock=perf_counter, device_stage=None, checkpoints=(64, 424, 768)):
         self.directory = Path(directory)
@@ -58,9 +93,14 @@ class ProfileTimes:
         self.failures, self.forward_counts = Counter(), Counter()
         self.views, self.device_samples = defaultdict(Counter), []
         self.frames = 0
+        self.measurements = 0
 
     @contextmanager
     def measure(self, name):
+        with self.lock:
+            if self.measurements >= MAX_MEASUREMENTS:
+                raise RuntimeError("Host diagnostic measurement budget exceeded")
+            self.measurements += 1
         metadata = {key: value for key, value in CONTEXT.get().items() if key != "local_calls"}
         selected = False
         if name in FORWARDS:

@@ -244,13 +244,15 @@ class TaskStore:
         return json.loads(result) if result else None
 
     async def create(self, kind: str, source_kind: str, source_ref: str, task_id: str | None = None,
-                     *, redaction_mode: str = "solid", profile_detection: bool = False,
+                     *, redaction_mode: str = "solid", profile_detection: bool | str = False,
                      idempotency_key: str | None = None, fingerprint: str | None = None,
                      notification_target: str | None = None) -> dict:
         if redaction_mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
         if profile_detection and kind != 'video':
             raise ValueError('Detection profiling requires a video task')
+        if profile_detection not in (False, True, 'host'):
+            raise ValueError('Unsupported detection profile')
         task_id = task_id or str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
         task = dict(
@@ -263,7 +265,7 @@ class TaskStore:
             fingerprint=fingerprint, notification_target=notification_target,
         )
         if profile_detection:
-            task['profile_detection'] = True
+            task['profile_detection'] = profile_detection
         return await self._change(task_id, "create", task, self.stream_limit if kind == "stream" else self.file_limit)
 
     async def get(self, task_id: str) -> dict | None:

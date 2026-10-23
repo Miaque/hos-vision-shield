@@ -87,6 +87,20 @@ def test_statistics_keep_first_and_warmup_separate():
     assert summary["steady_after_10_calls"]["p50_ms"] == 15.5
 
 
+def test_diagnostic_budget_stops_before_running_more_model_work(tmp_path, monkeypatch):
+    monkeypatch.setattr(profile.observer, "MAX_MEASUREMENTS", 1)
+    collector = profile.ProfileTimes(tmp_path)
+    with collector.measure("forward-primary-face"):
+        pass
+    executed = False
+    with pytest.raises(RuntimeError, match="budget"):
+        with collector.measure("forward-primary-face"):
+            executed = True
+    assert not executed
+    assert collector.report(1)["models"]["forward-primary-face"]["calls"] == 1
+    collector.close()
+
+
 def test_codec_wrappers_keep_packets_and_stream_configuration(tmp_path):
     collector = profile.ProfileTimes(tmp_path)
     frames, packets = [object()], [object()]

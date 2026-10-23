@@ -101,7 +101,7 @@ async def execute(task_id, broker, context):
             payload = dict(kind=record["kind"], source=str(source), directory=str(directory),
                            config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid")})
             if record.get('profile_detection'):
-                payload['profile_detection'] = True
+                payload['profile_detection'] = record['profile_detection']
             result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                        payload, cancel, event_received, settings.process_stop_timeout)
         current = await store.get(task_id)
