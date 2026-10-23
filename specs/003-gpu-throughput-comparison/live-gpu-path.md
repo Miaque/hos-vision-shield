@@ -190,3 +190,17 @@ observations.jsonl 与最终快照，只有一个 attempt，1659 个输出序号
 超时仍终止子进程，不取消已完成但尚未消费的事件。传输与进程生命周期检查 4 通过、
 1 POSIX 用例因 Windows 跳过。此修复只保证最终事件可被消费，尚不证明所有排队帧在停止时输出；
 实时取消仍可能留下未处理队列，必须依据最终计数明确报告而不能归零掩盖。
+
+## 停止统计第二处阻断（2026-10-24）
+
+`exp-20261024-a-live-metrics-03` / `1aad8e2` 首次部署在 GitHub TLS 拉取失败，原命令重试成功且全部服务健康。
+单路任务 `e0207761-2bd3-41c5-916c-ac185af59f95` 已 stopped，活动任务为空。
+证据 `data/validation/route-a-live-metrics-20261024-bringup-03/`：48.078 秒采样，737 个连续独立输出，
+P50/P95/P99=0.206141/0.478318/0.580929 秒；完整十秒窗口 16.0/15.3/15.1/15.1 FPS。
+最终仍显示 processed=739、encoded=737、pending=2、input=741、queue=1、dropped=1，不能认定尾帧已完成。
+
+代码进一步定位：TaskStore 的 update 在 desired_state 非 run 时拒绝所有字段，因此 runner 收到最终事件仍不能保存。
+真实 Redis 测试复现后，最小修复仅允许停止中的 stream 有效所有者更新 stats/timings/detection_stats/codec 字段；
+保留租约、generation、终态检查，混入 state/ready 等字段整次拒绝，不能恢复发布权限。
+相关检查 49 通过，1 个已有契约测试失败：它仍假设 stream 不支持 detection_interval，实际现有 create 已支持；
+该旧断言未随本次存储修复更改。新修复尚未服务器验证，不宣称尾帧问题解决。

@@ -94,7 +94,13 @@ elseif op == 'recover' then
         redis.call('SREM', pool, t.id)
     end
 elseif op == 'update' then
-    if not owned or terminal or t.desired_state ~= 'run' then return false end
+    if not owned or terminal then return false end
+    if t.desired_state ~= 'run' then
+        if t.kind ~= 'stream' then return false end
+        -- 收尾统计可写入，但停止请求不能被迟到的运行状态覆盖。
+        local metrics = {stats=true, timings=true, detection_stats=true, video_encoder=true, video_decoder=true}
+        for k,_ in pairs(arg.values) do if not metrics[k] then return false end end
+    end
     for k,v in pairs(arg.values) do t[k] = v end
 elseif op == 'output' then
     if not owned or terminal or t.desired_state ~= 'run' or not t.publish_allowed then return false end

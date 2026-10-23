@@ -79,6 +79,22 @@ async def test_stopped_queued_stream_never_claims_and_history_is_retained(store)
     assert await store.get(task["id"]) is not None
 
 
+async def test_stopping_stream_keeps_final_stats_without_reviving_publication(store):
+    task = await store.create("stream", "rtsp", "rtsp://approved/live")
+    owner = await store.claim(task["id"], "worker")
+    generation = owner["generation"]
+    await store.request_stop(task["id"], "stopped")
+    stats = {"processed_frames": 12, "stream": {"encoded_frames": 12}}
+    for worker, epoch in [("other", generation), ("worker", generation + 1)]:
+        assert not await store.update_owned(task["id"], worker, epoch, stats=stats)
+    assert not await store.update_owned(task["id"], "worker", generation, state="running", stats=stats)
+    updated = await store.update_owned(task["id"], "worker", generation, stats=stats, timings={"encode": 1})
+    assert updated and updated["stats"] == stats
+    assert updated["desired_state"] == "stopped" and not updated["ready"] and not updated["publish_allowed"]
+    assert await store.finish(task["id"], "worker", generation, "stopped")
+    assert not await store.update_owned(task["id"], "worker", generation, stats={})
+
+
 async def test_stream_publish_and_video_tracking_contracts_survive_merge(store):
     publish_url = "rtmp://approved/app/camera?sign=test"
     stream = await store.create("stream", "rtsp", "rtsp://approved/live", publish_url=publish_url)
