@@ -16,7 +16,7 @@ from vision_shield.api.schemas import (DesiredStateInput, FileUrlInput, StreamIn
                                       ResourceSnapshot, ResourcesResponse)
 from vision_shield.jobs.diagnostics import STALE_SECONDS
 from vision_shield.jobs.service import require_worker
-from vision_shield.jobs.store import IdempotencyConflict, CapacityExceeded, request_fingerprint, stream_health
+from vision_shield.jobs.store import IdempotencyConflict, CapacityExceeded, request_fingerprint, stream_health, publisher_exit_pending
 from vision_shield.media.source import SourceError, validate_source
 from vision_shield.detection.timing import STAGES
 from vision_shield.detection.device_profile import CHECKPOINTS
@@ -208,7 +208,7 @@ async def list_tasks(request: Request):
     for task in sorted(tasks, key=lambda task: (task["created_at"], task["id"])):
         if task["state"] not in {"queued", "processing", "connecting", "running", "recovering"}:
             continue
-        waiting = task["desired_state"] == "run" and (
+        waiting = task["desired_state"] == "run" and not publisher_exit_pending(task) and (
             task["state"] == "queued" or (task["state"] == "recovering" and task["owner_id"] is None)
         )
         groups["queued" if waiting else "current"].append(public(request, task))

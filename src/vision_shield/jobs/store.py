@@ -44,9 +44,12 @@ local old_state, old_ready, old_desired = t.state, t.ready, t.desired_state
 local pool = t.kind == 'stream' and KEYS[3] or KEYS[2]
 local terminal = t.state == 'succeeded' or t.state == 'failed' or t.state == 'cancelled' or t.state == 'stopped'
 local owned = t.owner_id == arg.owner_id and t.generation == arg.generation and t.lease_until > now
+local external = t.publish_url ~= nil and t.publish_url ~= cjson.null
 if op == 'claim' then
     if terminal or t.desired_state ~= 'run' or t.lease_until > now then return false end
     if t.state ~= 'queued' and t.state ~= 'recovering' then return false end
+    if external and t.generation > 0 and t.publisher_owner_id ~= cjson.null then return false end
+    if external then t.publisher_owner_id = cjson.null end
     t.owner_id = arg.owner_id
     t.generation = t.generation + 1
     t.lease_until = now + tonumber(ARGV[3])
@@ -59,6 +62,7 @@ elseif op == 'heartbeat' then
     t.lease_until = now + tonumber(ARGV[3])
 elseif op == 'finish' then
     if not owned or terminal then return false end
+    if external and t.publisher_owner_id ~= cjson.null then return false end
     local valid = (arg.state == 'succeeded' or arg.state == 'failed' or arg.state == 'cancelled') and t.kind ~= 'stream'
     valid = valid or (t.kind == 'stream' and (arg.state == 'failed' or arg.state == 'stopped'))
     if not valid then return false end
@@ -79,6 +83,8 @@ elseif op == 'stop' then
     end
 elseif op == 'recover' then
     if terminal or t.lease_until == 0 or t.lease_until > now then return false end
+    -- 旧版本外部任务缺少退出标记时，保留发布者身份，不能推断已经退出。
+    if external and t.publisher_owner_id == nil then t.publisher_owner_id = t.owner_id end
     t.owner_id, t.lease_until, t.ready, t.publish_allowed = cjson.null, 0, false, false
     if t.kind == 'stream' then
         t.state, t.dispatch_pending = 'recovering', true
@@ -98,20 +104,42 @@ elseif op == 'output' then
         t.last_output_ms = output
     end
 elseif op == 'authorize' then
+    if external then return false end
     if not owned or not t.publish_allowed or t.desired_state ~= 'run' then return false end
     t.sessions[arg.session_id] = t.generation
 elseif op == 'freeze' then
+    if external then return false end
     if not owned and t.desired_state ~= 'stopped' then return false end
     t.publish_allowed, t.ready = false, false
 elseif op == 'clear' then
+    if external then return false end
     if not owned and t.desired_state ~= 'stopped' then return false end
     for _,id in ipairs(arg.sessions) do t.sessions[id] = nil end
     if t.desired_state == 'stopped' and t.lease_until <= now and next(t.sessions) == nil then
         t.state, t.owner_id, t.lease_until = 'stopped', cjson.null, 0
         redis.call('SREM',pool,t.id)
     end
+elseif op == 'external_close' then
+    if not external or terminal then return false end
+    if arg.process_exited then
+        if arg.owner_id == cjson.null or t.publisher_owner_id ~= arg.owner_id or t.generation ~= arg.generation then
+            return false
+        end
+    else
+        if t.publisher_owner_id ~= cjson.null then return false end
+        if not owned and t.desired_state ~= 'stopped' then return false end
+    end
+    t.publisher_owner_id, t.publish_allowed, t.ready = cjson.null, false, false
+    if t.desired_state == 'stopped' then
+        t.state, t.owner_id, t.lease_until = 'stopped', cjson.null, 0
+        redis.call('SREM', pool, t.id)
+    end
 elseif op == 'open' then
     if not owned or t.desired_state ~= 'run' or next(t.sessions) ~= nil then return false end
+    if external then
+        if t.publisher_owner_id ~= cjson.null then return false end
+        t.publisher_owner_id = arg.owner_id
+    end
     t.publish_allowed = true
 else
     return redis.error_reply('Unknown task operation')
@@ -194,6 +222,12 @@ def request_fingerprint(**values) -> str:
     return hashlib.sha256(json.dumps(values, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def publisher_exit_pending(record: dict) -> bool:
+    """外部发布者未确认退出时，任务不能进入可接管队列。"""
+    return bool(record.get("publish_url") and record["generation"] > 0 and
+                ("publisher_owner_id" not in record or record["publisher_owner_id"] is not None))
+
+
 def stream_health(record: dict, now_ms: int) -> dict | None:
     """用当前 owner 租约和当前代次实际输出证明播放有效期。"""
     if record["kind"] != "stream":
@@ -268,6 +302,7 @@ class TaskStore:
             task['profile_detection'] = True
         if publish_url is not None:
             task["publish_url"] = publish_url
+            task["publisher_owner_id"] = None
         return await self._change(task_id, "create", task, self.stream_limit if kind == "stream" else self.file_limit)
 
     async def get(self, task_id: str) -> dict | None:

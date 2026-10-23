@@ -24,13 +24,19 @@ async def kill_owned_process(process):
 
 
 async def run_process(command: list[str], payload: dict, cancel: asyncio.Event,
-                      on_event: Callable[[dict], Awaitable[None]], stop_timeout: float = 10) -> dict:
-    """Supervise one child; callbacks receive events, and cancellation waits for exit."""
-    process = await asyncio.create_subprocess_exec(
-        *command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL,
-        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-    )
+                      on_event: Callable[[dict], Awaitable[None]], stop_timeout: float = 10,
+                      *, on_exit: Callable[[], Awaitable[None]] | None = None) -> dict:
+    """Supervise one child; on_exit confirms completed teardown or failed process creation."""
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+    except OSError:
+        if on_exit is not None:
+            await on_exit()
+        raise
     stop = asyncio.create_task(cancel.wait())
     read = None
     result = {}
@@ -70,3 +76,5 @@ async def run_process(command: list[str], payload: dict, cancel: asyncio.Event,
         process.stdin.close()
         with contextlib.suppress(BrokenPipeError, ConnectionResetError):
             await process.stdin.wait_closed()
+        if on_exit is not None:
+            await on_exit()
