@@ -2,6 +2,7 @@
 
 import threading
 import time
+import os
 
 import av
 import numpy as np
@@ -15,7 +16,9 @@ from vision_shield.media.video import check_streams
 @pytest.mark.parametrize("scheme", ["rtsp", "rtmp"])
 @pytest.mark.parametrize("audio_codec", [None, "aac", "pcm_alaw", "pcm_mulaw"])
 @pytest.mark.parametrize("fault", [None, TimeoutError, RuntimeError])
-def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec, fault):
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
+    os.getenv("RUN_GPU_TESTS") != "1", reason="requires real NVDEC/GPU mask/NVENC"))])
+def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec, fault, device):
     source, target = tmp_path / "source.nut", tmp_path / "output.nut"
     with av.open(str(source), "w") as writer:
         video = writer.add_stream("libx264", rate=12)
@@ -48,8 +51,8 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
                 check_streams(reader, Settings(_env_file=None).model_dump())
 
     class Reader:
-        def __init__(self):
-            self.container = original_open(str(source))
+        def __init__(self, hardware):
+            self.container = original_open(str(source), **hardware)
             self.streams = self.container.streams
 
         def demux(self):
@@ -62,7 +65,7 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
 
     def open_endpoint(url, *args, **kwargs):
         if url.startswith("rtsp://camera/"):
-            return Reader()
+            return Reader({key: kwargs[key] for key in ("hwaccel",) if key in kwargs})
         opened.update(url=url, **kwargs)
         return original_open(str(target), "w", format="flv" if scheme == "rtmp" else "nut")
 
@@ -75,6 +78,7 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
     monkeypatch.setattr(streams.av, "open", open_endpoint)
     events = []
     config = Settings(_env_file=None).model_dump(mode="json")
+    config["inference_device"] = device
     config["publish_url"] = f"{scheme}://media.test/live/camera?sign=secret"
     if fault:
         with pytest.raises(fault, match="inference failed"):

@@ -49,7 +49,7 @@ def masked_frame(frame: av.VideoFrame, detector: "Detector | FrameRedactor", ori
 
 
 def add_video(writer, frame, source, live=False, *, device="cpu"):
-    encoder = "h264_nvenc" if device == "cuda" and not live else "libx264"
+    encoder = "h264_nvenc" if device == "cuda" else "libx264"
     hardware = getattr(getattr(frame, "format", None), "name", None) == "cuda"
     options = {}
     if hardware:
@@ -67,18 +67,18 @@ def add_video(writer, frame, source, live=False, *, device="cpu"):
             setattr(video.codec_context, name, getattr(frame, name))
     video.time_base = frame.time_base
     video.codec_context.time_base = frame.time_base
+    if encoder == "h264_nvenc":
+        import torch
+        video.bit_rate = 0
+        video.options = {"preset": "p6", "tune": "ull" if live else "hq", "rc": "vbr", "cq": "19",
+                         "gpu": str(torch.cuda.current_device()), "bf": "0" if live else "3"}
+    else:
+        video.options = ({"preset": "ultrafast", "tune": "zerolatency", "bf": "0"} if live
+                         else {"preset": "slow", "crf": "23"})
     if live:
-        video.options = {"preset": "ultrafast", "tune": "zerolatency", "bf": "0"}
-        # Sparse processed frames must remain immediately decodable by new readers.
+        # New readers must be able to decode immediately.
         video.codec_context.gop_size = 1
     else:
-        if encoder == "h264_nvenc":
-            import torch
-            video.bit_rate = 0
-            video.options = {"preset": "p6", "tune": "hq", "rc": "vbr", "cq": "19",
-                             "gpu": str(torch.cuda.current_device()), "bf": "3"}
-        else:
-            video.options = {"preset": "slow", "crf": "23"}
         if source.bit_rate and source.bit_rate > 0:
             # 保留质量目标，以源平均码率的 115% 设两秒 VBV；不是文件大小硬上限。
             maximum = round(source.bit_rate * 1.15)

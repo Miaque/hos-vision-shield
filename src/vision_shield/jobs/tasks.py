@@ -164,10 +164,8 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                         confirmed = False
                     if event.get("ready") and confirmed:
                         values.update(state="running", ready=True, error=None)
-                    if "stats" in event:
-                        values["stats"] = event["stats"]
-                    if "timings" in event:
-                        values["timings"] = event["timings"]
+                    values.update({key: event[key] for key in ("stats", "timings", "video_encoder", "video_decoder", "detection_stats")
+                                   if key in event})
                     if values:
                         await store.update_owned(task_id, owner, generation, **values)
 

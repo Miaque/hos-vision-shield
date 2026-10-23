@@ -50,15 +50,17 @@ def test_cuda_file_encoding_uses_nvenc_on_the_selected_device(monkeypatch):
     assert video.time_base == video.codec_context.time_base == frame.time_base
 
 
-def test_unavailable_nvenc_is_never_replaced_with_cpu_encoding():
+@pytest.mark.parametrize("live", [False, True])
+def test_unavailable_nvenc_is_never_replaced_with_cpu_encoding(live):
     writer = SimpleNamespace(add_stream=Mock(side_effect=RuntimeError("NVENC unavailable")))
     frame = SimpleNamespace(width=320, height=240, time_base=Fraction(1, 15))
     with pytest.raises(RuntimeError, match="NVENC unavailable"):
-        add_video(writer, frame, SimpleNamespace(average_rate=Fraction(15)), device="cuda")
+        add_video(writer, frame, SimpleNamespace(average_rate=Fraction(15)), device="cuda", live=live)
     writer.add_stream.assert_called_once_with("h264_nvenc", rate=Fraction(15))
 
 
-def test_cuda_frames_go_directly_to_nvenc_with_the_selected_context_and_color_metadata(monkeypatch):
+@pytest.mark.parametrize("live", [False, True])
+def test_cuda_frames_go_directly_to_nvenc_with_the_selected_context_and_color_metadata(monkeypatch, live):
     import torch
 
     monkeypatch.setattr(torch.cuda, "current_device", lambda: 2)
@@ -68,7 +70,7 @@ def test_cuda_frames_go_directly_to_nvenc_with_the_selected_context_and_color_me
                             format=SimpleNamespace(name="cuda"), colorspace=1, color_range=2,
                             color_trc=1, color_primaries=1)
     source = SimpleNamespace(average_rate=Fraction(15), bit_rate=2_000_000)
-    add_video(writer, frame, source, device="cuda")
+    add_video(writer, frame, source, device="cuda", live=live)
     call = writer.add_stream.call_args
     assert call.args == ("h264_nvenc",) and call.kwargs["rate"] == Fraction(15)
     hwaccel = call.kwargs["hwaccel"]
@@ -76,3 +78,7 @@ def test_cuda_frames_go_directly_to_nvenc_with_the_selected_context_and_color_me
     assert hwaccel.options == {"primary_ctx": "0", "current_ctx": "1"}
     assert video.pix_fmt == "cuda" and video.options["gpu"] == "2"
     assert video.codec_context.colorspace == 1 and video.codec_context.color_range == 2
+    assert video.options["tune"] == ("ull" if live else "hq")
+    assert video.options["bf"] == ("0" if live else "3")
+    if live:
+        assert video.codec_context.gop_size == 1

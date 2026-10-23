@@ -53,8 +53,13 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
         async def run(command, payload, cancel, on_event, timeout, *, on_exit=None):
             assert payload["publish_url"] == target and payload["config"]["publish_url"] == target
             await on_event(dict(output=True, output_monotonic=time.monotonic(), ready=True))
+            await on_event(dict(stats=dict(processed_frames=3, dropped_frames=0, elapsed_seconds=1),
+                                video_decoder="h264_nvdec", video_encoder="h264_nvenc",
+                                detection_stats=dict(full_frames=1, skipped_frames=2)))
             current = await store.get(task["id"])
             assert current["ready"] and current["state"] == "running"
+            assert current["video_decoder"] == "h264_nvdec" and current["video_encoder"] == "h264_nvenc"
+            assert current["detection_stats"] == dict(full_frames=1, skipped_frames=2)
             await store.request_stop(task["id"], "stopped")
             cancel.set()
             if on_exit:

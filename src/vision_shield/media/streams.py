@@ -1,4 +1,4 @@
-"""One RTSP input, a bounded latest-frame buffer, and one output mux owner."""
+"""One RTSP input, bounded FIFO backpressure, and one output mux owner."""
 
 from collections import deque
 import threading
@@ -11,6 +11,7 @@ import httpx
 
 from vision_shield.media.video import add_video, check_streams, check_dimensions, masked_frame
 from vision_shield.redaction import FrameRedactor
+from vision_shield.detection.timing import snapshot
 if TYPE_CHECKING:
     from vision_shield.detection import Detector
 
@@ -76,14 +77,30 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         raise ValueError("Unsupported output protocol")
     buffer = StreamBuffer(config["frame_buffer_size"], config["audio_buffer_seconds"], config["audio_buffer_bytes"], stop)
     writer_done = threading.Event()
-    redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"))
+    redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
+                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"))
+    frames = None
+    cuda_device = None
+    if config.get("inference_device") == "cuda":
+        import torch
+
+        cuda_device = torch.cuda.current_device()
 
     def read_source():
+        nonlocal frames
         source_reader = None
         try:
+            hardware = {}
+            if cuda_device is not None:
+                from vision_shield.media.cuda_frames import CUDAFrames, hwaccel
+
+                # Establish the current CUDA context in the thread that opens NVDEC.
+                torch.cuda.set_device(cuda_device)
+                frames = CUDAFrames()
+                hardware["hwaccel"] = hwaccel(frames.device)
             # RTSP SDP supplies codec parameters; long probing creates an audio burst.
             source_reader = av.open(source, options={"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768"},
-                                    timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]))
+                                    timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
             video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"))
             with buffer.condition:
                 buffer.input_video = video
@@ -136,11 +153,15 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 if origin is None:
                     origin = moment
                 stage = time.monotonic()
-                output = masked_frame(frame, redactor, origin)
+                if frames:
+                    output = frames.masked(frame, redactor)
+                    output.pts = round((moment - origin) / output.time_base)
+                else:
+                    output = masked_frame(frame, redactor, origin)
                 frame_seconds += time.monotonic() - stage
                 stage = time.monotonic()
                 if video is None:
-                    video = add_video(writer, output, buffer.input_video, live=True)
+                    video = add_video(writer, output, buffer.input_video, live=True, device=config.get("inference_device", "cpu"))
                     if buffer.input_audio:
                         transcode_audio = protocol == "rtmp" and buffer.input_audio.codec_context.name != "aac"
                         if transcode_audio:
@@ -170,10 +191,13 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     emit({"output": True, "output_monotonic": time.monotonic(), "ready": True})
                     last_output_report = time.monotonic()
                 count += 1
-                emit({"stats": {"processed_frames": count, "dropped_frames": buffer.dropped,
+                emit({"video_decoder": "h264_nvdec" if frames else "h264",
+                      "video_encoder": video.codec_context.name,
+                      "detection_stats": redactor.detection_stats.copy(),
+                      "stats": {"processed_frames": count, "dropped_frames": buffer.dropped,
                                 "elapsed_seconds": time.monotonic() - started},
                       "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                                      encode=encode_seconds, **redactor.candidate_timings)})
+                                      encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})
                 if stop.is_set():
                     break
             if video:
