@@ -8,7 +8,7 @@ import torch
 
 from vision_shield.detection import Detection
 from vision_shield.detection.egoblur import Detector as EgoBlurDetector, _HalfPlate
-from vision_shield.detection.timing import measure
+from vision_shield.detection.timing import measure, timed
 
 MODEL_PATH = Path(__file__).with_name("assets") / "yolov8n_face.onnx"
 
@@ -23,6 +23,7 @@ class Detector(EgoBlurDetector):
         self.face_path, self.sessions = Path(face_path), {}
         self.providers = [self._session(160, 160).get_providers()[0]]
 
+    @timed("session-primary-face")
     def _session(self, height, width):
         import onnxruntime as ort
 

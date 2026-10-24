@@ -13,7 +13,7 @@ import httpx
 from vision_shield.media.video import add_video, check_streams, check_dimensions, masked_frame
 from vision_shield.media.stream_metrics import StreamMetrics, vcl_digest
 from vision_shield.redaction import FrameRedactor
-from vision_shield.detection.timing import snapshot
+from vision_shield.detection.timing import measure, snapshot
 if TYPE_CHECKING:
     from vision_shield.detection import Detector
 
@@ -115,7 +115,13 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 buffer.input_video = video
                 buffer.input_audio = source_reader.streams.audio[0] if source_reader.streams.audio else None
             received = {}
-            for packet in source_reader.demux():
+            packets = iter(source_reader.demux())
+            while True:
+                try:
+                    with measure(redactor, "source-read"):
+                        packet = next(packets)
+                except StopIteration:
+                    break
                 if stop.is_set():
                     break
                 if packet.stream.type == "video":
@@ -123,10 +129,13 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         received.setdefault(packet.pts * packet.time_base, time.monotonic())
                         if len(received) > 256:
                             del received[next(iter(received))]
-                    for frame in packet.decode():
+                    with measure(redactor, "source-decode"):
+                        decoded = packet.decode()
+                    for frame in decoded:
                         check_dimensions(frame.width, frame.height, config)
                         moment = frame.pts * frame.time_base if frame.pts is not None and frame.time_base is not None else None
-                        buffer.frame(frame, received.pop(moment, None))
+                        with measure(redactor, "source-backpressure"):
+                            buffer.frame(frame, received.pop(moment, None))
                 elif packet.stream.type == "audio" and packet.dts is not None:
                     buffer.audio_packet(packet)
         except Exception as error:

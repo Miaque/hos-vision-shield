@@ -100,6 +100,7 @@ class Detector(CPUDetector):
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.view_stream, self.face_stream, self.plate_stream = [torch.cuda.Stream(device=self.device) for _ in range(3)]
 
+    @timed("session-detail-face")
     def _face_session(self, height, width):
         import onnxruntime as ort
 

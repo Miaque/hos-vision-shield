@@ -12,6 +12,7 @@ STAGES = (
     "post-primary", "post-detail", "local-confirm", "input-copy", "output-copy", "explicit-sync",
     "track-confirm", "track-update", "track-flow", "track-probe", "track-recheck", "track-face-recheck",
     "color-convert", "gray-copy", "mask-gpu",
+    "source-read", "source-decode", "source-backpressure", "session-primary-face", "session-detail-face",
 )
 
 

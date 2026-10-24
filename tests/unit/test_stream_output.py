@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from vision_shield.config import Settings
+from vision_shield.detection.timing import StageTimes
 from vision_shield.media import streams
 from vision_shield.media.stream_metrics import vcl_digest
 from vision_shield.media.video import check_streams
@@ -74,6 +75,8 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
         return original_open(str(target), "w", format="flv" if scheme == "rtmp" else "nut")
 
     class Detector:
+        stage_times = StageTimes()
+
         def detect(self, pixels):
             if fault:
                 raise fault("inference failed")
@@ -99,6 +102,9 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
     assert metrics['input_frames'] == metrics['encoded_frames'] == 12
     assert metrics['unmatched_packets'] == metrics['missing_receive_frames'] == metrics['failed_frames'] == 0
     assert metrics['protected_frames'] == metrics['pending_encoder_frames'] == 0
+    assert events[-1]['timings']['source-read'] >= 0.04
+    assert events[-1]['timings']['source-decode'] > 0
+    assert events[-1]['timings']['source-backpressure'] > 0
     assert [sample['sequence'] for sample in metrics['recent_outputs']] == list(range(1, 13))
     assert all(sample['latency_seconds'] >= 0 for sample in metrics['recent_outputs'])
     assert opened["format"] == ("flv" if scheme == "rtmp" else "rtsp")
