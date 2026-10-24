@@ -105,7 +105,9 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 frames = CUDAFrames()
                 hardware["hwaccel"] = hwaccel(frames.device)
             # RTSP SDP supplies codec parameters; long probing creates an audio burst.
-            source_reader = av.open(source, options={"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768"},
+            # shortcut: video-only RTCP clock trial; restore audio after timing recovery is validated.
+            source_reader = av.open(source, options={"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768",
+                                                    "allowed_media_types": "video"},
                                     timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
             video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"))
             with buffer.condition:

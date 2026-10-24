@@ -69,6 +69,7 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         if url == "rtsp://camera/input":
             threads["decode"] = threading.get_ident()
             assert kwargs["hwaccel"] is accelerator
+            assert kwargs["options"]["allowed_media_types"] == "video"
             if fault == "decode":
                 raise RuntimeError("decode failed")
             return Reader()
