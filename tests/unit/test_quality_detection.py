@@ -487,6 +487,62 @@ def test_invalid_primary_metadata_cannot_be_used_as_confirmation(bad):
     with pytest.raises(ValueError, match="Invalid detector output"):
         detector.candidates(np.zeros((10, 10, 3), np.uint8))
 
+
+@pytest.mark.parametrize("count", [0, 2])
+def test_primary_output_validation_avoids_scalar_reads(count):
+    import torch
+    from torch.profiler import ProfilerActivity, profile
+    from vision_shield.detection.egoblur import Detector
+
+    boxes = torch.tensor([[1., 1., 4., 4.], [5., 5., 8., 8.]])[:count]
+    scores = torch.tensor([0.8, 0.9])[:count]
+    detector = Detector.__new__(Detector)
+    detector.models = [None, lambda pixels: (boxes, None, scores, None)]
+    detector.device = torch.device("cpu")
+    detector.face_threshold, detector.max_side = 0.1, 1280
+    with profile(activities=[ProfilerActivity.CPU]) as trace:
+        result = detector.candidates(np.zeros((10, 10, 3), np.uint8), kind="plate")
+    scalar_reads = sum(event.count for event in trace.key_averages() if event.key == "aten::_local_scalar_dense")
+    assert scalar_reads == 0, "数值校验不应逐项读取 CUDA 标量"
+    assert len(result) == count
+
+
+@pytest.mark.parametrize("bad", ["box_nan", "box_inf", "score_nan", "score_inf", "negative_score", "zero_width"])
+def test_primary_numeric_validation_still_fails_before_nms(monkeypatch, bad):
+    import torch
+    from vision_shield.detection import egoblur
+
+    boxes, scores = torch.tensor([[1., 1., 4., 4.]]), torch.tensor([0.8])
+    if bad.startswith("box_"):
+        boxes[0, 0] = float("nan") if bad == "box_nan" else float("inf")
+    elif bad == "zero_width":
+        boxes[0, 2] = boxes[0, 0]
+    else:
+        scores[0] = {"score_nan": float("nan"), "score_inf": float("inf"), "negative_score": -0.1}[bad]
+    detector = egoblur.Detector.__new__(egoblur.Detector)
+    detector.models = [None, lambda pixels: (boxes, None, scores, None)]
+    detector.device = torch.device("cpu")
+    detector.face_threshold, detector.max_side = 0.1, 1280
+    monkeypatch.setattr(egoblur.torchvision.ops, "nms", lambda *args: pytest.fail("非法预测不得进入 NMS"))
+    with pytest.raises(ValueError, match="Invalid detector output"):
+        detector.candidates(np.zeros((10, 10, 3), np.uint8), kind="plate")
+
+
+def test_primary_host_filter_keeps_float32_threshold_and_nms_order():
+    import torch
+    from vision_shield.detection.egoblur import Detector
+
+    above = np.nextafter(np.float32(0.1), np.float32(1))
+    boxes = torch.tensor([[0., 0., 1., 1.], [2., 2., 3., 3.], [4., 4., 5., 5.], [6., 6., 7., 7.]])
+    scores = torch.tensor([0.1, float(above), 1., 0.])
+    detector = Detector.__new__(Detector)
+    detector.models = [None, lambda pixels: (boxes, None, scores, None)]
+    detector.device = torch.device("cpu")
+    detector.face_threshold, detector.max_side = 0.1, 1280
+    result = detector.candidates(np.zeros((10, 10, 3), np.uint8), kind="plate")
+    assert result == [Detection("plate", (4., 4., 5., 5.), 1.),
+                      Detection("plate", (2., 2., 3., 3.), float(above))]
+
 @pytest.mark.parametrize('kind', ['face', 'plate'])
 def test_typed_quality_recheck_does_not_run_unrelated_models(kind):
     from vision_shield.detection.quality import Detector

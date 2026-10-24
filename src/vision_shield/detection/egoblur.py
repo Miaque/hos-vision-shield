@@ -99,16 +99,20 @@ class Detector:
                     else:
                         coordinates, _, scores, _ = model(image)
                 with measure(self, "post-primary"):
-                    if (coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),)
-                            or not torch.isfinite(coordinates).all() or not torch.isfinite(scores).all()
-                            or (scores < 0).any() or (scores > 1).any()
-                            or (coordinates[:, 2:] <= coordinates[:, :2]).any()):
+                    if coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),):
+                        raise ValueError("Invalid detector output")
+                    # Reuse one small host table instead of synchronizing for each validity predicate.
+                    with measure(self, "output-copy"):
+                        predictions = torch.cat((coordinates, scores[:, None]), dim=1).cpu().numpy()
+                    if (not np.isfinite(predictions).all() or (predictions[:, 4] < 0).any()
+                            or (predictions[:, 4] > 1).any()
+                            or (predictions[:, 2:4] <= predictions[:, :2]).any()):
                         raise ValueError("Invalid detector output")
                     keep = torchvision.ops.nms(coordinates, scores, 0.3)
-                    # Map each axis using the actual rounded input size, then mask full-resolution pixels.
-                    selected = keep[scores[keep] > threshold]
                     with measure(self, "output-copy"):
-                        values, confidences = coordinates[selected].cpu().tolist(), scores[selected].cpu().tolist()
+                        selected = predictions[keep.cpu().numpy()]
+                    # Map each axis using the actual rounded input size, then mask full-resolution pixels.
+                    values = selected[selected[:, 4] > threshold].tolist()
                     boxes.extend(Detection(model_kind, (x1 * x_scale, y1 * y_scale, x2 * x_scale, y2 * y_scale), score)
-                                 for (x1, y1, x2, y2), score in zip(values, confidences, strict=True))
+                                 for x1, y1, x2, y2, score in values)
         return boxes
