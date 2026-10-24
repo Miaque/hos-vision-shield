@@ -276,7 +276,7 @@ async def detection_diagnostics(task_id: UUID, request: Request,
     task = await request.app.state.store.get(str(task_id))
     if task is None:
         raise HTTPException(404, 'task_not_found')
-    if task['kind'] == 'stream' and sample is None and task.get('media_failure'):
+    if task.get('kind') == 'stream' and sample is None and task.get('media_failure'):
         return {'mode': 'stream', 'last_failure': task['media_failure']}
     if task.get('device_profile') is None:
         raise HTTPException(409, 'diagnostics_not_ready')
