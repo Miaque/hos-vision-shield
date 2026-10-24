@@ -33,3 +33,24 @@ CPU 原型在空画面 32×32、319×321 和有七个车牌输出的 360×1280 �
 分层 nonzero 保留，repeat_interleave 为零。完整 unit 集合 584 项通过、48 项按既定 GPU 条件跳过。
 本地没有 CUDA，CPU 图等价不能证明 Ada 半精度结果或性能收益；仍需服务器独立采样和完整任务比较。
 只有整体收益超过波动且输出与质量不退化才保留。
+
+实现语义参考 [PyTorch repeat_interleave](https://docs.pytorch.org/docs/stable/generated/torch.repeat_interleave.html)
+对输出形状同步的说明，以及 [Torchvision ROIAlign](https://docs.pytorch.org/vision/main/_modules/torchvision/ops/roi_align.html)
+对 batch 索引列和自适应采样数量的定义；性能结论仍以本项目服务器实测为准。
+
+## RTX 设备采样
+
+服务器固定 `b2e6ca7` / `exp-20261025-a-single-image-pooler-02`，同时运行两路流和两个 GPU 文件。
+两份文件各 1776 帧、零丢帧，媒体耗时 119.205/117.544 秒；本轮带 profiler，且播放传输条件与
+此前内部 RTSP 采样不同，这两个耗时不用于判定整体收益。
+
+六个对应主车牌采样的同步次数均再减少三次：从异步迁移版本的 15/17/17 变为 12/14/14，
+HtoD 次数减少一次；稳态主车牌主机 P50 为 32.452/30.941 ms，P95 为 47.217/46.613 ms。
+两份完整输出 SHA256 仍为 `231cf162a86c3f945b4c2be30b710c235e8bacf41766c7c9f0e7d5d2c9cc2132`，
+与已有完整视频逐字节一致，检测/跟踪计数、NVDEC/NVENC 均核验；完整帧、PTS 和 943 个 AAC 包
+的等价结论按精确哈希复用。六份原始 trace、profile 与输出保存在
+`data/validation/route-a-single-image-pooler-20261025-01/candidate-device/`。
+
+采样证明目标同步确实消除，尚未证明收益超过运行波动。不带 profiler 的三轮双流双文件完整对照
+正在 `route-a-single-image-pooler-20261025-01/candidate/` 执行；本轮继续使用既定 G3 外部推流/播放路径，
+attempt 原因随测试自动记录。未通过性能、绝对质量或最终验收。

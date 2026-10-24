@@ -43,3 +43,9 @@ HTTP 发布控制失败、凭据不进入记录、历史 32 项上限、旧 owne
 新增测试先复现缺少 reason，再验证终态之后拒绝更新时结束记录仍已保存。
 90 项定向测试通过、48 项按原条件跳过；后续 GPU 性能测试同时复核该顺序，无需专门等待自然重连。
 顺序修复后的完整 unit 集合 585 项通过、48 项按原 GPU 条件跳过。
+
+顺序修复已随 `b2e6ca7` 部署，并在后续单图 ROI 的 GPU 双流双文件采样中复核：外部 RTMP 与
+内部 RTSP 任务停止后，diagnostics 均保留 `stop_requested`、结束时间和与 FPS 一致的 attempt ID。
+服务器任务与队列收尾为空；证据位于
+`route-a-single-image-pooler-20261025-01/candidate-device/final-verification-metadata.json`。
+本轮没有自然重连；以后在正常性能测试中捕获并处理，不为等待重连单独延长诊断。
