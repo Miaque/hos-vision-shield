@@ -11,6 +11,21 @@ from vision_shield.detection import Detection
 from vision_shield.detection.timing import measure
 
 
+def _async_device_moves(model):
+    # shortcut: fixed Gen1/TorchScript internals; revalidate the graph and APIs on model or PyTorch upgrades.
+    graph = model.inlined_graph.copy()
+    moves = [node for node in graph.findAllNodes("aten::to")
+             if node.schema().startswith("aten::to.prim_Device(")]
+    if len(moves) != 17:
+        raise RuntimeError("Unexpected Gen1 device-transfer graph")
+    with graph.insert_point_guard(moves[0]):
+        asynchronous = graph.insertConstant(True)
+    for node in moves:
+        node.replaceInput(3, asynchronous)
+    graph.lint()
+    return torch._C._create_function_from_graph("plate_async_device_moves", graph)
+
+
 class _HalfPlate(torch.nn.Module):
     """Keep the original graph and float normalization while using half model weights."""
 
@@ -21,10 +36,12 @@ class _HalfPlate(torch.nn.Module):
         mean, std = core.pixel_mean.clone(), core.pixel_std.clone()
         model.half()
         core.pixel_mean, core.pixel_std = mean, std
+        # Internal transfers target CUDA; their consumers remain ordered on the model stream.
+        self._forward = _async_device_moves(model)
 
     def forward(self, pixels):
         with torch.autocast("cuda", dtype=torch.float16):
-            boxes, labels, scores, size = self.model(pixels)
+            boxes, labels, scores, size = self._forward(self.model, pixels)
         return boxes.float(), labels, scores.float(), size
 
 
