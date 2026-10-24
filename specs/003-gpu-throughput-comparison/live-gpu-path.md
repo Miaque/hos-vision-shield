@@ -612,3 +612,15 @@ queue=1；唯一少的一帧是既有无 PTS 输入规则产生的 dropped，不
 这证明在 g3 源可达时，当前无码率上限版本可以完成该 RTMP 推送并从新 HTTPS FLV 地址
 解码播放；它不是双路 20 FPS 或 30 分钟验收，g3 输入本身约 15 FPS，且仍保留初始
 无 PTS dropped 与一次时钟修复。音频仍是 video-only 实验，未验证音频恢复和音画同步。
+
+### 显式 `max_bitrate=20000000` 实流验证
+
+在 `a7d6731` 已部署版本上，使用同一 g3 外部 RTMP/HTTPS FLV 路径创建任务
+`6f4e7241-a167-43df-8bfb-abaaa1a64738`，请求显式传入 `max_bitrate=20000000`。
+任务进入 running/ready；收尾前服务端 input=1149、encoded=1145、failed=0、
+timestamp_repairs=0，初始无 PTS 规则产生四帧差异，任务随后 stopped，活动任务为零。
+
+最近 512 个输出样本按有效时间跨度估算约 11.89 Mbps，证明显式参数已经传入实时编码器；
+该短段未达到 20 Mbps 上限，不能据此判断复杂画面的峰值行为。对应 HTTPS FLV 实际解码
+30 帧，3840×1080，无缺 PTS 或非递增 PTS，P95 帧间隔 0.031 秒、最大 0.047 秒。
+证据目录 `data/validation/route-a-g3-bitrate-param-20261024-01/` 保存服务端和播放结果。
