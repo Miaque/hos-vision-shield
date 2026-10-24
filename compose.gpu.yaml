@@ -5,8 +5,9 @@ services:
       args:
         TORCH_BACKEND: cu126
     environment:
-      DETECTION_BACKEND: quality_yolo
-      INFERENCE_DEVICE: cuda
+      # 独立资源隔离实验：文件任务不占用共享 GPU，实时流仍走 CUDA。
+      DETECTION_BACKEND: quality
+      INFERENCE_DEVICE: cpu
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
       GPU_DEVICE_ID: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
     deploy:
