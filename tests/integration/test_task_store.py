@@ -97,16 +97,20 @@ async def test_stopping_stream_keeps_final_stats_without_reviving_publication(st
 
 async def test_stream_publish_and_video_tracking_contracts_survive_merge(store):
     publish_url = "rtmp://approved/app/camera?sign=test"
-    stream = await store.create("stream", "rtsp", "rtsp://approved/live", publish_url=publish_url)
+    with pytest.raises(ValueError):
+        await store.create("video", "upload", "source.mp4", max_bitrate=20_000_000)
+    stream = await store.create("stream", "rtsp", "rtsp://approved/live", publish_url=publish_url,
+                                max_bitrate=20_000_000)
     video = await store.create("video", "upload", "source.mp4", profile_detection=True,
                                detection_interval=3, tracking="flow")
     stored_stream = await store.get(stream["id"])
     stored_video = await store.get(video["id"])
     assert stored_stream["publish_url"] == publish_url and stored_stream["publisher_owner_id"] is None
+    assert stored_stream["max_bitrate"] == 20_000_000
     assert stored_video["profile_detection"] and stored_video["detection_interval"] == 3
     assert stored_video["tracking"] == "flow" and "publish_url" not in stored_video
     for kind, options in [("video", {"publish_url": publish_url}),
-                          ("stream", {"detection_interval": 3}), ("video", {"tracking": "flow"})]:
+                          ("image", {"detection_interval": 3}), ("video", {"tracking": "flow"})]:
         with pytest.raises(ValueError):
             await store.create(kind, "upload", "source", **options)
 

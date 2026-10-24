@@ -51,6 +51,17 @@ def test_cuda_file_encoding_uses_nvenc_on_the_selected_device(monkeypatch):
     assert video.time_base == video.codec_context.time_base == frame.time_base
 
 
+def test_live_nvenc_omits_rate_cap_when_not_requested(monkeypatch):
+    import torch
+
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 2)
+    video = SimpleNamespace(codec_context=SimpleNamespace())
+    writer = SimpleNamespace(add_stream=Mock(return_value=video))
+    frame = SimpleNamespace(width=3840, height=1080, time_base=Fraction(1, 90000))
+    add_video(writer, frame, SimpleNamespace(average_rate=Fraction(15)), live=True, device="cuda")
+    assert "maxrate" not in video.options and "bufsize" not in video.options
+
+
 @pytest.mark.parametrize("live", [False, True])
 def test_unavailable_nvenc_is_never_replaced_with_cpu_encoding(live):
     writer = SimpleNamespace(add_stream=Mock(side_effect=RuntimeError("NVENC unavailable")))
@@ -92,9 +103,9 @@ def test_live_nvenc_caps_rate_while_retaining_cq_resolution_and_clock(monkeypatc
     video = SimpleNamespace(codec_context=SimpleNamespace())
     writer = SimpleNamespace(add_stream=Mock(return_value=video))
     frame = SimpleNamespace(width=3840, height=1080, time_base=Fraction(1, 90000))
-    add_video(writer, frame, SimpleNamespace(average_rate=None), live=True, device='cuda')
+    add_video(writer, frame, SimpleNamespace(average_rate=None), live=True, device='cuda', max_bitrate=20_000_000)
     assert video.width == 3840 and video.height == 1080 and video.bit_rate == 0
     assert video.time_base == video.codec_context.time_base == frame.time_base
     assert video.codec_context.gop_size == 25
     assert video.options == dict(preset='p6', tune='ull', rc='vbr', cq='19', gpu='2', bf='0',
-                                 maxrate='5000000', bufsize='5000000')
+                                 maxrate='20000000', bufsize='20000000')

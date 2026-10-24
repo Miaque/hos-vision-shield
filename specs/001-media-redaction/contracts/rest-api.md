@@ -24,7 +24,7 @@ PATCH重复设置同一意图幂等，不允许重新设run，不能以停止接
 
 - **FileUrlInput**：kind必填枚举image/video；url必填HTTP或HTTPS URL，最长4096字符；禁止其他字段。
 - **UploadInput**：kind必填枚举image/video；file必填且恰好一个文件；不接受URL字段或服务器路径。
-- **StreamInput**：url必填RTSP URL，最长4096字符；禁止其他字段，允许摄像头URL凭据但不得回显。
+- **StreamInput**：url必填RTSP URL，最长4096字符；可选publish_url指定外部RTSP/RTMP输出，可选max_bitrate为正整数bit/s实时编码上限；省略max_bitrate时不设置码率上限；允许摄像头URL凭据但不得回显。
 - **DesiredStateInput**：desired_state必填cancelled/stopped；文件只允许cancelled，流只允许stopped；其他值422。
 
 kind声明必须与实际解码格式一致。图片JPEG/PNG；文件MP4/H.264；流H.264；音频仅AAC或无音轨。

@@ -32,6 +32,13 @@ def test_mode_is_validated():
         redact(np.zeros((2, 2, 3), np.uint8), [], mode='blur')
 
 
+def test_stream_bitrate_is_optional_positive_bits_per_second():
+    assert StreamInput(url="rtsp://example.com/live").max_bitrate is None
+    assert StreamInput(url="rtsp://example.com/live", max_bitrate=20_000_000).max_bitrate == 20_000_000
+    with pytest.raises(ValidationError):
+        StreamInput(url="rtsp://example.com/live", max_bitrate=0)
+
+
 def test_image_and_temporal_paths_use_selected_mode(tmp_path):
     from PIL import Image
     from vision_shield.media.images import process_image

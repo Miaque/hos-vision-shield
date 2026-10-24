@@ -29,6 +29,8 @@ class StreamInput(BaseModel):
     publish_url: Annotated[str | None, Field(min_length=1, max_length=4096,
         description="可选完整 RTSP/RTMP 推流地址；省略时使用默认 RTSP 输出")] = None
     redaction_mode: Literal["solid", "mosaic"] = "solid"
+    max_bitrate: Annotated[int | None, Field(default=None, ge=1,
+        description="可选实时编码码率上限，单位 bit/s；省略时不设置码率上限")] = None
 
 
 class DesiredStateInput(BaseModel):

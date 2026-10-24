@@ -29,6 +29,7 @@ async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_p
         assert "secret" not in created.text
         stored = await app.state.store.get(task["id"])
         assert stored.get("publish_url") == publish_url
+        assert "max_bitrate" not in stored
         assert stored.get("detection_interval", 1) == (3 if cadence else 1)
         assert stored.get("tracking", "template") == ("flow" if cadence else "template")
         assert (await client.post("/v1/stream-tasks", json=body, headers=headers)).json()["id"] == task["id"]
@@ -45,6 +46,19 @@ async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_p
             assert stopped.status_code == 200 and stopped.json()["state"] == "stopped"
 
 
+async def test_stream_max_bitrate_is_stored_when_explicit(redis_url, tmp_path):
+    app = create_app(Settings(_env_file=None, redis_url=redis_url, media_root=tmp_path, source_allowlist=["127.0.0.1"]))
+    async with app.router.lifespan_context(app), httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        seconds, micros = await app.state.redis.time()
+        await app.state.redis.zadd("vs:workers:streams", {"test": seconds * 1000 + micros // 1000})
+        response = await client.post('/v1/stream-tasks', json={
+            'url': 'rtsp://127.0.0.1/source', 'max_bitrate': 20_000_000,
+        }, headers={'Idempotency-Key': 'stream-bitrate'})
+        assert response.status_code == 202
+        stored = await app.state.store.get(response.json()['id'])
+        assert stored['max_bitrate'] == 20_000_000
+
+
 @pytest.mark.parametrize("scheme", ["rtsp", "rtmp"])
 @pytest.mark.parametrize("cadence", [False, True])
 async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, tmp_path, monkeypatch, scheme, cadence):
@@ -58,13 +72,14 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
         await app.state.redis.flushdb()
         store = app.state.store
         target = f"{scheme}://127.0.0.1/app/camera?sign=secret"
-        options = dict(detection_interval=3, tracking="flow") if cadence else {}
+        options = dict(detection_interval=3, tracking="flow", max_bitrate=20_000_000) if cadence else {"max_bitrate": 20_000_000}
         task = await store.create("stream", "rtsp", "rtsp://127.0.0.1/source", publish_url=target, **options)
         owned = await store.claim(task["id"], "owner")
         cancel = asyncio.Event()
 
         async def run(command, payload, cancel, on_event, timeout, *, on_exit=None):
             assert payload["publish_url"] == target and payload["config"]["publish_url"] == target
+            assert payload["config"]["max_bitrate"] == 20_000_000
             assert payload["config"].get("detection_interval", 1) == (3 if cadence else 1)
             assert payload["config"].get("tracking", "template") == ("flow" if cadence else "template")
             await on_event(dict(output=True, output_monotonic=time.monotonic(), ready=True))

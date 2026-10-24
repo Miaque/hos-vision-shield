@@ -226,7 +226,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 frame_seconds += time.monotonic() - stage
                 stage = time.monotonic()
                 if video is None:
-                    video = add_video(writer, output, buffer.input_video, live=True, device=config.get("inference_device", "cpu"))
+                    video_options = dict(live=True, device=config.get("inference_device", "cpu"))
+                    if config.get("max_bitrate") is not None:
+                        video_options["max_bitrate"] = config["max_bitrate"]
+                    video = add_video(writer, output, buffer.input_video, **video_options)
                     if buffer.input_audio:
                         transcode_audio = protocol == "rtmp" and buffer.input_audio.codec_context.name != "aac"
                         if transcode_audio:

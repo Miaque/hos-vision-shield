@@ -150,6 +150,9 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -
 }
 ```
 
+可选 `max_bitrate` 设置实时视频编码码率上限，单位为 bit/s，例如 `20000000` 表示 20 Mbps。
+省略或传 `null` 时不设置码率上限；该参数只影响实时 NVENC，不影响离线文件编码。
+
 - 不传或传 `null`：保持默认 MediaMTX RTSP 输出和 `playback_url`；完整 RTSP 地址也可用于直接推流。
 - 指定地址：保留路径、查询参数和鉴权信息，推流到外部服务，不拼接 `/redacted/{task_id}` 或注入内部 owner 凭据。输入与推流目标都必须在 `SOURCE_ALLOWLIST` 中授权；worker 每次重连重新校验并固定到授权 IP，RTMP `tcUrl` 保留原域名。
 - 流输入支持 H.264，音频可为 AAC、G711A、G711U 或无音轨。RTSP 保留音频编码；RTMP 使用 FLV，AAC 直接转封装、G711 转 AAC。文件视频仍只接受 AAC 或无音轨。

@@ -176,7 +176,7 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                                publish_url=publish_url, config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid"),
                                                                "publish_url": record.get("publish_url")},
                                directory=str(settings.media_root.resolve() / task_id / f"attempt-{generation}"))
-                for key in ('detection_interval', 'tracking'):
+                for key in ('detection_interval', 'tracking', 'max_bitrate'):
                     if key in record:
                         payload['config'][key] = record[key]
                 result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
