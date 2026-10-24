@@ -98,7 +98,7 @@ elseif op == 'update' then
     if t.desired_state ~= 'run' then
         if t.kind ~= 'stream' then return false end
         -- 收尾统计可写入，但停止请求不能被迟到的运行状态覆盖。
-        local metrics = {stats=true, timings=true, detection_stats=true, video_encoder=true, video_decoder=true, media_failure=true}
+        local metrics = {stats=true, timings=true, detection_stats=true, video_encoder=true, video_decoder=true, media_failure=true, stream_attempts=true, stream_attempts_discarded=true}
         for k,_ in pairs(arg.values) do if not metrics[k] then return false end end
     end
     for k,v in pairs(arg.values) do t[k] = v end

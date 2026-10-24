@@ -12,6 +12,7 @@ import httpx
 
 from vision_shield.media.video import add_video, check_streams, check_dimensions, masked_frame
 from vision_shield.media.stream_metrics import StreamMetrics, vcl_digest
+from vision_shield.media.attempts import failure_details
 from vision_shield.redaction import FrameRedactor
 from vision_shield.detection.timing import measure, snapshot
 if TYPE_CHECKING:
@@ -26,6 +27,7 @@ class StreamBuffer:
         self.received, self.last_received, self.input_frames = deque(), None, 0
         self.audio_size, self.dropped = 0, 0
         self.eof, self.error, self.input_video, self.input_audio = False, None, None, None
+        self.failure = None
 
     def frame(self, value, received_at=None):
         with self.condition:
@@ -96,6 +98,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     def read_source():
         nonlocal frames
         source_reader = None
+        phase = "source_initialize"
         try:
             hardware = {}
             if cuda_device is not None:
@@ -107,9 +110,11 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 hardware["hwaccel"] = hwaccel(frames.device)
             # RTSP SDP supplies codec parameters; long probing creates an audio burst.
             # shortcut: video-only RTCP clock trial; restore audio after timing recovery is validated.
+            phase = "source_open"
             source_reader = av.open(source, options={"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768",
                                                     "allowed_media_types": "video"},
                                     timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
+            phase = "source_validate"
             video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"))
             with buffer.condition:
                 buffer.input_video = video
@@ -118,6 +123,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             packets = iter(source_reader.demux())
             while True:
                 try:
+                    phase = "source_read"
                     with measure(redactor, "source-read"):
                         packet = next(packets)
                 except StopIteration:
@@ -129,18 +135,22 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         received.setdefault(packet.pts * packet.time_base, time.monotonic())
                         if len(received) > 256:
                             del received[next(iter(received))]
+                    phase = "source_decode"
                     with measure(redactor, "source-decode"):
                         decoded = packet.decode()
                     for frame in decoded:
                         check_dimensions(frame.width, frame.height, config)
                         moment = frame.pts * frame.time_base if frame.pts is not None and frame.time_base is not None else None
+                        phase = "input_buffer"
                         with measure(redactor, "source-backpressure"):
                             buffer.frame(frame, received.pop(moment, None))
                 elif packet.stream.type == "audio" and packet.dts is not None:
+                    phase = "input_audio_buffer"
                     buffer.audio_packet(packet)
         except Exception as error:
             with buffer.condition:
                 buffer.error = error
+                buffer.failure = failure_details(error, phase)
         finally:
             with buffer.condition:
                 buffer.eof = True
@@ -158,6 +168,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     last_output_report = None
     frame_seconds = encode_seconds = 0.0
     video, last_stats, failed_frames, processing = None, None, 0, False
+    phase, ending = "publish_open", None
 
     def report(force=False):
         nonlocal last_stats
@@ -169,7 +180,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             stream_stats = dict(input_frames=buffer.input_frames, queue_frames=len(buffer.frames),
                                audio_queue_bytes=buffer.audio_size, failed_frames=failed_frames,
                                protected_frames=0, **metrics.snapshot())
-        emit({**({"video_decoder": "h264_nvdec" if frames else "h264",
+        emit({**({"stream_end": ending} if force and ending else {}),
+              **({"video_decoder": "h264_nvdec" if frames else "h264",
                   "video_encoder": video.codec_context.name} if video else {}),
               "detection_stats": redactor.detection_stats.copy(),
               "stats": {"processed_frames": count, "dropped_frames": dropped,
@@ -179,15 +191,16 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         last_stats = now
 
     def mux_video(packet):
-        nonlocal failed_frames, processing
+        nonlocal failed_frames, processing, ending
         # Capture the encoder clock before mux rescales it (notably FLV milliseconds).
         moment = packet.pts * packet.time_base if packet.pts is not None and packet.time_base is not None else None
         encoded_bytes, encoded_vcl_sha256 = packet.size, vcl_digest(bytes(packet))
         try:
             writer.mux(packet)
-        except Exception:
+        except Exception as error:
             failed_frames += 1
             processing = False
+            ending = failure_details(error, "publish_write")
             raise
         metrics.written(moment, time.monotonic(), encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256)
 
@@ -206,6 +219,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             while sample := buffer.take():
                 frame, packets = sample
                 processing = True
+                phase = "input_clock"
                 source_moment = frame.pts * frame.time_base
                 if previous_source is not None and source_moment > previous_source:
                     step = source_moment - previous_source
@@ -227,6 +241,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 if origin is None:
                     origin = moment
                 stage = time.monotonic()
+                phase = "frame_process"
                 if frames:
                     output = frames.masked(frame, redactor)
                     output.pts = round((moment - origin) / output.time_base)
@@ -235,6 +250,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 frame_seconds += time.monotonic() - stage
                 stage = time.monotonic()
                 if video is None:
+                    phase = "encoder_initialize"
                     video_options = dict(live=True, device=config.get("inference_device", "cpu"))
                     if config.get("max_bitrate") is not None:
                         video_options["max_bitrate"] = config["max_bitrate"]
@@ -249,6 +265,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 if (output.width, output.height) != (video.width, video.height):
                     raise BufferError("Stream dimensions changed")
                 for packet in packets:
+                    phase = "audio_process"
                     packet.pts -= round(origin / packet.time_base)
                     packet.dts -= round(origin / packet.time_base)
                     if transcode_audio:
@@ -259,6 +276,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         packet.stream = audio
                         writer.mux(packet)
                 published = False
+                phase = "video_encode"
                 metrics.submit(output, buffer.last_received, source_moment, timeline_pts=moment, timestamp_repaired=repaired)
                 for packet in video.encode(output):
                     mux_video(packet)
@@ -273,16 +291,25 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 report()
                 if stop.is_set():
                     break
+                phase = "input_wait"
             if video:
+                phase = "encoder_flush"
                 for packet in video.encode():
                     mux_video(packet)
             if transcode_audio:
+                phase = "audio_flush"
                 for packet in audio.encode():
                     writer.mux(packet)
-    except Exception:
+            phase = "publish_close"
+    except Exception as error:
         failed_frames += int(processing)
+        if ending is None:
+            ending = buffer.failure if error is buffer.error else failure_details(error, phase)
         raise
     finally:
+        if ending is None:
+            ending = dict(reason="stop_requested" if stop.is_set() else "source_eof", phase="source_read")
+        ending.update(attempt_id=metrics.attempt_id, ended_monotonic=time.monotonic())
         stop.set()
         writer_done.set()
         reader.join(timeout=config["rtsp_read_timeout"] + 1)

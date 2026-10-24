@@ -95,10 +95,14 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
         assert not target.exists() or target.stat().st_size == 0
         assert events[-1]['stats']['stream']['encoded_frames'] == 0
         assert events[-1]['stats']['stream']['failed_frames'] == 1
+        assert events[-1]['stream_end']['phase'] == 'frame_process'
+        assert events[-1]['stream_end']['error_type'] == fault.__name__
         return
     streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
                            Detector(), config, threading.Event(), events.append)
     metrics = events[-1]['stats']['stream']
+    assert events[-1]['stream_end']['reason'] == 'source_eof'
+    assert events[-1]['stream_end']['attempt_id'] == metrics['attempt_id']
     assert metrics['input_frames'] == metrics['encoded_frames'] == 12
     assert metrics['unmatched_packets'] == metrics['missing_receive_frames'] == metrics['failed_frames'] == 0
     assert metrics['protected_frames'] == metrics['pending_encoder_frames'] == 0

@@ -16,6 +16,7 @@ from vision_shield.jobs.store import TaskStore
 from vision_shield.media.runner import run_process
 from vision_shield.media.source import SourceError, download, validate_source
 from vision_shield.media.publisher import Publisher
+from vision_shield.media.attempts import failure_details
 
 
 def log_model_timing(event: dict, task_id: str, generation: int) -> None:
@@ -41,6 +42,7 @@ async def execute(task_id, broker, context):
     logger = logging.getLogger(__name__)
     logger.info("task=%s kind=%s generation=%s started", task_id, record["kind"], generation)
     cancel = asyncio.Event()
+    cancellation = {}
 
     async def control():
         try:
@@ -48,25 +50,30 @@ async def execute(task_id, broker, context):
                 async with asyncio.timeout(settings.lease_seconds / 2):
                     current = await store.get(task_id)
                     if not current:
+                        cancellation.update(reason="task_removed", phase="worker_control")
                         cancel.set()
                         return
                     if current["desired_state"] != "run":
+                        cancellation.update(reason="stop_requested", phase="worker_control")
                         # Hold ownership until the child has actually stopped.
                         cancel.set()
                     if deployment_stop is not None and deployment_stop.is_set():
+                        cancellation.update(reason="worker_shutdown", phase="worker_control")
                         # 部署停止期间仍续租，直到媒体子进程完成回收。
                         cancel.set()
                     if not await store.heartbeat(task_id, owner, generation):
+                        cancellation.update(reason="lease_lost", phase="worker_control")
                         cancel.set()
                         return
                 await asyncio.sleep(min(settings.heartbeat_seconds, 1))
-        except Exception:
+        except Exception as error:
+            cancellation.update(failure_details(error, "worker_control"))
             cancel.set()
 
     controller = asyncio.create_task(control())
     try:
         if record["kind"] == "stream":
-            await run_stream(record, store, settings, cancel, owner, generation)
+            await run_stream(record, store, settings, cancel, owner, generation, cancellation=cancellation)
             return
         root = settings.media_root.resolve()
         directory = root / task_id / f"attempt-{generation}"
@@ -137,17 +144,35 @@ async def execute(task_id, broker, context):
         logger.info("task=%s generation=%s execution ended", task_id, generation)
 
 
-async def run_stream(record, store, settings, cancel, owner, generation):
+async def run_stream(record, store, settings, cancel, owner, generation, *, cancellation=None):
     task_id, retry = record["id"], 0
     publisher = Publisher(store, settings)
+    history = list(record.get("stream_attempts", []))
+    discarded = record.get("stream_attempts_discarded", 0)
+    for previous in history:
+        if "ended_at_unix" not in previous:
+            previous.update(reason="worker_lost", phase="worker_control", ended_at_unix=time.time())
 
     async def child_exited():
-        await publisher.close(record, owner, generation, process_exited=True)
+        nonlocal phase
+        try:
+            await publisher.close(record, owner, generation, process_exited=True)
+        except Exception:
+            phase = "publisher_close"
+            raise
 
     try:
         while not cancel.is_set():
+            attempt = dict(run_id=uuid4().hex, generation=generation, started_at_unix=time.time())
+            history.append(attempt)
+            discarded += max(0, len(history) - 32)
+            history = history[-32:]
+            await store.update_owned(task_id, owner, generation, stream_attempts=history,
+                                     stream_attempts_discarded=discarded)
+            ending, phase, finish_error = {}, "source_validate", None
             try:
                 original, address = await validate_source(record["source_ref"], settings.source_allowlist, ("rtsp",))
+                phase = "publisher_prepare"
                 publish_url = await publisher.prepare(record, owner, generation)
                 await store.update_owned(task_id, owner, generation, state="connecting", ready=False)
 
@@ -156,6 +181,12 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                     if event.get("failure_type"):
                         logging.getLogger(__name__).warning("task=%s media failure type=%s at=%s", task_id, event["failure_type"], event.get("failure_at"))
                     values = {}
+                    if event.get("stream_end"):
+                        ending.update(event["stream_end"])
+                    stream = event.get("stats", {}).get("stream")
+                    if stream and "attempt_id" not in attempt:
+                        attempt["attempt_id"] = stream["attempt_id"]
+                        values["stream_attempts"] = history
                     if event.get("failure_type"):
                         values["media_failure"] = dict(type=event["failure_type"], at=event.get("failure_at", []),
                                                        generation=generation, observed_at_unix=time.time())
@@ -179,22 +210,49 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                 for key in ('detection_interval', 'tracking', 'max_bitrate'):
                     if key in record:
                         payload['config'][key] = record[key]
+                phase = "child_process"
                 result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                            payload, cancel, event_received, settings.process_stop_timeout,
                                            on_exit=child_exited if record.get("publish_url") else None)
+                if not ending:
+                    ending.update(reason="child_exit", phase=phase, returncode=result.get("returncode"))
+                    if result.get("failure_type"):
+                        ending.update(reason="child_initialize_error", phase="child_initialize",
+                                      error_type=result["failure_type"], at=result.get("failure_at", []))
+                        if "failure_errno" in result:
+                            ending["errno"] = result["failure_errno"]
                 if cancel.is_set():
+                    ending.update(cancellation or dict(reason="control_cancelled", phase="worker_control"))
                     break
+                phase = "publisher_close"
                 await publisher.close(record, owner, generation)
                 if result.get("error") and not result.get("retryable"):
-                    await store.finish(task_id, owner, generation, "failed", error=result["error"])
-                    return
+                    finish_error = result["error"]
             except SourceError as error:
+                ending.update(failure_details(error, phase))
                 if error.code != "source_unreachable":
                     raise
-            except (httpx.HTTPError, TimeoutError):
-                pass
+            except (httpx.HTTPError, TimeoutError) as error:
+                ending.update(failure_details(error, phase))
+            except Exception as error:
+                ending.update(failure_details(error, phase))
+                raise
+            finally:
+                if not ending:
+                    ending.update(cancellation or dict(reason="worker_interrupted", phase=phase))
+                attempt.update(ending, ended_at_unix=time.time())
+                await store.update_owned(task_id, owner, generation, stream_attempts=history,
+                                         stream_attempts_discarded=discarded)
+                logging.getLogger(__name__).info("task=%s attempt=%s reason=%s phase=%s type=%s errno=%s",
+                    task_id, attempt.get("attempt_id", attempt["run_id"]), attempt.get("reason"),
+                    attempt.get("phase"), attempt.get("error_type"), attempt.get("errno"))
+            if finish_error:
+                await store.finish(task_id, owner, generation, "failed", error=finish_error)
+                return
             await store.update_owned(task_id, owner, generation, state="recovering", ready=False,
-                                     error={"code": "source_unreachable", "message": "Stream reconnect pending"})
+                                     error={"code": "source_unreachable" if ending.get("phase") in (
+                                         "source_validate", "source_open", "source_read") else "processing_failed",
+                                            "message": "Stream reconnect pending"})
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(cancel.wait(), min(30, 2 ** min(retry, 5)))
             retry += 1

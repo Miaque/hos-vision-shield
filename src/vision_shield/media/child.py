@@ -133,6 +133,7 @@ def main():
         retryable = payload["kind"] == "stream" and isinstance(error, RETRYABLE_STREAM_ERRORS)
         code = "storage_full" if isinstance(error, OSError) and error.errno == 28 else "processing_failed"
         emit({"retryable": retryable, "failure_type": type(error).__name__,
+              **({"failure_errno": error.errno} if isinstance(getattr(error, "errno", None), int) else {}),
               "failure_at": [f"{frame.name}:{frame.lineno}" for frame in traceback.extract_tb(error.__traceback__)],
               "error": {"code": code, "message": code.replace("_", " ")}})
         sys.exit(1)
