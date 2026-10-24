@@ -567,3 +567,26 @@ P50/P95/P99=0.031/0.093/0.109 秒，最大 0.125 秒；独立十秒包采样 248
 音频恢复或正式质量门槛。继续使用现有两路时，g3 约 15 FPS 仍只能作稳定性观察；正式
 吞吐仍需足帧率源。5 Mbps 上限保留为实验候选，回退到 `exp-20261024-a-live-integrity-01`
 即可移除该上限而保留摘要诊断。
+
+### g3 外部 RTMP/HTTPS FLV 地址尝试（无码率上限）
+
+用户要求将 g3 推送到外部 RTMP `vp.yjgl.site/rfm_private/555555`，再从对应的
+`/rfm_private/555555.live.flv` HTTPS 地址播放，并明确要求本次不调整码率。
+先确认活动任务为零，再按原授权标签命令部署无 5 Mbps 上限的
+`exp-20261024-a-live-integrity-01` / `b032cfb`；该版本仍保留 video-only、GOP 约一秒、
+非递增时钟修复和 VCL 摘要，未启用 `maxrate/bufsize=5000000`。
+
+随后只创建一个带幂等键的 g3 任务 `fdd0c9c9-4b2d-446f-8cf7-9948f2e1c0a1`，
+目标配置为用户指定的 RTMP 路径（凭据不写入仓库或报告）。任务启动即进入
+`connecting`，错误为 `source_unreachable / Stream reconnect pending`，当前 attempt
+输入/编码帧均为 0；没有到达编码器，也没有证据证明 RTMP 服务器收到推流。
+
+直接请求用户给出的 HTTPS FLV 地址，状态为 HTTP 404、`text/html`、233 字节。
+因此本次 404 与上游没有成功推流相符，不能判断 FLV 播放地址在成功推流时是否可用。
+任务已按原 ID 停止，最终 stopped，活动任务为零。证据目录
+`data/validation/route-a-g3-external-rtmp-20261024-01/` 保存提交范围、HTTP 结果和终态；
+不保存目标 token。
+
+本次确认了“可以不调整码率上线”的部署路径，但没有完成外部 RTMP/FLV 的端到端验证，
+根因仍是 g3 源当前不可达。待 g3 源恢复后，应复用同一无码率上限 tag、重新生成新的
+幂等键，再验证 RTMP 任务进入 running、外部 FLV 返回视频内容并实际解码；不能复用已停止 ID。
