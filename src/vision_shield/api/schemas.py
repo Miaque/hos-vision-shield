@@ -2,7 +2,7 @@ from datetime import timedelta, timezone
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer, WithJsonSchema
+from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer, WithJsonSchema
 
 
 UTC8 = timezone(timedelta(hours=8))
@@ -63,7 +63,8 @@ class StreamStats(BaseModel):
     audio_queue_bytes: int = Field(ge=0)
     failed_frames: int = Field(ge=0)
     protected_frames: int = Field(ge=0)
-    recent_outputs: list[StreamOutputSample] = Field(max_length=512)
+    # Redis Lua cjson round-trips an empty array as an empty object.
+    recent_outputs: Annotated[list[StreamOutputSample], BeforeValidator(lambda value: [] if value == {} else value)] = Field(max_length=512)
 
 
 class Stats(BaseModel):

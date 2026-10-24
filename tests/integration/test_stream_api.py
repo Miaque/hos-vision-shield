@@ -73,6 +73,14 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
             from vision_shield.media.stream_metrics import StreamMetrics
 
             metrics = StreamMetrics()
+            empty_stats = dict(input_frames=0, queue_frames=0, audio_queue_bytes=0,
+                               failed_frames=0, protected_frames=0, **metrics.snapshot())
+            await on_event(dict(stats=dict(processed_frames=0, dropped_frames=0, elapsed_seconds=0,
+                                          stream=empty_stats)))
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+                response = await client.get('/v1/tasks/' + task['id'])
+                assert response.status_code == 200
+                assert response.json()['stats']['stream']['recent_outputs'] == []
             metrics.submit(SimpleNamespace(pts=0, time_base=Fraction(1, 1000)), 10.0, Fraction(9))
             metrics.written(Fraction(0), 10.25)
             stream_stats = dict(input_frames=3, queue_frames=0, audio_queue_bytes=0,
