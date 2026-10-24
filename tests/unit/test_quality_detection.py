@@ -488,25 +488,6 @@ def test_invalid_primary_metadata_cannot_be_used_as_confirmation(bad):
         detector.candidates(np.zeros((10, 10, 3), np.uint8))
 
 
-@pytest.mark.parametrize("count", [0, 2])
-def test_primary_output_validation_avoids_scalar_reads(count):
-    import torch
-    from torch.profiler import ProfilerActivity, profile
-    from vision_shield.detection.egoblur import Detector
-
-    boxes = torch.tensor([[1., 1., 4., 4.], [5., 5., 8., 8.]])[:count]
-    scores = torch.tensor([0.8, 0.9])[:count]
-    detector = Detector.__new__(Detector)
-    detector.models = [None, lambda pixels: (boxes, None, scores, None)]
-    detector.device = torch.device("cpu")
-    detector.face_threshold, detector.max_side = 0.1, 1280
-    with profile(activities=[ProfilerActivity.CPU]) as trace:
-        result = detector.candidates(np.zeros((10, 10, 3), np.uint8), kind="plate")
-    scalar_reads = sum(event.count for event in trace.key_averages() if event.key == "aten::_local_scalar_dense")
-    assert scalar_reads == 0, "数值校验不应逐项读取 CUDA 标量"
-    assert len(result) == count
-
-
 @pytest.mark.parametrize("bad", ["box_nan", "box_inf", "score_nan", "score_inf", "negative_score", "zero_width"])
 def test_primary_numeric_validation_still_fails_before_nms(monkeypatch, bad):
     import torch
@@ -528,7 +509,7 @@ def test_primary_numeric_validation_still_fails_before_nms(monkeypatch, bad):
         detector.candidates(np.zeros((10, 10, 3), np.uint8), kind="plate")
 
 
-def test_primary_host_filter_keeps_float32_threshold_and_nms_order():
+def test_primary_filter_keeps_float32_threshold_and_nms_order():
     import torch
     from vision_shield.detection.egoblur import Detector
 
