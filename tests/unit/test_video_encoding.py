@@ -24,13 +24,14 @@ def test_file_encoding_keeps_quality_target_and_uses_available_source_rate(sourc
         assert "maxrate" not in video.options and "bufsize" not in video.options
 
 
-def test_live_encoding_keeps_its_low_latency_options():
+@pytest.mark.parametrize('rate,gop', [(Fraction(25), 25), (None, 25), (Fraction(30000, 1001), 30)])
+def test_live_encoding_keeps_its_low_latency_options(rate, gop):
     video = SimpleNamespace(codec_context=SimpleNamespace())
     writer = SimpleNamespace(add_stream=Mock(return_value=video))
     frame = SimpleNamespace(width=320, height=240, time_base=Fraction(1, 90000))
-    add_video(writer, frame, SimpleNamespace(average_rate=Fraction(25)), live=True)
+    add_video(writer, frame, SimpleNamespace(average_rate=rate), live=True)
     assert video.options == {"preset": "ultrafast", "tune": "zerolatency", "bf": "0"}
-    assert video.codec_context.gop_size == 1
+    assert video.codec_context.gop_size == gop
 
 
 def test_cuda_file_encoding_uses_nvenc_on_the_selected_device(monkeypatch):
@@ -81,4 +82,4 @@ def test_cuda_frames_go_directly_to_nvenc_with_the_selected_context_and_color_me
     assert video.options["tune"] == ("ull" if live else "hq")
     assert video.options["bf"] == ("0" if live else "3")
     if live:
-        assert video.codec_context.gop_size == 1
+        assert video.codec_context.gop_size == 15

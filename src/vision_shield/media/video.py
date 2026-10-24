@@ -76,8 +76,8 @@ def add_video(writer, frame, source, live=False, *, device="cpu"):
         video.options = ({"preset": "ultrafast", "tune": "zerolatency", "bf": "0"} if live
                          else {"preset": "slow", "crf": "23"})
     if live:
-        # New readers must be able to decode immediately.
-        video.codec_context.gop_size = 1
+        # Bound join time without sending a bandwidth-heavy keyframe for every picture.
+        video.codec_context.gop_size = max(1, round(float(source.average_rate or 25)))
     else:
         if source.bit_rate and source.bit_rate > 0:
             # 保留质量目标，以源平均码率的 115% 设两秒 VBV；不是文件大小硬上限。

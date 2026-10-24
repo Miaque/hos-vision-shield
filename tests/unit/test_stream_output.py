@@ -107,6 +107,9 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
     else:
         assert opened["options"]["rtsp_transport"] == "tcp"
     with original_open(str(target)) as reader:
+        packets = [p for p in reader.demux(video=0) if p.size]
+        assert len(packets) == 12 and 0 < sum(p.is_keyframe for p in packets) < 12
+    with original_open(str(target)) as reader:
         assert reader.streams.video[0].codec_context.name == "h264"
         output_audio = reader.streams.audio
         assert bool(output_audio) is bool(audio_codec)
