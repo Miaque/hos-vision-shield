@@ -72,6 +72,9 @@ def add_video(writer, frame, source, live=False, *, device="cpu"):
         video.bit_rate = 0
         video.options = {"preset": "p6", "tune": "ull" if live else "hq", "rc": "vbr", "cq": "19",
                          "gpu": str(torch.cuda.current_device()), "bf": "0" if live else "3"}
+        if live:
+            # shortcut: fixed 5 Mbps trial; revisit per-source limits after playback and quality validation.
+            video.options.update(maxrate="5000000", bufsize="5000000")
     else:
         video.options = ({"preset": "ultrafast", "tune": "zerolatency", "bf": "0"} if live
                          else {"preset": "slow", "crf": "23"})
