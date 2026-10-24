@@ -624,3 +624,26 @@ timestamp_repairs=0，初始无 PTS 规则产生四帧差异，任务随后 stop
 该短段未达到 20 Mbps 上限，不能据此判断复杂画面的峰值行为。对应 HTTPS FLV 实际解码
 30 帧，3840×1080，无缺 PTS 或非递增 PTS，P95 帧间隔 0.031 秒、最大 0.047 秒。
 证据目录 `data/validation/route-a-g3-bitrate-param-20261024-01/` 保存服务端和播放结果。
+
+### 默认无码率双路长测
+
+为验证省略 `max_bitrate` 的默认行为，使用已部署 `a7d6731` /
+`exp-20261024-a-bitrate-control-01` 启动双路稳定性观察，g3 使用已验证的外部 RTMP
+路径，rfm 使用默认 RTSP 输出；请求中没有 `max_bitrate`。证据
+`data/validation/route-a-long-default-20261024-01/`，任务为 g3
+`36bbf12f-ba6d-4dc1-ab99-dcfef859d512`、rfm `5d2c1967-4098-4631-b5ea-b53c031d45a1`。
+
+客户端观察约 1860 秒，最终按原 ID 停止、活动任务为零。rfm 为单一 attempt，持续
+1849.829 秒，input=46266、encoded=46265、failed=0、timestamp_repairs=0，最终
+queue=0、pending_encoder=0；但完整十秒窗口 FPS 范围为 4.6–40.7，含低于 20 FPS
+窗口，不能作为正式吞吐通过。g3 分为三个有效 attempt：125.989 秒/1544 帧、
+733.661 秒/8844 帧、911.880 秒/10574 帧；中间发生两次 source reconnect，不能拼成
+连续 30 分钟。三个 attempt 的窗口范围分别为 11.2–12.9、0.5–25.0、1.4–25.2 FPS，
+时钟修复计数为 0/24/1，failed 均为 0；最终 g3 queue=2、pending_encoder=0，初始
+无 PTS dropped=1。
+
+一次长测期间的并发播放采样仍能解码 g3 3840×1080 和 rfm 640×480；g3 30 帧 P95
+到达间隔 0.063 秒，rfm 30 帧无缺 PTS。资源快照从模型加载后的约 2.15–2.18 GB
+流 worker 内存、约 4.57 GB GPU 显存继续到结束约 2.25 GB、4.71 GB；采样没有证明
+无限增长，但源重连和窗口低 FPS 已足以否定正式验收。全部结果只证明默认不设码率上限
+的任务可长时间运行并可恢复，未达到双路每路 20 FPS、连续 30 分钟和质量门槛。
