@@ -1,8 +1,23 @@
 """Bounded, uniquely clocked output samples; consumers detect gaps by sequence."""
 
 from collections import deque
+import hashlib
+import re
 import time
 from uuid import uuid4
+
+
+def vcl_digest(payload):
+    """Hash H.264 picture NALs across Annex B prefix and RTP parameter-set changes."""
+    units = [unit.rstrip(b'\x00') for unit in re.split(b'\x00\x00\x00?\x01', payload)[1:]
+             if unit and unit[0] & 31 in (1, 5)]
+    if not units:
+        return None
+    digest = hashlib.sha256()
+    for unit in units:
+        digest.update(len(unit).to_bytes(4, 'big'))
+        digest.update(unit)
+    return digest.hexdigest()
 
 
 class StreamMetrics:
@@ -21,7 +36,7 @@ class StreamMetrics:
         self.pending[moment] = (received_at, str(source_pts), str(source_pts if timeline_pts is None else timeline_pts), timestamp_repaired)
         self.repairs += timestamp_repaired
 
-    def written(self, moment, now):
+    def written(self, moment, now, *, encoded_bytes=None, encoded_vcl_sha256=None):
         """Call only after mux succeeds; mux may mutate packet PTS/time_base."""
         self.packets += 1
         sample = self.pending.pop(moment, None)
@@ -32,6 +47,7 @@ class StreamMetrics:
         self.frames += 1
         self.missing_receive += received_at is None
         self.outputs.append(dict(sequence=self.frames, source_pts=source_pts, timeline_pts=timeline_pts, timestamp_repaired=repaired,
+            encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256,
             received_monotonic=received_at, encoded_monotonic=now,
             latency_seconds=None if received_at is None else now - received_at))
 

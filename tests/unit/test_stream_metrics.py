@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from vision_shield.media.stream_metrics import StreamMetrics
+from vision_shield.media.stream_metrics import StreamMetrics, vcl_digest
 
 
 def frame(pts):
@@ -22,7 +22,26 @@ def test_only_unique_written_frames_count_and_keep_receive_latency():
     assert result['unmatched_packets'] == 2 and result['pending_encoder_frames'] == 0
     assert result['timestamp_repairs'] == 0
     assert result['recent_outputs'] == [dict(sequence=1, source_pts='2251/25', timeline_pts='2251/25', timestamp_repaired=False,
+        encoded_bytes=None, encoded_vcl_sha256=None,
         received_monotonic=10.0, encoded_monotonic=10.25, latency_seconds=0.25)]
+
+
+def test_vcl_hash_ignores_annexb_prefixes_parameter_sets_and_padding_but_detects_image_byte_changes():
+    first = b'\x00\x00\x00\x01\x67sps\x00\x00\x00\x01\x65image\x00\x00'
+    same = b'\x00\x00\x01\x68pps\x00\x00\x01\x65image'
+    assert vcl_digest(first) == vcl_digest(same)
+    assert vcl_digest(first) != vcl_digest(same + b'x')
+    assert vcl_digest(b'\x00\x00\x01\x67sps') is None
+    assert vcl_digest(b'') is None
+
+
+def test_encoded_packet_evidence_survives_output_sample():
+    metrics = StreamMetrics()
+    metrics.submit(frame(40), 10.0, Fraction(1))
+    digest = vcl_digest(b'\x00\x00\x01\x65image')
+    metrics.written(Fraction(40,1000),10.25,encoded_bytes=9,encoded_vcl_sha256=digest)
+    sample = metrics.snapshot()['recent_outputs'][0]
+    assert sample['encoded_bytes'] == 9 and sample['encoded_vcl_sha256'] == digest
 
 
 def test_missing_receive_clock_is_explicit_and_samples_are_bounded():

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+import av
 import torch
 
 from vision_shield.config import Settings
@@ -85,7 +86,8 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             return pending
         if fault == "encode":
             raise RuntimeError("encode failed")
-        packet = SimpleNamespace(pts=frame.pts, time_base=frame.time_base)
+        packet = av.Packet(b'\x00\x00\x00\x01\x65picture')
+        packet.pts, packet.time_base = frame.pts, frame.time_base
         if delayed:
             pending.append(packet)
             return []

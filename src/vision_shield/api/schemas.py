@@ -46,6 +46,8 @@ class StreamOutputSample(BaseModel):
     source_pts: str
     timeline_pts: str | None = None
     timestamp_repaired: bool = False
+    encoded_bytes: int | None = Field(default=None, ge=0)
+    encoded_vcl_sha256: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
     received_monotonic: float | None
     encoded_monotonic: float
     latency_seconds: float | None

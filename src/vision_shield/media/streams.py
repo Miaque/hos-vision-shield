@@ -11,7 +11,7 @@ import av
 import httpx
 
 from vision_shield.media.video import add_video, check_streams, check_dimensions, masked_frame
-from vision_shield.media.stream_metrics import StreamMetrics
+from vision_shield.media.stream_metrics import StreamMetrics, vcl_digest
 from vision_shield.redaction import FrameRedactor
 from vision_shield.detection.timing import snapshot
 if TYPE_CHECKING:
@@ -173,13 +173,14 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         nonlocal failed_frames, processing
         # Capture the encoder clock before mux rescales it (notably FLV milliseconds).
         moment = packet.pts * packet.time_base if packet.pts is not None and packet.time_base is not None else None
+        encoded_bytes, encoded_vcl_sha256 = packet.size, vcl_digest(bytes(packet))
         try:
             writer.mux(packet)
         except Exception:
             failed_frames += 1
             processing = False
             raise
-        metrics.written(moment, time.monotonic())
+        metrics.written(moment, time.monotonic(), encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256)
 
     try:
         options = {"rtsp_transport": "tcp"}
