@@ -101,6 +101,22 @@ class ProfileTimes:
         self.views, self.device_samples = defaultdict(Counter), []
         self.frames = 0
         self.measurements = 0
+        self.candidates, self.candidate_bytes, self.candidates_truncated = [], 0, False
+
+    def record_candidates(self, stage, detections):
+        context = CONTEXT.get()
+        if context.get("purpose") != "discovery" or not 1 <= context.get("frame", 0) <= 32:
+            return
+        row = dict(stage=stage, frame=context["frame"], source_seconds=context.get("source_seconds"),
+                   detections=[dict(kind=d.kind, box=[float(v) for v in d.box], score=float(d.score)) for d in detections])
+        size = len(json.dumps(row).encode("utf-8"))
+        with self.lock:
+            # Keep the diagnostic event within the child pipe limit; short clips target later source frames.
+            if self.candidate_bytes + size > 64 * 1024:
+                self.candidates_truncated = True
+                return
+            self.candidates.append(row)
+            self.candidate_bytes += size
 
     @contextmanager
     def measure(self, name):
@@ -166,6 +182,8 @@ class ProfileTimes:
                     host_groups=[dict(stage=name, origin=origin, purpose=purpose, view=view, **statistics(values))
                                  for (name, origin, purpose, view), values in sorted(self.groups.items())],
                     views={name: dict(counts) for name, counts in self.views.items()}, device_samples=self.device_samples,
+                    candidate_evidence=dict(first_frames=32, byte_limit=64 * 1024,
+                                            truncated=self.candidates_truncated, rows=self.candidates),
                     notes=["Host-wall scopes include submission/waits; they are not GPU kernel time.",
                            "Nested/concurrent stages must not be summed into total time.",
                            "Steady means calls after the first 10 per group; new input shapes may still initialize.",
@@ -194,7 +212,9 @@ def instrument_candidates(model, name, collector):
         with scope(model_group=name, source_shape=list(pixels.shape), mirror=mirror,
                    view="mixed" if batched_views else "global", batched_candidate_regions=regions, **mixed):
             with collector.measure(f"candidate-{name}"):
-                return original(pixels, *args, **kwargs)
+                result = original(pixels, *args, **kwargs)
+            collector.record_candidates(name, result)
+            return result
 
     model.candidates = candidates
     if hasattr(model, "_views"):
@@ -299,7 +319,10 @@ def instrument(stack, collector):
                 if purpose == "track-confirm":
                     metadata["origin"] = purpose
             with scope(**metadata), collector.measure(stage):
-                return original(instance, *args, **kwargs)
+                result = original(instance, *args, **kwargs)
+                if stage == "quality-detection":
+                    collector.record_candidates("accepted", result)
+                return result
 
         stack.enter_context(patch.object(owner, name, wrapped))
 

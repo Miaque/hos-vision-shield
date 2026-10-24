@@ -9,6 +9,7 @@ import pytest
 
 
 from vision_shield.detection import host_profile as profile
+from vision_shield.detection import Detection
 
 def test_parallel_scopes_keep_frame_view_and_actual_forward_counts(tmp_path):
     collector = profile.ProfileTimes(tmp_path, clock=iter(range(20)).__next__)
@@ -55,21 +56,24 @@ def test_views_and_local_mirror_are_distinguished_without_extra_calls(tmp_path):
                         with collector.measure("forward-detail-face"):
                             pass
                     pool.submit(run).result()
-            return [kind]
+            return [Detection(kind, (1, 2, 3, 4), 0.5)]
 
     model = Model()
     profile.instrument_candidates(model, "detail", collector)
     with profile.scope(frame=1, purpose="discovery"):
-        assert model.candidates(SimpleNamespace(shape=(1080, 3840, 3)), kind="face") == ["face"]
+        assert model.candidates(SimpleNamespace(shape=(1080, 3840, 3)), kind="face")[0].kind == "face"
     with profile.scope(frame=2, purpose="local-confirm", local_calls={}):
         for _ in range(2):
-            assert model.candidates(SimpleNamespace(shape=(320, 320, 3)), kind="face") == ["face"]
+            assert model.candidates(SimpleNamespace(shape=(320, 320, 3)), kind="face")[0].kind == "face"
     collector.close()
     rows = [json.loads(line) for line in (tmp_path / "calls.jsonl").read_text().splitlines()]
     assert len(rows) == 6
     assert [row["view"] for row in rows[:2]] == ["global", "tile"]
     assert [row["mirror"] for row in rows[2:]] == [False, False, True, True]
     assert collector.report(2)["views"]["discovery"]["tile"] == 1
+    evidence = collector.report(2)["candidate_evidence"]["rows"]
+    assert len(evidence) == 1 and evidence[0]["stage"] == "detail"
+    assert evidence[0]["detections"][0]["score"] == 0.5
 
 
 def test_statistics_keep_first_and_warmup_separate():
@@ -80,6 +84,28 @@ def test_statistics_keep_first_and_warmup_separate():
     assert summary["p95_ms"] == pytest.approx(19.05)
     assert summary["steady_after_10_calls"]["calls"] == 10
     assert summary["steady_after_10_calls"]["p50_ms"] == 15.5
+
+
+def test_candidate_evidence_is_bounded_and_keeps_empty_discovery_results(tmp_path):
+    collector = profile.ProfileTimes(tmp_path)
+    detections = [Detection("face", (1, 2, 30, 40), 0.25)]
+    with profile.scope(frame=1, source_seconds=51.833, purpose="discovery"):
+        collector.record_candidates("primary", detections)
+        collector.record_candidates("detail", [])
+    with profile.scope(frame=1, purpose="local-confirm"):
+        collector.record_candidates("primary", detections)
+    with profile.scope(frame=33, purpose="discovery"):
+        collector.record_candidates("primary", detections)
+    evidence = collector.report(33)["candidate_evidence"]
+    assert len(evidence["rows"]) == 2
+    assert evidence["rows"][0]["detections"] == [{"kind": "face", "box": [1, 2, 30, 40], "score": 0.25}]
+    assert evidence["rows"][0]["source_seconds"] == 51.833
+    assert evidence["rows"][1]["detections"] == []
+    with profile.scope(frame=2, purpose="discovery"):
+        collector.record_candidates("primary", detections * 2000)
+    assert collector.report(33)["candidate_evidence"]["truncated"]
+    assert len(collector.report(33)["candidate_evidence"]["rows"]) == 2
+    collector.close()
 
 
 def test_batched_view_forward_is_not_attributed_to_the_last_tile(tmp_path):
