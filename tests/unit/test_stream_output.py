@@ -3,6 +3,8 @@
 import threading
 import time
 import os
+from fractions import Fraction
+from types import SimpleNamespace
 
 import av
 import numpy as np
@@ -116,3 +118,67 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
     if audio_codec:
         with original_open(str(target)) as reader:
             assert sum(frame.samples for frame in reader.decode(audio=0)) > 0
+
+
+@pytest.mark.parametrize('clocks,duration,expected', [
+    ([10000, 11000, 11000, 9000, 10000], 0, [10000, 11000, 12000, 13000, 14000]),
+    ([10000, 10000, 11000], 1000, [10000, 11000, 12000]),
+    ([10000, 10000], 0, None),
+])
+def test_realtime_clock_repair_keeps_independent_pictures_and_raw_clocks(tmp_path, monkeypatch, clocks, duration, expected):
+    target = tmp_path / 'repaired.nut'
+    source_video = SimpleNamespace(type='video', width=64, height=48, average_rate=None,
+                                   codec_context=SimpleNamespace(name='h264'))
+    frames = []
+    for index, pts in enumerate(clocks):
+        frame = av.VideoFrame.from_ndarray(np.full((48, 64, 3), 80 + index * 25, dtype=np.uint8), format='rgb24')
+        frame.pts, frame.time_base, frame.duration = pts, Fraction(1, 12000), duration
+        frames.append(frame)
+
+    class Reader:
+        streams = SimpleNamespace(video=[source_video], audio=[])
+
+        def demux(self):
+            for frame in frames:
+                yield SimpleNamespace(stream=source_video, pts=frame.pts, time_base=frame.time_base,
+                                      decode=lambda frame=frame: [frame])
+
+        def close(self):
+            pass
+
+    original_open = av.open
+    monkeypatch.setattr(streams.av, 'open', lambda url, *args, **kwargs: Reader()
+                        if url.startswith('rtsp://camera/') else original_open(str(target), 'w', format='nut'))
+
+    class Detector:
+        def detect(self, pixels):
+            return [(0, 0, 32, 48)]
+
+    events = []
+    config = Settings(_env_file=None).model_dump()
+    config['inference_device'] = 'cpu'
+    def run():
+        streams.process_stream('rtsp://camera/source', 'rtsp://output/test', Detector(), config,
+                               threading.Event(), events.append)
+
+    if expected is None:
+        with pytest.raises(BufferError, match='frame interval'):
+            run()
+        assert events[-1]['stats']['stream']['encoded_frames'] == 1
+        assert events[-1]['stats']['stream']['failed_frames'] == 1
+        return
+    run()
+    stats = events[-1]['stats']
+    metrics = stats['stream']
+    assert stats['dropped_frames'] == metrics['failed_frames'] == metrics['unmatched_packets'] == 0
+    assert metrics['input_frames'] == metrics['encoded_frames'] == len(clocks)
+    assert [s['source_pts'] for s in metrics['recent_outputs']] == [str(Fraction(p, 12000)) for p in clocks]
+    assert [s['timeline_pts'] for s in metrics['recent_outputs']] == [str(Fraction(p, 12000)) for p in expected]
+    assert metrics['timestamp_repairs'] == (2 if len(clocks) == 5 else 1)
+    with original_open(str(target)) as reader:
+        output = list(reader.decode(video=0))
+    assert [f.pts * f.time_base for f in output] == [Fraction(p - expected[0], 12000) for p in expected]
+    for index, frame in enumerate(output):
+        pixels = frame.to_ndarray(format='rgb24')
+        assert pixels[:, :24].mean() < 70
+        assert abs(pixels[:, 40:].mean() - (80 + index * 25)) < 5

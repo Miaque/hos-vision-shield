@@ -14,10 +14,13 @@ from vision_shield.media import cuda_frames, streams
 
 @pytest.mark.parametrize("fault", [None, "decode", "mask", "encode", "mux"])
 @pytest.mark.parametrize("delayed", [False, True])
-def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed):
+@pytest.mark.parametrize("repair", [False, True])
+def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair):
     source_video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
     frames = [SimpleNamespace(width=64, height=48, pts=900000 + 3600 * i, time_base=Fraction(1, 90000))
               for i in range(3)]
+    if repair:
+        frames[-1].pts = frames[-2].pts
     threads, masked, encoded = {}, [], []
     closed = threading.Event()
     accelerator = object()
@@ -121,6 +124,9 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         assert events[-1]["stats"]["processed_frames"] == 3
         assert events[-1]["stats"]["stream"]["encoded_frames"] == 3
         assert events[-1]["stats"]["stream"]["missing_receive_frames"] == 0
+        assert events[-1]["stats"]["stream"]["timestamp_repairs"] == int(repair)
+        assert [s['source_pts'] for s in events[-1]['stats']['stream']['recent_outputs']] == [
+            '10', '251/25', '251/25' if repair else '252/25']
         assert events[-1]["video_decoder"] == "h264_nvdec"
         assert events[-1]["video_encoder"] == "h264_nvenc"
     software_mask.assert_not_called()

@@ -83,6 +83,37 @@ def test_latency_above_threshold_is_not_rounded_down():
     assert result['latency_thresholds_met'] is False
 
 
+def test_repaired_timeline_retains_raw_anomalies_without_inflating_frames():
+    row = observation()
+    stream = row['task']['stats']['stream']
+    for index, sample in enumerate(stream['recent_outputs']):
+        sample['timeline_pts'] = sample['source_pts']
+        sample['timestamp_repaired'] = index == 2
+        if index >= 2:
+            sample['source_pts'] = str((index - 1) / 20)
+    stream['timestamp_repairs'] = 1
+    result = evaluate([row])['attempts'][0]
+    assert result['evidence_errors'] == []
+    assert result['raw_nonincreasing_timestamps'] == 1
+    assert result['counters']['timestamp_repairs'] == 1
+    assert result['sample_count'] == 200
+    assert result['all_complete_10s_windows_at_least_20_fps'] is True
+    stream['timestamp_repairs'] = 0
+    assert 'timestamp_repair_counter_mismatch' in evaluate([row])['attempts'][0]['evidence_errors']
+    stream['timestamp_repairs'] = 1
+    stream['recent_outputs'][2]['timestamp_repaired'] = False
+    assert 'unreported_clock_offset_change' in evaluate([row])['attempts'][0]['evidence_errors']
+
+
+def test_unreported_timeline_change_is_rejected():
+    row = observation()
+    for index, sample in enumerate(row['task']['stats']['stream']['recent_outputs']):
+        sample['timeline_pts'] = str(index / 20 + (0.05 if index >= 2 else 0))
+    assert 'unreported_clock_offset_change' in evaluate([row])['attempts'][0]['evidence_errors']
+    row['task']['stats']['stream']['recent_outputs'][2]['timestamp_repaired'] = True
+    assert 'invalid_timestamp_repair' in evaluate([row])['attempts'][0]['evidence_errors']
+
+
 def test_cli_saves_report_and_missing_metrics_are_explicit(tmp_path, monkeypatch):
     row = observation()
     del row['task']['stats']['stream']

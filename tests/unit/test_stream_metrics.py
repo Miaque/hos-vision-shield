@@ -20,7 +20,8 @@ def test_only_unique_written_frames_count_and_keep_receive_latency():
     result = metrics.snapshot()
     assert result['encoded_frames'] == 1 and result['encoded_packets'] == 3
     assert result['unmatched_packets'] == 2 and result['pending_encoder_frames'] == 0
-    assert result['recent_outputs'] == [dict(sequence=1, source_pts='2251/25',
+    assert result['timestamp_repairs'] == 0
+    assert result['recent_outputs'] == [dict(sequence=1, source_pts='2251/25', timeline_pts='2251/25', timestamp_repaired=False,
         received_monotonic=10.0, encoded_monotonic=10.25, latency_seconds=0.25)]
 
 

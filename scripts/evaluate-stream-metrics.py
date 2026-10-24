@@ -47,16 +47,27 @@ def summarize(observations):
         if not math.isfinite(end - start) or end < start:
             raise ValueError('Invalid observation clock')
         seconds = [[] for _ in range(math.floor(end - start))]
-        latencies, drifts = [], []
-        previous_source, previous_output = None, None
+        latencies, drifts, timeline_drifts = [], [], []
+        previous_source, previous_timeline, previous_output, previous_offset = None, None, None, 0
+        repairs = raw_anomalies = 0
         for sample in samples:
             source, output = Fraction(sample['source_pts']), sample['encoded_monotonic']
+            timeline = Fraction(sample.get('timeline_pts') or sample['source_pts'])
+            offset = timeline - source
+            repaired = sample.get('timestamp_repaired', False)
             if not math.isfinite(output) or output < start or output > end:
                 errors.add('invalid_output_clock')
                 continue
-            if previous_source is not None and (source <= previous_source or output < previous_output):
+            if previous_timeline is not None and (timeline <= previous_timeline or output < previous_output):
                 errors.add('nonincreasing_frame_clock')
+            raw_anomalies += previous_source is not None and source <= previous_source
+            if offset != previous_offset and not repaired:
+                errors.add('unreported_clock_offset_change')
+            if repaired and (previous_timeline is None or source + previous_offset > previous_timeline or offset <= previous_offset):
+                errors.add('invalid_timestamp_repair')
+            repairs += repaired
             previous_source, previous_output = source, output
+            previous_timeline, previous_offset = timeline, offset
             received, latency = sample['received_monotonic'], sample['latency_seconds']
             if received is None or latency is None:
                 errors.add('missing_receive_time')
@@ -70,6 +81,10 @@ def summarize(observations):
                 seconds[index].append(sample)
             drifts.append(output - samples[0]['encoded_monotonic']
                           - float(source - Fraction(samples[0]['source_pts'])))
+            timeline_drifts.append(output - samples[0]['encoded_monotonic']
+                                   - float(timeline - Fraction(samples[0].get('timeline_pts') or samples[0]['source_pts'])))
+        if repairs != latest.get('timestamp_repairs', 0):
+            errors.add('timestamp_repair_counter_mismatch')
         for key in ('unmatched_packets', 'missing_receive_frames', 'failed_frames', 'protected_frames'):
             if latest[key]:
                 errors.add(key)
@@ -89,6 +104,9 @@ def summarize(observations):
             fps_per_second=[len(bucket) for bucket in seconds], ten_second_windows=windows,
             latency_seconds=distribution, source_to_output_drift_seconds=percentiles(drifts),
             source_to_output_drift_last_seconds=drifts[-1] if drifts else None,
+            raw_nonincreasing_timestamps=raw_anomalies,
+            timeline_to_output_drift_seconds=percentiles(timeline_drifts),
+            timeline_to_output_drift_last_seconds=timeline_drifts[-1] if timeline_drifts else None,
             all_complete_10s_windows_at_least_20_fps=(all(w['fps'] >= 20 for w in windows)
                                                     if windows and not errors else None),
             latency_thresholds_met=(distribution['p95'] <= 2 and distribution['p99'] <= 5

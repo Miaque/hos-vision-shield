@@ -1,6 +1,7 @@
 """One RTSP input, bounded FIFO backpressure, and one output mux owner."""
 
 from collections import deque
+from math import floor
 import threading
 import time
 from collections.abc import Callable
@@ -143,6 +144,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     reader = threading.Thread(target=read_source, daemon=True)
     reader.start()
     count, origin, previous = 0, None, None
+    previous_source, step, clock_offset = None, None, 0
     started = time.monotonic()
     last_output_report = None
     frame_seconds = encode_seconds = 0.0
@@ -194,9 +196,23 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             while sample := buffer.take():
                 frame, packets = sample
                 processing = True
+                source_moment = frame.pts * frame.time_base
+                if previous_source is not None and source_moment > previous_source:
+                    step = source_moment - previous_source
+                previous_source = source_moment
+                frame.pts = round((source_moment + clock_offset) / frame.time_base)
                 moment = frame.pts * frame.time_base
-                if previous is not None and moment <= previous:
-                    raise BufferError("Stream clock moved backwards")
+                repaired = previous is not None and moment <= previous
+                if repaired:
+                    if buffer.input_audio:
+                        raise BufferError("Cannot repair video clock with audio")
+                    duration = getattr(frame, "duration", 0) * frame.time_base or step
+                    if duration is None or duration <= 0:
+                        raise BufferError("Cannot repair clock without a frame interval")
+                    # Keep independent pictures; retain the resulting offset until the next discontinuity.
+                    frame.pts = floor(previous / frame.time_base) + max(1, round(duration / frame.time_base))
+                    moment = frame.pts * frame.time_base
+                    clock_offset = moment - source_moment
                 previous = moment
                 if origin is None:
                     origin = moment
@@ -230,7 +246,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         packet.stream = audio
                         writer.mux(packet)
                 published = False
-                metrics.submit(output, buffer.last_received, moment)
+                metrics.submit(output, buffer.last_received, source_moment, timeline_pts=moment, timestamp_repaired=repaired)
                 for packet in video.encode(output):
                     mux_video(packet)
                     published = True

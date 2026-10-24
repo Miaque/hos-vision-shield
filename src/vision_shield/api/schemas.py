@@ -44,6 +44,8 @@ class TaskError(BaseModel):
 class StreamOutputSample(BaseModel):
     sequence: int = Field(ge=1)
     source_pts: str
+    timeline_pts: str | None = None
+    timestamp_repaired: bool = False
     received_monotonic: float | None
     encoded_monotonic: float
     latency_seconds: float | None
@@ -63,6 +65,7 @@ class StreamStats(BaseModel):
     audio_queue_bytes: int = Field(ge=0)
     failed_frames: int = Field(ge=0)
     protected_frames: int = Field(ge=0)
+    timestamp_repairs: int = Field(default=0, ge=0)
     # Redis Lua cjson round-trips an empty array as an empty object.
     recent_outputs: Annotated[list[StreamOutputSample], BeforeValidator(lambda value: [] if value == {} else value)] = Field(max_length=512)
 
