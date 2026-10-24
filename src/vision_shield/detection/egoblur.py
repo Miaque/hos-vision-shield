@@ -11,7 +11,12 @@ from vision_shield.detection import Detection
 from vision_shield.detection.timing import measure
 
 
-def _async_device_moves(model):
+@torch.jit.script
+def _single_image_boxes(boxes: torch.Tensor):
+    return torch.cat((torch.zeros_like(boxes[:, :1]), boxes), 1)
+
+
+def _plate_forward(model):
     # shortcut: fixed Gen1/TorchScript internals; revalidate the graph and APIs on model or PyTorch upgrades.
     graph = model.inlined_graph.copy()
     moves = [node for node in graph.findAllNodes("aten::to")
@@ -22,8 +27,27 @@ def _async_device_moves(model):
         asynchronous = graph.insertConstant(True)
     for node in moves:
         node.replaceInput(3, asynchronous)
+    formats = []
+    for node in graph.findAllNodes("aten::cat"):
+        columns = list(node.inputsAt(0).node().inputs())
+        if len(columns) != 2 or columns[0].node().kind() != "aten::unsqueeze":
+            continue
+        index = columns[0].node().inputsAt(0).node()
+        while index.kind() == "aten::slice":
+            index = index.inputsAt(0).node()
+        if index.kind() == "aten::repeat_interleave":
+            formats.append((node, columns[1]))
+    if len(formats) != 1 or len(graph.findAllNodes("aten::repeat_interleave")) != 1:
+        raise RuntimeError("Unexpected Gen1 single-image pooler graph")
+    node, boxes = formats[0]
+    # Gen1 consumes one image; each original ROI's batch index is zero, including an empty set.
+    with graph.insert_point_guard(node):
+        formatted, = graph.insertGraph(_single_image_boxes.graph, [boxes])
+    node.output().replaceAllUsesWith(formatted)
+    node.destroy()
+    torch._C._jit_pass_dce(graph)
     graph.lint()
-    return torch._C._create_function_from_graph("plate_async_device_moves", graph)
+    return torch._C._create_function_from_graph("plate_inference_forward", graph)
 
 
 class _HalfPlate(torch.nn.Module):
@@ -37,7 +61,7 @@ class _HalfPlate(torch.nn.Module):
         model.half()
         core.pixel_mean, core.pixel_std = mean, std
         # Internal transfers target CUDA; their consumers remain ordered on the model stream.
-        self._forward = _async_device_moves(model)
+        self._forward = _plate_forward(model)
 
     def forward(self, pixels):
         with torch.autocast("cuda", dtype=torch.float16):
