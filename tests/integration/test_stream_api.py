@@ -89,6 +89,12 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
                 assert response.status_code == 200
                 assert response.json()['stats']['stream'] == stream_stats
             await store.request_stop(task["id"], "stopped")
+            await on_event(dict(failure_type="BufferError", failure_at=["process_stream:200"],
+                                error={"message": "rtsp://private/?token=secret"}))
+            failure = (await store.get(task["id"]))["media_failure"]
+            assert failure["type"] == "BufferError" and failure["at"] == ["process_stream:200"]
+            assert failure["generation"] == owned["generation"]
+            assert "secret" not in str(failure)
             cancel.set()
             if on_exit:
                 await on_exit()
@@ -99,6 +105,24 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
         current = await store.get(task["id"])
         assert current["state"] == "stopped" and not current["publish_allowed"]
         assert current["publish_url"] == target and not current["sessions"]
+
+
+async def test_stream_failure_diagnostics_are_available_without_exposing_source(tmp_path):
+    from unittest.mock import AsyncMock
+
+    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    failure = dict(type="BufferError", at=["process_stream:200"], generation=1, observed_at_unix=1.0)
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://test"
+    ) as client:
+        app.state.store.get = AsyncMock(return_value=dict(kind="stream", media_failure=failure,
+                                                         source_ref="rtsp://private/?token=secret"))
+        path = '/v1/tasks/00000000-0000-0000-0000-000000000001/diagnostics'
+        response = await client.get(path)
+        assert response.status_code == 200
+        assert response.json() == {"mode": "stream", "last_failure": failure}
+        assert 'secret' not in response.text
+        assert (await client.get(path + '?sample=64')).status_code == 409
 
 
 @pytest.mark.parametrize("headers", [

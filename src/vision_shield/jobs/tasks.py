@@ -156,6 +156,9 @@ async def run_stream(record, store, settings, cancel, owner, generation):
                     if event.get("failure_type"):
                         logging.getLogger(__name__).warning("task=%s media failure type=%s at=%s", task_id, event["failure_type"], event.get("failure_at"))
                     values = {}
+                    if event.get("failure_type"):
+                        values["media_failure"] = dict(type=event["failure_type"], at=event.get("failure_at", []),
+                                                       generation=generation, observed_at_unix=time.time())
                     if event.get("output"):
                         # 父子进程共享单调时钟，管道积压不能把陈旧输出改成新鲜证明。
                         age_ms = max(0, int((time.monotonic() - event["output_monotonic"]) * 1000))
