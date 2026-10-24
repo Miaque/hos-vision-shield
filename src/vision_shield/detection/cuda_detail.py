@@ -120,6 +120,8 @@ class Detector(CPUDetector):
             if len(self.face_sessions) == 4:
                 self.face_sessions.pop(next(iter(self.face_sessions)))
             self.face_sessions[key] = session
+        # Keep recurring full-frame sessions hot while local confirmation shapes change.
+        self.face_sessions[key] = self.face_sessions.pop(key)
         return self.face_sessions[key]
 
     def candidates(self, rgb, *, kind=None):

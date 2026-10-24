@@ -83,6 +83,12 @@ def test_fixed_face_sessions_keep_dimensions_device_and_bounded_lifetime(monkeyp
         detector._face_session(height, 1280)
     assert len(detector.face_sessions) == 4 and (384, 1280) not in detector.face_sessions
     assert len(created) == 5 and all(session.disabled for session in created)
+    hot = detector._face_session(512, 1280)
+    for height in (544, 576, 608, 640):
+        assert detector._face_session(512, 1280) is hot
+        detector._face_session(height, 1280)
+    assert detector._face_session(512, 1280) is hot
+    assert len(detector.face_sessions) == 4
 
 
 @pytest.mark.parametrize("count,fault,parallel,kind", [(2, False, True, None), (4, False, True, None),

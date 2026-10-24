@@ -43,6 +43,8 @@ class Detector(EgoBlurDetector):
             if len(self.sessions) == 4:
                 self.sessions.pop(next(iter(self.sessions)))
             self.sessions[key] = session
+        # Keep recurring full-frame sessions hot while local confirmation shapes change.
+        self.sessions[key] = self.sessions.pop(key)
         return self.sessions[key]
 
     def proposals(self, rgb):

@@ -145,6 +145,12 @@ def test_session_cache_is_bounded_and_rejects_cpu_fallback(monkeypatch, tmp_path
     assert len(instance.sessions) == 4 and (160, 160) not in instance.sessions
     assert all(s.fallback_disabled for s in created)
     assert all(s.provider_device == 2 for s in created), "新线程的默认卡不能覆盖已选GPU"
+    hot = instance._session(288, 288)
+    for side in (320, 352, 384, 416):
+        assert instance._session(288, 288) is hot
+        instance._session(side, side)
+    assert instance._session(288, 288) is hot
+    assert len(instance.sessions) == 4
 
 
 def test_empty_faces_and_outside_boxes_never_mask_unrelated_pixels(monkeypatch):
