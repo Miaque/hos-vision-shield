@@ -153,8 +153,19 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
         if "ended_at_unix" not in previous:
             previous.update(reason="worker_lost", phase="worker_control", ended_at_unix=time.time())
 
+    async def persist_ending():
+        attempt.update(ending, ended_at_unix=time.time())
+        await store.update_owned(task_id, owner, generation, stream_attempts=history,
+                                 stream_attempts_discarded=discarded)
+
     async def child_exited():
         nonlocal phase
+        if cancel.is_set():
+            ending.update(cancellation or dict(reason="control_cancelled", phase="worker_control"))
+        elif not ending:
+            ending.update(reason="child_exit", phase="child_process")
+        # External teardown may finalize the task and release ownership in this callback.
+        await persist_ending()
         try:
             await publisher.close(record, owner, generation, process_exited=True)
         except Exception:
@@ -216,11 +227,12 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                                            on_exit=child_exited if record.get("publish_url") else None)
                 if not ending:
                     ending.update(reason="child_exit", phase=phase, returncode=result.get("returncode"))
-                    if result.get("failure_type"):
-                        ending.update(reason="child_initialize_error", phase="child_initialize",
-                                      error_type=result["failure_type"], at=result.get("failure_at", []))
-                        if "failure_errno" in result:
-                            ending["errno"] = result["failure_errno"]
+                ending["returncode"] = result.get("returncode")
+                if result.get("failure_type") and ending["reason"] == "child_exit":
+                    ending.update(reason="child_initialize_error", phase="child_initialize",
+                                  error_type=result["failure_type"], at=result.get("failure_at", []))
+                    if "failure_errno" in result:
+                        ending["errno"] = result["failure_errno"]
                 if cancel.is_set():
                     ending.update(cancellation or dict(reason="control_cancelled", phase="worker_control"))
                     break
@@ -240,9 +252,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
             finally:
                 if not ending:
                     ending.update(cancellation or dict(reason="worker_interrupted", phase=phase))
-                attempt.update(ending, ended_at_unix=time.time())
-                await store.update_owned(task_id, owner, generation, stream_attempts=history,
-                                         stream_attempts_discarded=discarded)
+                await persist_ending()
                 logging.getLogger(__name__).info("task=%s attempt=%s reason=%s phase=%s type=%s errno=%s",
                     task_id, attempt.get("attempt_id", attempt["run_id"]), attempt.get("reason"),
                     attempt.get("phase"), attempt.get("error_type"), attempt.get("errno"))

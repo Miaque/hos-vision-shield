@@ -176,3 +176,42 @@ async def test_fatal_child_failure_is_saved_before_terminal_state(monkeypatch):
         failure_type='ValueError', error=dict(code='processing_failed', message='Media processing failed'))))
     await tasks.run_stream(record, store, Settings(_env_file=None), asyncio.Event(), 'owner', 1)
     store.finish.assert_awaited_once()
+
+
+async def test_external_publisher_stop_persists_reason_before_releasing_ownership(monkeypatch):
+    from vision_shield.jobs import tasks
+
+    record = dict(id='job', kind='stream', desired_state='stopped', generation=1,
+                  source_ref='rtsp://input', publish_url='rtmp://output')
+    saved = {}
+    terminal = False
+
+    async def update(*args, **values):
+        if terminal:
+            return False
+        saved.update(copy.deepcopy(values))
+        return True
+
+    async def close(*args, process_exited=False):
+        nonlocal terminal
+        if process_exited:
+            assert saved['stream_attempts'][-1]['reason'] == 'stop_requested'
+            terminal = True
+        return True
+
+    store = SimpleNamespace(update_owned=AsyncMock(side_effect=update), get=AsyncMock(return_value=record), finish=AsyncMock())
+    publisher = SimpleNamespace(prepare=AsyncMock(return_value='rtmp://output'), close=AsyncMock(side_effect=close))
+    monkeypatch.setattr(tasks, 'Publisher', lambda *args: publisher)
+    monkeypatch.setattr(tasks, 'validate_source', AsyncMock(return_value=(httpx.URL(record['source_ref']), '127.0.0.1')))
+    cancel = asyncio.Event()
+
+    async def run(*args, **kwargs):
+        await args[3](dict(stream_end=dict(reason='stop_requested', phase='source_read', attempt_id='ended')))
+        cancel.set()
+        await kwargs['on_exit']()
+        return dict(returncode=0, cancelled=True)
+
+    monkeypatch.setattr(tasks, 'run_process', run)
+    await tasks.run_stream(record, store, Settings(_env_file=None), cancel, 'owner', 1,
+                           cancellation=dict(reason='stop_requested', phase='worker_control'))
+    assert terminal and saved['stream_attempts'][-1]['attempt_id'] == 'ended'
