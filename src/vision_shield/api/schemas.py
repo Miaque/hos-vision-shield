@@ -34,6 +34,8 @@ class StreamInput(BaseModel):
     redaction_mode: Literal["solid", "mosaic"] = "solid"
     max_bitrate: Annotated[int | None, Field(default=None, ge=1,
         description="可选实时编码码率上限，单位 bit/s；省略时不设置码率上限")] = None
+    audio_enabled: bool = Field(default=True, strict=True,
+        description="是否保留实时音轨；false 跳过输入音频并允许修复视频时间戳")
 
     @field_validator('playback_url')
     @classmethod

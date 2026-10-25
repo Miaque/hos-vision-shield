@@ -70,6 +70,26 @@ async def test_stream_max_bitrate_is_stored_when_explicit(redis_url, tmp_path):
         assert stored['max_bitrate'] == 20_000_000
 
 
+async def test_muted_stream_is_frozen_in_idempotent_intent(redis_url, tmp_path):
+    """静音选项入库并参与幂等；显式开启与省略值兼容旧请求。"""
+    app = create_app(Settings(_env_file=None, redis_url=redis_url, media_root=tmp_path, source_allowlist=["127.0.0.1"]))
+    async with app.router.lifespan_context(app), httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        seconds, micros = await app.state.redis.time()
+        await app.state.redis.zadd("vs:workers:streams", {"test": seconds * 1000 + micros // 1000})
+        body = {"url": "rtmp://127.0.0.1/source", "audio_enabled": False, "max_bitrate": 2_000_000}
+        headers = {"Idempotency-Key": "muted-stream"}
+        response = await client.post("/v1/stream-tasks", json=body, headers=headers)
+        assert response.status_code == 202
+        stored = await app.state.store.get(response.json()["id"])
+        assert stored["audio_enabled"] is False and stored["max_bitrate"] == 2_000_000
+        assert (await client.post("/v1/stream-tasks", json=body, headers=headers)).json()["id"] == stored["id"]
+        assert (await client.post("/v1/stream-tasks", json=body | {"audio_enabled": True}, headers=headers)).status_code == 409
+        defaults = {"Idempotency-Key": "default-audio-stream"}
+        original = await client.post("/v1/stream-tasks", json={"url": body["url"]}, headers=defaults)
+        explicit = await client.post("/v1/stream-tasks", json={"url": body["url"], "audio_enabled": True}, headers=defaults)
+        assert explicit.status_code == 202 and explicit.json()["id"] == original.json()["id"]
+
+
 @pytest.mark.parametrize("scheme", ["rtsp", "rtmp"])
 @pytest.mark.parametrize("cadence", [False, True])
 async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, tmp_path, monkeypatch, scheme, cadence):
@@ -84,6 +104,7 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
         store = app.state.store
         target = f"{scheme}://127.0.0.1/app/camera?sign=secret"
         options = dict(detection_interval=3, tracking="flow", max_bitrate=20_000_000) if cadence else {"max_bitrate": 20_000_000}
+        options["audio_enabled"] = False
         task = await store.create("stream", "rtsp", "rtsp://127.0.0.1/source", publish_url=target, **options)
         owned = await store.claim(task["id"], "owner")
         cancel = asyncio.Event()
@@ -91,6 +112,7 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
         async def run(command, payload, cancel, on_event, timeout, *, on_exit=None):
             assert payload["publish_url"] == target and payload["config"]["publish_url"] == target
             assert payload["config"]["max_bitrate"] == 20_000_000
+            assert payload["config"]["audio_enabled"] is False
             assert payload["config"].get("detection_interval", 1) == (3 if cadence else 1)
             assert payload["config"].get("tracking", "template") == ("flow" if cadence else "template")
             await on_event(dict(output=True, output_monotonic=time.monotonic(), ready=True))

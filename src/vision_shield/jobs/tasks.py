@@ -228,7 +228,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                                                                "source_url": record["source_ref"],
                                                                "stream_started_monotonic": attempt['started_monotonic']},
                                directory=str(settings.media_root.resolve() / task_id / f"attempt-{generation}"))
-                for key in ('detection_interval', 'tracking', 'max_bitrate'):
+                for key in ('detection_interval', 'tracking', 'max_bitrate', 'audio_enabled'):
                     if key in record:
                         payload['config'][key] = record[key]
                 phase = "child_process"

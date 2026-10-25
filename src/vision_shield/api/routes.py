@@ -91,7 +91,8 @@ async def create_stream(data: StreamInput, request: Request, response: Response,
     if tracking == 'flow' and detection_interval != '3':
         raise HTTPException(422, 'invalid_input')
     options = {**({'detection_interval': 3} if detection_interval == '3' else {}),
-               **({'tracking': 'flow'} if tracking == 'flow' else {})}
+               **({'tracking': 'flow'} if tracking == 'flow' else {}),
+               **({'audio_enabled': False} if not data.audio_enabled else {})}
     fingerprint = request_fingerprint(kind="stream", source_kind="rtsp", source_digest=data.url,
                                       redaction_mode=data.redaction_mode, notification_target=target,
                                       profile_detection=False,

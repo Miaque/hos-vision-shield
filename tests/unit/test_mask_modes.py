@@ -39,6 +39,15 @@ def test_stream_bitrate_is_optional_positive_bits_per_second():
         StreamInput(url="rtsp://example.com/live", max_bitrate=0)
 
 
+def test_stream_audio_switch_is_strict_and_preserves_default():
+    """静音只接受明确布尔值，历史请求仍保留声音。"""
+    assert StreamInput(url="rtmp://example.com/live").audio_enabled is True
+    assert StreamInput(url="rtmp://example.com/live", audio_enabled=False).audio_enabled is False
+    for value in ("false", 0, None):
+        with pytest.raises(ValidationError):
+            StreamInput(url="rtmp://example.com/live", audio_enabled=value)
+
+
 def test_image_and_temporal_paths_use_selected_mode(tmp_path):
     from PIL import Image
     from vision_shield.media.images import process_image

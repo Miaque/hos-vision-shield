@@ -289,7 +289,7 @@ class TaskStore:
                      idempotency_key: str | None = None, fingerprint: str | None = None,
                      notification_target: str | None = None, publish_url: str | None = None,
                      playback_url: str | None = None,
-                     max_bitrate: int | None = None) -> dict:
+                     max_bitrate: int | None = None, audio_enabled: bool = True) -> dict:
         if redaction_mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
         if profile_detection and kind != 'video':
@@ -308,6 +308,8 @@ class TaskStore:
             raise ValueError('A playback URL requires a stream task')
         if max_bitrate is not None and (kind != "stream" or type(max_bitrate) is not int or max_bitrate < 1):
             raise ValueError("A max bitrate requires a positive integer stream task")
+        if type(audio_enabled) is not bool or not audio_enabled and kind != "stream":
+            raise ValueError("Invalid stream audio switch")
         task_id = task_id or str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
         task = dict(
@@ -332,6 +334,8 @@ class TaskStore:
             task['playback_url'] = playback_url
         if max_bitrate is not None:
             task["max_bitrate"] = max_bitrate
+        if not audio_enabled:
+            task["audio_enabled"] = False
         return await self._change(task_id, "create", task, self.stream_limit if kind == "stream" else self.file_limit)
 
     async def get(self, task_id: str) -> dict | None:

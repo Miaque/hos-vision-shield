@@ -23,14 +23,16 @@ def check_dimensions(width: int, height: int, config: dict) -> None:
         raise ValueError("Video dimensions exceed limit")
 
 
-def check_streams(reader, config, *, audio_codecs=("aac",)):
-    if len(reader.streams.video) != 1 or len(reader.streams.audio) > 1:
+def check_streams(reader, config, *, audio_codecs=("aac",), audio_enabled=True):
+    """验证实际消费的媒体轨道；静音实时任务不受被忽略的音轨限制。"""
+    audio = reader.streams.audio if audio_enabled else []
+    if len(reader.streams.video) != 1 or len(audio) > 1:
         raise ValueError("Exactly one video and at most one audio track are supported")
     video = reader.streams.video[0]
     if video.codec_context.name != "h264":
         raise ValueError("H.264 required")
     check_dimensions(video.width, video.height, config)
-    if reader.streams.audio and reader.streams.audio[0].codec_context.name not in audio_codecs:
+    if audio and audio[0].codec_context.name not in audio_codecs:
         raise ValueError("Unsupported audio codec")
     return video
 
@@ -72,12 +74,12 @@ def add_video(writer, frame, source, live=False, *, device="cpu", max_bitrate=No
         video.bit_rate = 0
         video.options = {"preset": "p6", "tune": "ull" if live else "hq", "rc": "vbr", "cq": "19",
                          "gpu": str(torch.cuda.current_device()), "bf": "0" if live else "3"}
-        if live and max_bitrate is not None:
-            video.options.update(maxrate=str(max_bitrate), bufsize=str(max_bitrate))
     else:
         video.options = ({"preset": "ultrafast", "tune": "zerolatency", "bf": "0"} if live
                          else {"preset": "slow", "crf": "23"})
     if live:
+        if max_bitrate is not None:
+            video.options.update(maxrate=str(max_bitrate), bufsize=str(max_bitrate))
         # Bound join time without sending a bandwidth-heavy keyframe for every picture.
         video.codec_context.gop_size = max(1, round(float(source.average_rate or 25)))
     else:

@@ -90,6 +90,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     buffer = StreamBuffer(config["frame_buffer_size"], config["audio_buffer_seconds"], config["audio_buffer_bytes"], stop)
     writer_done = threading.Event()
     debug = config.get('debug', False)
+    audio_enabled = config.get("audio_enabled", True)
     metrics = StreamMetrics(started=config.get('stream_started_monotonic'), debug=debug)
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
                              detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"), debug=debug)
@@ -126,12 +127,14 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             source_reader = av.open(source, options=options,
                                     timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
             phase = "source_validate"
-            video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"))
+            video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"),
+                                  audio_enabled=audio_enabled)
             with buffer.condition:
                 buffer.input_video = video
-                buffer.input_audio = source_reader.streams.audio[0] if source_reader.streams.audio else None
+                buffer.input_audio = source_reader.streams.audio[0] if audio_enabled and source_reader.streams.audio else None
             received = {}
-            packets = iter(source_reader.demux())
+            # 静音任务只读取视频，不让音频时钟和缓冲阻止视频时间戳修复。
+            packets = iter(source_reader.demux() if audio_enabled else source_reader.demux(video=0))
             while True:
                 try:
                     phase = "source_read"
@@ -155,7 +158,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         phase = "input_buffer"
                         with measure(redactor, "source-backpressure"):
                             buffer.frame(frame, received.pop(moment, None))
-                elif packet.stream.type == "audio" and packet.dts is not None:
+                elif audio_enabled and packet.stream.type == "audio" and packet.dts is not None:
                     phase = "input_audio_buffer"
                     buffer.audio_packet(packet)
         except Exception as error:

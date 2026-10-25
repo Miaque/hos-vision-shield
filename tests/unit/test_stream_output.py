@@ -25,7 +25,7 @@ from vision_shield.media.video import check_streams
 @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
     os.getenv("RUN_GPU_TESTS") != "1", reason="requires real NVDEC/GPU mask/NVENC"))])
 def test_stream_output_muxes_processed_video_and_compatible_audio(
-    tmp_path, monkeypatch, scheme, audio_codec, fault, source_bframes, device, debug, input_scheme="rtsp",
+    tmp_path, monkeypatch, scheme, audio_codec, fault, source_bframes, device, debug, input_scheme="rtsp", audio_enabled=True,
 ):
     source, target = tmp_path / "source.nut", tmp_path / "output.nut"
     with av.open(str(source), "w") as writer:
@@ -63,8 +63,8 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(
             self.container = original_open(str(source), **hardware)
             self.streams = self.container.streams
 
-        def demux(self):
-            for packet in self.container.demux():
+        def demux(self, **kwargs):
+            for packet in self.container.demux(**kwargs):
                 time.sleep(0.005)
                 yield packet
 
@@ -93,6 +93,7 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(
         monkeypatch.setattr(streams, 'vcl_digest', lambda _: pytest.fail('Production must not hash frames'))
         monkeypatch.setattr(streams.StreamMetrics, 'snapshot', lambda _: pytest.fail('Production must not sample output'))
     config["inference_device"] = device
+    config["audio_enabled"] = audio_enabled
     config["publish_url"] = f"{scheme}://media.test/live/camera?sign=secret"
     config["source_url"] = f"{input_scheme}://vendor.test/g3/camera?token=source"
     config['stream_started_monotonic'] = time.monotonic() - 25
@@ -152,15 +153,15 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(
     with original_open(str(target)) as reader:
         assert reader.streams.video[0].codec_context.name == "h264"
         output_audio = reader.streams.audio
-        assert bool(output_audio) is bool(audio_codec)
-        if audio_codec:
+        assert bool(output_audio) is bool(audio_codec and audio_enabled)
+        if audio_codec and audio_enabled:
             assert output_audio[0].codec_context.name == ("aac" if scheme == "rtmp" else audio_codec)
         frames = list(reader.decode(video=0))
         assert len(frames) == 12 and frames[-1].to_ndarray(format="rgb24").mean() < 100
         pixels = frames[-1].to_ndarray(format="rgb24")
         np.testing.assert_allclose(pixels[24:].mean(axis=(0, 1)), [64, 64, 64], atol=5)
         assert any(event.get("output") for event in events)
-    if audio_codec:
+    if audio_codec and audio_enabled:
         with original_open(str(target)) as reader:
             assert sum(frame.samples for frame in reader.decode(audio=0)) > 0
 
@@ -171,6 +172,28 @@ def test_rtmp_input_preserves_vendor_host_and_outputs_redacted_flv(tmp_path, mon
     test_stream_output_muxes_processed_video_and_compatible_audio(
         tmp_path, monkeypatch, "rtmp", audio_codec, None, 0, "cpu", True, input_scheme="rtmp",
     )
+
+
+def test_muted_rtmp_output_contains_only_redacted_video(tmp_path, monkeypatch):
+    """真实 AAC 输入静音后不再产生音轨，视频帧与遮挡仍完整。"""
+    test_stream_output_muxes_processed_video_and_compatible_audio(
+        tmp_path, monkeypatch, "rtmp", "aac", None, 0, "cpu", True,
+        input_scheme="rtmp", audio_enabled=False,
+    )
+
+
+def test_muted_stream_ignores_audio_validation_without_relaxing_video():
+    """未消费的多音轨和编码不限制静音任务，视频编码仍严格校验。"""
+    video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
+    reader = SimpleNamespace(streams=SimpleNamespace(video=[video], audio=[SimpleNamespace(
+        codec_context=SimpleNamespace(name="unsupported"))] * 2))
+    config = Settings(_env_file=None).model_dump()
+    assert check_streams(reader, config, audio_enabled=False) is video
+    with pytest.raises(ValueError, match="at most one audio"):
+        check_streams(reader, config)
+    video.codec_context.name = "hevc"
+    with pytest.raises(ValueError, match="H.264"):
+        check_streams(reader, config, audio_enabled=False)
 
 
 @pytest.mark.parametrize('clocks,duration,expected', [

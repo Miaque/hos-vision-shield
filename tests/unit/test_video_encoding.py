@@ -96,16 +96,22 @@ def test_cuda_frames_go_directly_to_nvenc_with_the_selected_context_and_color_me
         assert video.codec_context.gop_size == 15
 
 
-def test_live_nvenc_caps_rate_while_retaining_cq_resolution_and_clock(monkeypatch):
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_live_encoder_caps_rate_while_retaining_resolution_and_clock(monkeypatch, device):
     import torch
 
     monkeypatch.setattr(torch.cuda, 'current_device', lambda: 2)
     video = SimpleNamespace(codec_context=SimpleNamespace())
     writer = SimpleNamespace(add_stream=Mock(return_value=video))
     frame = SimpleNamespace(width=3840, height=1080, time_base=Fraction(1, 90000))
-    add_video(writer, frame, SimpleNamespace(average_rate=None), live=True, device='cuda', max_bitrate=20_000_000)
-    assert video.width == 3840 and video.height == 1080 and video.bit_rate == 0
+    add_video(writer, frame, SimpleNamespace(average_rate=None), live=True, device=device, max_bitrate=20_000_000)
+    assert video.width == 3840 and video.height == 1080
     assert video.time_base == video.codec_context.time_base == frame.time_base
     assert video.codec_context.gop_size == 25
-    assert video.options == dict(preset='p6', tune='ull', rc='vbr', cq='19', gpu='2', bf='0',
-                                 maxrate='20000000', bufsize='20000000')
+    if device == "cuda":
+        assert video.bit_rate == 0
+        assert video.options == dict(preset='p6', tune='ull', rc='vbr', cq='19', gpu='2', bf='0',
+                                     maxrate='20000000', bufsize='20000000')
+    else:
+        assert video.options == {'preset': 'ultrafast', 'tune': 'zerolatency', 'bf': '0',
+                                 'maxrate': '20000000', 'bufsize': '20000000'}

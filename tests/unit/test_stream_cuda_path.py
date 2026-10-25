@@ -17,7 +17,7 @@ from vision_shield.media import cuda_frames, streams
 @pytest.mark.parametrize("delayed", [False, True])
 @pytest.mark.parametrize("repair", [False, True])
 @pytest.mark.parametrize('debug', [False, True])
-def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug):
+def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False):
     source_video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
     frames = [SimpleNamespace(width=64, height=48, pts=900000 + 3600 * i, time_base=Fraction(1, 90000))
               for i in range(3)]
@@ -31,9 +31,10 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     monkeypatch.setattr(torch.cuda, "set_device", lambda device: threads.update(selected=device))
 
     class Reader:
-        streams = SimpleNamespace(video=[source_video], audio=[])
+        streams = SimpleNamespace(video=[source_video], audio=[SimpleNamespace(
+            codec_context=SimpleNamespace(name="aac"))] if muted else [])
 
-        def demux(self):
+        def demux(self, **kwargs):
             for frame in frames:
                 yield SimpleNamespace(stream=source_video, pts=frame.pts, time_base=frame.time_base,
                                       decode=lambda frame=frame: [frame])
@@ -58,6 +59,9 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             return SimpleNamespace(**vars(frame))
 
     class Writer:
+        def add_stream_from_template(self, source):
+            return SimpleNamespace()
+
         def __enter__(self):
             return self
 
@@ -71,10 +75,11 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             packet.pts = -1  # Muxers may rescale/mutate the packet after accepting it.
 
     def open_endpoint(url, *args, **kwargs):
-        if url == "rtsp://camera/input":
+        if url == ("rtmp://camera/input" if muted else "rtsp://camera/input"):
             threads["decode"] = threading.get_ident()
             assert kwargs["hwaccel"] is accelerator
-            assert kwargs["options"]["allowed_media_types"] == "video"
+            if not muted:
+                assert kwargs["options"]["allowed_media_types"] == "video"
             if fault == "decode":
                 raise RuntimeError("decode failed")
             return Reader()
@@ -105,11 +110,14 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     monkeypatch.setattr(streams, "masked_frame", software_mask)
     config = {**Settings(_env_file=None, debug=debug).model_dump(), "inference_device": "cuda",
               "detection_interval": 3, "tracking": "flow"}
+    if muted:
+        config["audio_enabled"] = False
     events = []
     stop = threading.Event()
 
     def process():
-        streams.process_stream("rtsp://camera/input", "rtsp://output/test", object(), config, stop, events.append)
+        streams.process_stream("rtmp://camera/input" if muted else "rtsp://camera/input",
+                               "rtsp://output/test", object(), config, stop, events.append)
 
     if fault:
         with pytest.raises(RuntimeError, match=f"{fault} failed"):
@@ -139,3 +147,10 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     assert stop.is_set()
     if fault != "decode":
         assert closed.is_set()
+
+
+def test_muted_rtmp_with_audio_repairs_video_clock_on_cuda_path(monkeypatch):
+    """带音轨的 RTMP 静音后仍可修复重复视频 PTS，保留所有独立画面。"""
+    test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
+        monkeypatch, fault=None, delayed=False, repair=True, debug=True, muted=True,
+    )

@@ -159,6 +159,12 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -
 
 - 不传或传 `null`：保持默认 MediaMTX RTSP 输出和 `playback_url`；完整 RTSP 地址也可用于直接推流。
 - 指定地址：保留路径、查询参数和鉴权信息，推流到外部服务，不拼接 `/redacted/{task_id}` 或注入内部 owner 凭据。输入与推流目标都必须在 `SOURCE_ALLOWLIST` 中授权；worker 每次重连重新校验并固定到授权 IP，RTMP `tcUrl` 保留原域名。
+
+实时流创建请求可指定 `max_bitrate`（正整数，单位 bit/s）和 `audio_enabled`（布尔值，默认 `true`）。
+例如 `{"url":"rtmp://camera.example/live","max_bitrate":2000000,"audio_enabled":false}` 会限制视频编码码率并只输出脱敏视频。
+码率限制沿用编码器的一秒 VBV 窗口，瞬时码率仍可波动；降低码率后须复核画质。
+静音任务在服务端跳过音轨，沿用视频时间戳修复；有声任务仍拒绝无法保持音画同步的时间戳异常。
+两项参数随任务冻结并保留到重连；相同幂等键不能改变码率或声音，省略 `audio_enabled` 与显式 `true` 的行为一致。文件任务不接受该声音开关。
 - 流输入支持 H.264，音频可为 AAC、G711A、G711U 或无音轨。RTSP 保留音频编码；RTMP 使用 FLV，AAC 直接转封装、G711 转 AAC。文件视频仍只接受 AAC 或无音轨。
 - `playback_url` 优先返回请求指定的播放地址；未指定时，外部推流沿用完整 `publish_url`（含其凭据和鉴权参数），默认输出仍使用公开 RTSP 地址。接收平台播放地址与推流地址不同时，应显式传入 `playback_url`。通知不携带这些地址。`ready`/health 证明本 worker 已写出数据，不证明接收平台可播放。同一幂等键不能更换推流或播放地址。
 - 外部推流在本次媒体处理确认发布连接、编解码器和读取线程全部关闭，或子进程退出/超时强杀完成后确认停止；空 MediaMTX 会话列表不能证明外部推流已停止。租约过期后，在原发布者关闭确认前保持 `recovering`，不派发替代任务；相同发布者和代次的确认到达后，按停止意图结束任务，或允许新 worker 接管。旧版本任务缺少确认记录时同样保守处理，未开始执行的旧任务仍可正常调度。
