@@ -11,6 +11,7 @@ import numpy as np
 from vision_shield.detection.cpu import Detector as DetailDetector
 from vision_shield.detection.egoblur import Detector as PrimaryDetector
 from vision_shield.detection import Detection
+from vision_shield.detection.plate_readability import needs_plate_work
 from vision_shield.detection.timing import StageTimes, measure, timed
 
 
@@ -22,6 +23,10 @@ def _timed_candidates(model, pixels, *, kind=None, full_frame=False):
 
 
 class Detector:
+    @timed("plate-work-check")
+    def plate_needs_work(self, rgb, box):
+        return needs_plate_work(rgb, box)
+
     @cached_property
     def _pool(self):
         return ThreadPoolExecutor(max_workers=1)
@@ -130,7 +135,8 @@ class Detector:
                         or any(other.kind == detection.kind and other.score >= global_score
                                and self._overlap(detection.box, other.box) >= 0.2
                                for other in others)
-                        or self._confirmed(rgb, detection, verifier, local_score)):
+                        or (detection.kind != "plate" or self.plate_needs_work(rgb, detection.box))
+                        and self._confirmed(rgb, detection, verifier, local_score)):
                     continue
                 x1, y1, x2, y2 = detection.box
                 pad_x = (x2 - x1) * self.box_padding * (2 if not is_primary and detection.kind == "plate" else 1)

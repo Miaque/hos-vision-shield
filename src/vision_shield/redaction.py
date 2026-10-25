@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from vision_shield.detection import Detection
+from vision_shield.detection.plate_readability import source_view
 from vision_shield.detection.timing import measure, timed
 
 
@@ -108,7 +109,8 @@ class FrameRedactor:
                     self.detection_stats["flow_failures"] += 1
                     recheck = True
             if not recheck and getattr(self.detector, "plate_proposals", None):
-                recheck = self._proposal_recheck(pixels, flow_boxes)
+                with source_view(gray):
+                    recheck = self._proposal_recheck(pixels, flow_boxes)
                 if recheck:
                     self.detection_stats["proposal_rechecks"] += 1
             if recheck:
@@ -120,7 +122,7 @@ class FrameRedactor:
                 if face_only:
                     self.detection_stats["face_rechecks"] += 1
                     detect = True
-        with measure(self, "track-face-recheck" if face_only else "track-recheck") if recheck or face_only else nullcontext():
+        with source_view(gray), measure(self, "track-face-recheck" if face_only else "track-recheck") if recheck or face_only else nullcontext():
             detections = (self._merge_detections(self._detections(pixels, face_only=True) if face_only
                                                else self._detections(pixels)) if detect else [])
         self.detection_stats["full_frames" if detect and not face_only else "skipped_frames"] += 1
@@ -144,7 +146,7 @@ class FrameRedactor:
             use_flow = self.tracking == "flow" and (not detect or face_only and kind == "plate")
             predicted = flow_boxes[old] if use_flow else self._follow(gray, box, reference)
             if predicted is None:
-                confirmed = self._recheck(pixels, box, kind) if kind else self._recheck(pixels, box)
+                confirmed = self._recheck(pixels, box, kind, gray) if kind else self._recheck(pixels, box)
                 if confirmed is not None:
                     retained.append(confirmed)
                     history.append(_Track(moment, moment, confirmed, kind))
@@ -163,7 +165,7 @@ class FrameRedactor:
                 boxes[new] = self._smooth(predicted, boxes[new], elapsed)
                 continue
             if moment - seen > 0.2 and moment - checked >= 0.2:
-                confirmed = self._recheck(pixels, predicted, kind) if kind else self._recheck(pixels, predicted)
+                confirmed = self._recheck(pixels, predicted, kind, gray) if kind else self._recheck(pixels, predicted)
                 checked = moment
                 if confirmed is not None:
                     predicted, seen = confirmed, moment
@@ -315,9 +317,11 @@ class FrameRedactor:
         started = time.monotonic()
         proposals = self.detector.plate_proposals(pixels)
         self.inference_seconds += time.monotonic() - started
+        plate_work = getattr(self.detector, "plate_needs_work", None)
         for candidate in proposals:
             x, y, a, b = candidate.box
-            if min(a - x, b - y) < 12:
+            if (plate_work is not None and not plate_work(pixels, candidate.box)
+                    or plate_work is None and min(a - x, b - y) < 12):
                 continue
             covered = False
             for old, track in enumerate(self.history):
@@ -334,7 +338,7 @@ class FrameRedactor:
         return False
 
     @timed("track-confirm")
-    def _recheck(self, pixels, box, kind=""):
+    def _recheck(self, pixels, box, kind="", gray=None):
         self.detection_stats["local_rechecks"] += 1
         x1, y1, x2, y2 = box
         size = max(96, 3 * max(x2 - x1, y2 - y1))
@@ -347,8 +351,9 @@ class FrameRedactor:
         scale = 320 / max(crop.shape[:2])
         view = cv2.resize(crop, (max(1, round(crop.shape[1] * scale)), max(1, round(crop.shape[0] * scale))))
         xs, ys = (right - left) / view.shape[1], (bottom - top) / view.shape[0]
-        candidates = [(left + a * xs, top + b * ys, left + c * xs, top + d * ys)
-                      for detection in self._detections(view, kind) if detection.kind == kind
-                      for a, b, c, d in [detection.box]]
+        with source_view(pixels if gray is None else gray, left=left, top=top, x_scale=xs, y_scale=ys):
+            candidates = [(left + a * xs, top + b * ys, left + c * xs, top + d * ys)
+                          for detection in self._detections(view, kind) if detection.kind == kind
+                          for a, b, c, d in [detection.box]]
         candidates = [candidate for candidate in candidates if self._overlap(box, candidate) >= 0.2]
         return max(candidates, key=lambda candidate: self._overlap(box, candidate)) if candidates else None

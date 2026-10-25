@@ -13,6 +13,7 @@ STAGES = (
     "track-confirm", "track-update", "track-flow", "track-probe", "track-recheck", "track-face-recheck",
     "color-convert", "gray-copy", "mask-gpu",
     "source-read", "source-decode", "source-backpressure", "session-primary-face", "session-detail-face",
+    "plate-work-check",
 )
 
 

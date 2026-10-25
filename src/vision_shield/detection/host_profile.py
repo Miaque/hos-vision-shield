@@ -66,7 +66,7 @@ def runtime_metadata(detector, config):
     with detector.primary.face_path.open('rb') as handle:
         weights['primary_face'] = hashlib.file_digest(handle, 'sha256').hexdigest()
     source = {}
-    for name in ('detection.quality', 'detection.egoblur', 'detection.cuda_detail', 'detection.cpu',
+    for name in ('detection.quality', 'detection.plate_readability', 'detection.egoblur', 'detection.cuda_detail', 'detection.cpu',
                  'detection.host_profile', 'detection.yolo', 'detection.cuda_pixels', 'redaction', 'media.video'):
         with Path(sys.modules['vision_shield.' + name].__file__).open('rb') as handle:
             source[name] = hashlib.file_digest(handle, 'sha256').hexdigest()
