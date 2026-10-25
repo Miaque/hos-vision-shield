@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from vision_shield.config import Settings
-from vision_shield.jobs.amqp_notifications import AmqpNotifications, queue_name
+from vision_shield.jobs.amqp_notifications import AmqpNotifications, QUEUE_ARGUMENTS, queue_name
 
 
 def test_amqp_targets_require_valid_ids_and_connection_and_reject_http():
@@ -25,6 +25,20 @@ def test_amqp_targets_require_valid_ids_and_connection_and_reject_http():
         with pytest.raises(ValidationError):
             Settings(_env_file=None, **values)
 
+
+
+def test_queue_declaration_round_trips_unlimited_redelivery_argument():
+    """真实 AMQP 编解码必须保留 -1，不能只用 mock 验证队列声明。"""
+    from pamqp import frame
+    from pamqp.commands import Queue
+
+    declaration = Queue.Declare(queue=queue_name("dev.platform"), durable=True, arguments=QUEUE_ARGUMENTS)
+    encoded = frame.marshal(declaration, 1)
+    consumed, channel, decoded = frame.unmarshal(encoded)
+    assert consumed == len(encoded) and channel == 1
+    assert decoded.queue == declaration.queue and decoded.durable
+    assert decoded.arguments == QUEUE_ARGUMENTS
+    assert decoded.arguments["x-delivery-limit"] == -1
 
 
 @pytest.mark.asyncio

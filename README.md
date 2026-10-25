@@ -272,6 +272,8 @@ Platform 播放通过登录、设备权限和共享观看会话鉴权，不再�
 
 队列固定为 `hos.vision-shield.task-events.v1.<目标>`，例如 `hos.vision-shield.task-events.v1.dev.platform`。使用默认 exchange 按完整队列名直接投递，不修改已有业务 exchange、绑定、策略或队列。首次发布或消费时声明 durable quorum 队列，参数为 `x-max-length=10000`、`x-overflow=reject-publish`、`x-delivery-limit=-1`。最后一项避免暂时数据库故障因 quorum 重投上限丢失消息；消费者延迟 1 秒再 NACK，非法通知直接拒绝，不进行无限重投。
 
+通知依赖使用 `aio-pika>=10.0.1,<11` 及 `pamqp 4`；旧 `pamqp 3.3.0` 会在编码 `x-delivery-limit=-1` 时抛出 `struct.error`，队列声明尚未发到 RabbitMQ。更新依赖锁后需重新构建 Shield 和 Hub 镜像并重建通知进程；Platform 当前锁已使用 `pamqp 4.0.1`。CPU 和 GPU 部署锁保持同步，不通过移除 `-1` 改变重投语义。
+
 部署前在 RabbitMQ 管理界面只读核查四个队列名是否已存在；若同名但属性不符，停止部署并处理命名冲突，不删除或重建已有队列。通知账号仅授权其所需的上述队列；Shield 账号可发布所有已登记目标，各环境消费者只读取自己的队列。代码不会修改 broker 账号权限。RabbitMQ 必须支持 quorum 队列。
 
 #### 持久交接与补偿

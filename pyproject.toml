@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "aio-pika>=9.5.8,<10",
+    "aio-pika>=10.0.1,<11",
     "av>=16,<20",
     "fastapi>=0.115,<1",
     "httpx>=0.28,<1",
