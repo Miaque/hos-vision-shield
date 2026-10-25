@@ -1,6 +1,7 @@
 """One RTSP input, bounded FIFO backpressure, and one output mux owner."""
 
 from collections import deque
+from fractions import Fraction
 from math import floor
 import threading
 import time
@@ -23,17 +24,85 @@ class StreamCleanupError(OSError):
     """A timed-out input reader requires process reclamation before reuse."""
 
 
+class LiveAVClock:
+    """在有序读包线程修复两轨时钟，避免原始回退时间阻塞音视频配对。"""
+
+    def __init__(self, video=None, audio=None):
+        self.audio_time = self.audio_source = self.audio_duration = self.audio_step = None
+        self.video_time = self.video_source = self.video_step = None
+        self.audio_regressed = self.video_regressed = False
+        self.audio_offset = 0
+        self.audio_codec = audio.codec_context if audio else None
+        rate = getattr(video, "average_rate", None)
+        self.video_interval = 1 / rate if rate and rate > 0 else None
+
+    def audio_packet(self, packet):
+        """按可靠包间隔恢复音频时钟，保持压缩内容及 PTS/DTS 相对关系。"""
+        if packet.pts is None or packet.dts is None or packet.time_base is None:
+            raise BufferError("Invalid audio clock")
+        source = packet.dts * packet.time_base
+        duration = (packet.duration or 0) * packet.time_base
+        rate = getattr(self.audio_codec, "sample_rate", 0)
+        samples = getattr(self.audio_codec, "frame_size", 0)
+        channels = getattr(self.audio_codec, "channels", 0)
+        # RTMP 时基只有毫秒；从真实采样数保留小数，避免每包取整逐渐累积音画偏移。
+        if rate and samples:
+            duration = Fraction(samples, rate)
+        elif rate and channels and self.audio_codec.name in {"pcm_alaw", "pcm_mulaw"}:
+            duration = Fraction(packet.size, rate * channels)
+        if self.audio_source is not None and source > self.audio_source and not self.audio_regressed:
+            self.audio_step = source - self.audio_source
+        self.audio_regressed = self.audio_source is not None and source <= self.audio_source
+        moment = source
+        if self.audio_time is not None and source <= self.audio_time:
+            step = self.audio_duration or duration or self.audio_step
+            if step is None or step <= 0:
+                raise BufferError("Cannot repair audio clock without a packet interval")
+            moment = self.audio_time + step
+            corrected = max(round(moment / packet.time_base),
+                            floor(self.audio_time / packet.time_base) + 1)
+            packet.pts += corrected - packet.dts
+            packet.dts = corrected
+        self.audio_time = moment
+        self.audio_offset = self.audio_time - source
+        self.audio_source = source
+        self.audio_duration = duration or self.audio_step
+
+    def video_frame(self, frame):
+        """视频回退时参考音频修复偏移，孤立坏 PTS 恢复后不积累音画偏移。"""
+        source = frame.pts * frame.time_base
+        if self.video_source is not None and source > self.video_source and not self.video_regressed:
+            self.video_step = source - self.video_source
+        self.video_regressed = self.video_source is not None and source <= self.video_source
+        self.video_source = source
+        moment = source
+        if self.video_time is not None and source <= self.video_time:
+            moment = source + self.audio_offset
+            if moment <= self.video_time:
+                duration = getattr(frame, "duration", 0) * frame.time_base
+                if self.video_interval and (not duration or abs(duration - self.video_interval) < frame.time_base):
+                    duration = self.video_interval
+                step = duration or self.video_step
+                if step is None or step <= 0:
+                    raise BufferError("Cannot repair clock without a frame interval")
+                moment = self.video_time + step
+            frame.pts = max(round(moment / frame.time_base), floor(self.video_time / frame.time_base) + 1)
+        self.video_time = moment
+        return frame.pts * frame.time_base != source
+
+
 class StreamBuffer:
     def __init__(self, frame_limit, audio_seconds, audio_bytes, stop):
         self.frame_limit, self.audio_seconds, self.audio_limit = frame_limit, audio_seconds, audio_bytes
         self.stop, self.condition = stop, threading.Condition()
         self.frames, self.audio = deque(), deque()
         self.received, self.last_received, self.input_frames = deque(), None, 0
+        self.last_source_pts, self.last_timestamp_repaired = None, False
         self.audio_size, self.dropped = 0, 0
         self.eof, self.error, self.input_video, self.input_audio = False, None, None, None
         self.failure = None
 
-    def frame(self, value, received_at=None):
+    def frame(self, value, received_at=None, *, source_pts=None, timestamp_repaired=False):
         with self.condition:
             self.input_frames += 1
             # Some RTSP sources omit the first PTS; never publish or invent its clock.
@@ -45,7 +114,7 @@ class StreamBuffer:
             if self.stop.is_set():
                 return
             self.frames.append(value)
-            self.received.append(received_at)
+            self.received.append((received_at, source_pts, timestamp_repaired))
             self.condition.notify()
 
     def audio_packet(self, packet):
@@ -68,7 +137,7 @@ class StreamBuffer:
             if self.stop.is_set() or not self.frames:
                 return None
             frame = self.frames.popleft()
-            self.last_received = self.received.popleft()
+            self.last_received, self.last_source_pts, self.last_timestamp_repaired = self.received.popleft()
             self.condition.notify()
             if frame.pts is None or frame.time_base is None:
                 raise BufferError("Invalid video clock")
@@ -114,11 +183,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 torch.cuda.set_device(cuda_device)
                 frames = CUDAFrames()
                 hardware["hwaccel"] = hwaccel(frames.device)
-            # RTSP SDP supplies codec parameters; long probing creates an audio burst.
-            # shortcut: video-only RTCP clock trial; restore audio after timing recovery is validated.
+            # RTSP SDP 已提供编码参数；按声音开关协商音轨，避免长时间探测造成音频突发。
             phase = "source_open"
             options = {"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768",
-                       "allowed_media_types": "video"}
+                       "allowed_media_types": "video+audio" if audio_enabled else "video"}
             if httpx.URL(source).scheme == "rtmp":
                 original = httpx.URL(config.get("source_url") or source)
                 options = {"rtmp_tcurl": str(original.copy_with(path=original.path.rsplit("/", 1)[0],
@@ -132,6 +200,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             with buffer.condition:
                 buffer.input_video = video
                 buffer.input_audio = source_reader.streams.audio[0] if audio_enabled and source_reader.streams.audio else None
+            av_clock = LiveAVClock(video, buffer.input_audio) if buffer.input_audio else None
             received = {}
             # 静音任务只读取视频，不让音频时钟和缓冲阻止视频时间戳修复。
             packets = iter(source_reader.demux() if audio_enabled else source_reader.demux(video=0))
@@ -155,10 +224,16 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     for frame in decoded:
                         check_dimensions(frame.width, frame.height, config)
                         moment = frame.pts * frame.time_base if frame.pts is not None and frame.time_base is not None else None
+                        received_at = received.pop(moment, None)
+                        phase = "input_clock"
+                        repaired = av_clock.video_frame(frame) if av_clock and moment is not None else False
                         phase = "input_buffer"
                         with measure(redactor, "source-backpressure"):
-                            buffer.frame(frame, received.pop(moment, None))
+                            buffer.frame(frame, received_at, source_pts=moment, timestamp_repaired=repaired)
                 elif audio_enabled and packet.stream.type == "audio" and packet.dts is not None:
+                    phase = "input_audio_clock"
+                    if av_clock:
+                        av_clock.audio_packet(packet)
                     phase = "input_audio_buffer"
                     buffer.audio_packet(packet)
         except Exception as error:
@@ -235,16 +310,18 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 frame, packets = sample
                 processing = True
                 phase = "input_clock"
-                source_moment = frame.pts * frame.time_base
+                input_moment = frame.pts * frame.time_base
+                source_moment = buffer.last_source_pts if buffer.last_source_pts is not None else input_moment
                 if previous_source is not None and source_moment > previous_source:
                     step = source_moment - previous_source
                 previous_source = source_moment
-                frame.pts = round((source_moment + clock_offset) / frame.time_base)
+                frame.pts = round((input_moment + clock_offset) / frame.time_base)
                 moment = frame.pts * frame.time_base
-                repaired = previous is not None and moment <= previous
-                if repaired:
+                regressed = previous is not None and moment <= previous
+                repaired = buffer.last_timestamp_repaired or regressed
+                if regressed:
                     if buffer.input_audio:
-                        raise BufferError("Cannot repair video clock with audio")
+                        raise BufferError("Invalid normalized audiovisual clock")
                     duration = getattr(frame, "duration", 0) * frame.time_base or step
                     if duration is None or duration <= 0:
                         raise BufferError("Cannot repair clock without a frame interval")
