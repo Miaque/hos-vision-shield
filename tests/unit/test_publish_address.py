@@ -10,7 +10,27 @@ from pydantic import ValidationError
 from vision_shield.config import Settings
 from vision_shield.media.publisher import Publisher
 from vision_shield.api.routes import public
+from vision_shield.api.schemas import StreamInput, TaskResponse
 from vision_shield.media.source import SourceError
+
+
+@pytest.mark.parametrize('publish_url,playback_url', [
+    (None, None), ('rtsp://user:password@media/app/camera?token=secret', None),
+    ('rtmp://media/live/camera?sign=secret', None),
+    ('rtmp://media/live/camera?sign=secret', 'https://play.example/camera.m3u8?token=play'),
+])
+def test_stream_response_uses_explicit_playback_then_publish_then_default(publish_url, playback_url):
+    record = dict(id='job', kind='stream', state='running', desired_state='run', ready=True,
+                  created_at='2026-10-22T00:00:00Z', updated_at='2026-10-22T00:00:00Z',
+                  error=None, stats={}, publish_url=publish_url, playback_url=playback_url)
+    result = TaskResponse.from_record(record, 'rtsp://public:8554')
+    assert result.playback_url == (playback_url or publish_url or 'rtsp://public:8554/redacted/job')
+
+
+@pytest.mark.parametrize('address', ['', '/relative', 'javascript:alert(1)', 'file:///secret', 'https:///no-host', 'rtsp://media/live#fragment'])
+def test_invalid_playback_address_is_rejected(address):
+    with pytest.raises(ValidationError):
+        StreamInput(url='rtsp://camera/input', playback_url=address)
 
 
 @pytest.mark.parametrize("address", ["http://media:8554", "rtsp://u:p@media", "rtsp://media?q=1", "rtsp://media#x"])

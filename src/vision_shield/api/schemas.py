@@ -1,8 +1,9 @@
 from datetime import timedelta, timezone
 from typing import Annotated, Literal
 from uuid import UUID
+from urllib.parse import urlsplit
 
-from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer, WithJsonSchema
+from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer, WithJsonSchema, field_validator
 
 
 UTC8 = timezone(timedelta(hours=8))
@@ -28,9 +29,20 @@ class StreamInput(BaseModel):
     url: Annotated[str, Field(min_length=1, max_length=4096)]
     publish_url: Annotated[str | None, Field(min_length=1, max_length=4096,
         description="可选完整 RTSP/RTMP 推流地址；省略时使用默认 RTSP 输出")] = None
+    playback_url: Annotated[str | None, Field(min_length=1, max_length=4096,
+        description="可选完整 HTTP/HTTPS/RTSP/RTMP 播放地址；省略时沿用推流地址或默认公开 RTSP 地址")] = None
     redaction_mode: Literal["solid", "mosaic"] = "solid"
     max_bitrate: Annotated[int | None, Field(default=None, ge=1,
         description="可选实时编码码率上限，单位 bit/s；省略时不设置码率上限")] = None
+
+    @field_validator('playback_url')
+    @classmethod
+    def validate_playback_url(cls, value):
+        if value is not None:
+            url = urlsplit(value)
+            if url.scheme not in {'http', 'https', 'rtsp', 'rtmp'} or not url.hostname or url.fragment:
+                raise ValueError('Invalid playback URL')
+        return value
 
 
 class DesiredStateInput(BaseModel):
@@ -165,7 +177,8 @@ class TaskResponse(BaseModel):
         fields["sequence"] = record.get("sequence", 1)
         fields["health"] = record.get("health")
         fields["result_url"] = f"/v1/tasks/{record['id']}/result" if record["state"] == "succeeded" else None
-        fields["playback_url"] = f"{rtsp_base}/redacted/{record['id']}" if record["kind"] == "stream" and not record.get("publish_url") else None
+        fields["playback_url"] = (record.get('playback_url') or record.get('publish_url') or
+                                  f"{rtsp_base}/redacted/{record['id']}") if record["kind"] == "stream" else None
         return cls(**fields)
 
 

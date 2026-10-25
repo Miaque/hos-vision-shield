@@ -24,7 +24,7 @@ PATCH重复设置同一意图幂等，不允许重新设run，不能以停止接
 
 - **FileUrlInput**：kind必填枚举image/video；url必填HTTP或HTTPS URL，最长4096字符；禁止其他字段。
 - **UploadInput**：kind必填枚举image/video；file必填且恰好一个文件；不接受URL字段或服务器路径。
-- **StreamInput**：url必填RTSP URL，最长4096字符；可选publish_url指定外部RTSP/RTMP输出，可选max_bitrate为正整数bit/s实时编码上限；省略max_bitrate时不设置码率上限；允许摄像头URL凭据但不得回显。
+- **StreamInput**：url必填RTSP URL，最长4096字符；可选publish_url指定外部RTSP/RTMP输出；可选playback_url为完整HTTP/HTTPS/RTSP/RTMP播放地址，最长4096字符，不由服务端访问；可选max_bitrate为正整数bit/s实时编码上限；省略max_bitrate时不设置码率上限；允许摄像头URL凭据但不得回显。
 - **DesiredStateInput**：desired_state必填cancelled/stopped；文件只允许cancelled，流只允许stopped；其他值422。
 
 kind声明必须与实际解码格式一致。图片JPEG/PNG；文件MP4/H.264；流H.264；音频仅AAC或无音轨。
@@ -44,7 +44,7 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
 | ready | boolean |
 | created_at / updated_at | UTC+8 字符串，格式 `%Y-%m-%d %H:%M:%S`，例如 `2026-10-22 09:00:00` |
 | result_url | string或null；仅成功文件任务非空 |
-| playback_url | rtsp URL或null；流为稳定播放地址，ready=false时不可承诺可播放 |
+| playback_url | URL或null；流优先使用请求的playback_url，否则沿用完整publish_url，默认输出使用公开RTSP地址；ready=false时不可承诺可播放 |
 | error | null或{code: string, message: string} |
 | stats | {processed_frames: nonnegative integer, dropped_frames: nonnegative integer, elapsed_seconds: nonnegative number} |
 
@@ -57,7 +57,7 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
 实际视频编码事件已上报的任务还可附带`X-Video-Encoder: libx264`或`h264_nvenc`；旧任务和未上报路径不返回，不改变请求参数或JSON。该头不是硬件编解码全链路的证明。
 
 文件任务还可附带`X-Video-Decoder: h264_nvdec`或`h264`，表示实际硬件帧或原软件解码路径；未开始处理及旧任务可省略，不改变请求或JSON。兼容格式的CUDA文件使用NVDEC，其他格式保留原解码方式；选中硬解后失败不重试CPU，详见[诊断说明](../../002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
-上述诊断响应头仅在 `DEBUG=true` 时返回；默认生产环境不采样，也不返回旧任务的 `stats.stream` 诊断样本。原始来源、绝对磁盘路径、worker标识和发布凭据不进入响应。没有进度百分比，避免长流或未知时长的伪进度。
+上述诊断响应头仅在 `DEBUG=true` 时返回；默认生产环境不采样，也不返回旧任务的 `stats.stream` 诊断样本。原始来源、绝对磁盘路径、worker标识不进入响应。外部推流未指定playback_url时，返回的播放地址包含publish_url原有的凭据及查询参数；不应将其当作匿名播放地址。没有进度百分比，避免长流或未知时长的伪进度。
 
 ```json
 {

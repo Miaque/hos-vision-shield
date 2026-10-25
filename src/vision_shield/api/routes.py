@@ -95,6 +95,7 @@ async def create_stream(data: StreamInput, request: Request, response: Response,
                                       redaction_mode=data.redaction_mode, notification_target=target,
                                       profile_detection=False,
                                       **({"publish_url": data.publish_url} if data.publish_url is not None else {}),
+                                      **({"playback_url": data.playback_url} if data.playback_url is not None else {}),
                                       **({"max_bitrate": data.max_bitrate} if data.max_bitrate is not None else {}), **options)
     task = await replay(request, key, fingerprint)
     if task is not None:
@@ -107,6 +108,7 @@ async def create_stream(data: StreamInput, request: Request, response: Response,
     await require_media_capacity(settings)
     task = await request.app.state.store.create("stream", "rtsp", data.url, redaction_mode=data.redaction_mode,
         idempotency_key=key, fingerprint=fingerprint, notification_target=target, publish_url=data.publish_url,
+        playback_url=data.playback_url,
         max_bitrate=data.max_bitrate, **options)
     response.headers["Location"] = f"/v1/tasks/{task['id']}"
     return public(request, task)

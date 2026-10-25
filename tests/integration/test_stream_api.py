@@ -9,7 +9,8 @@ from vision_shield.jobs import tasks
 
 @pytest.mark.parametrize("publish_url", [None, "rtsp://127.0.0.1/custom?token=secret", "rtmp://127.0.0.1/live/custom?sign=secret"])
 @pytest.mark.parametrize("cadence", [False, True])
-async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_path, publish_url, cadence):
+@pytest.mark.parametrize("playback_url", [None, 'https://play.example/live/camera.m3u8?token=play'])
+async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_path, publish_url, cadence, playback_url):
     app = create_app(Settings(_env_file=None, redis_url=redis_url, media_root=tmp_path, source_allowlist=["127.0.0.1"]))
     async with app.router.lifespan_context(app), httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         redis = app.state.redis
@@ -19,16 +20,19 @@ async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_p
         body = {"url": "rtsp://127.0.0.1/source"}
         if publish_url:
             body["publish_url"] = publish_url
+        if playback_url:
+            body['playback_url'] = playback_url
         headers = {"Idempotency-Key": "stream"}
         if cadence:
             headers.update({"X-Detection-Interval": "3", "X-Tracking-Mode": "flow"})
         created = await client.post("/v1/stream-tasks", json=body, headers=headers)
         assert created.status_code == 202
         task = created.json()
-        assert bool(task["playback_url"]) is (publish_url is None) and not task["ready"]
-        assert "secret" not in created.text
+        assert task['playback_url'] == (playback_url or publish_url or f"rtsp://127.0.0.1:8554/redacted/{task['id']}")
+        assert not task['ready'] and 'publish_url' not in task
         stored = await app.state.store.get(task["id"])
         assert stored.get("publish_url") == publish_url
+        assert stored.get('playback_url') == playback_url
         assert "max_bitrate" not in stored
         assert stored.get("detection_interval", 1) == (3 if cadence else 1)
         assert stored.get("tracking", "template") == ("flow" if cadence else "template")
@@ -40,6 +44,10 @@ async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_p
         assert (await client.post("/v1/stream-tasks", json=body, headers=other_headers)).status_code == 409
         changed = body | {"publish_url": "rtmp://127.0.0.1/live/other"}
         assert (await client.post("/v1/stream-tasks", json=changed, headers=headers)).status_code == 409
+        changed = body | {'playback_url': 'https://play.example/other.m3u8'}
+        assert (await client.post('/v1/stream-tasks', json=changed, headers=headers)).status_code == 409
+        queried = await client.post('/v1/tasks/query', json={'task_ids': [task['id']]})
+        assert queried.json()['items'][0]['playback_url'] == task['playback_url']
         assert (await client.get(f"/v1/tasks/{task['id']}/result")).status_code == 409
         for _ in range(2):
             stopped = await client.patch(f"/v1/tasks/{task['id']}", json={"desired_state": "stopped"})

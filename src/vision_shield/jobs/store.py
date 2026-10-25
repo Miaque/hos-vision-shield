@@ -288,6 +288,7 @@ class TaskStore:
                      tracking: str = "template",
                      idempotency_key: str | None = None, fingerprint: str | None = None,
                      notification_target: str | None = None, publish_url: str | None = None,
+                     playback_url: str | None = None,
                      max_bitrate: int | None = None) -> dict:
         if redaction_mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
@@ -303,6 +304,8 @@ class TaskStore:
             raise ValueError('Unsupported tracking mode')
         if publish_url is not None and kind != "stream":
             raise ValueError("A publish URL requires a stream task")
+        if playback_url is not None and kind != 'stream':
+            raise ValueError('A playback URL requires a stream task')
         if max_bitrate is not None and (kind != "stream" or type(max_bitrate) is not int or max_bitrate < 1):
             raise ValueError("A max bitrate requires a positive integer stream task")
         task_id = task_id or str(uuid4())
@@ -325,6 +328,8 @@ class TaskStore:
         if publish_url is not None:
             task["publish_url"] = publish_url
             task["publisher_owner_id"] = None
+        if playback_url is not None:
+            task['playback_url'] = playback_url
         if max_bitrate is not None:
             task["max_bitrate"] = max_bitrate
         return await self._change(task_id, "create", task, self.stream_limit if kind == "stream" else self.file_limit)
