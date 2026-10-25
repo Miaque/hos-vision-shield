@@ -11,7 +11,7 @@ import sys
 from uuid import uuid4
 
 from redis.asyncio import Redis
-from taskiq.receiver import Receiver
+from taskiq.receiver import Receiver as TaskiqReceiver
 
 from vision_shield.config import Settings
 from vision_shield.jobs.tasks import file_broker, stream_broker
@@ -19,6 +19,22 @@ from vision_shield.jobs.diagnostics import observe_resources
 from vision_shield.media.runner import MediaProcess, run_process
 
 PROBE_TIMEOUT = 120
+
+
+class Receiver(TaskiqReceiver):
+    """A media worker must not reserve the next delivery while its only slot is busy."""
+
+    def __init__(self, broker, **kwargs):
+        super().__init__(broker, **kwargs)
+        broker.state.receive_ready = asyncio.Event()
+        broker.state.receive_ready.set()
+
+    async def callback(self, message, raise_err=False):
+        try:
+            return await super().callback(message, raise_err=raise_err)
+        finally:
+            if not self.broker.state.stop_event.is_set():
+                self.broker.state.receive_ready.set()
 
 
 async def probe_models(settings: Settings, stop: asyncio.Event, session=None) -> None:

@@ -51,8 +51,11 @@ class BoundedRedisBroker(RedisStreamBroker):
         return ack
 
     async def listen(self):
+        receive_ready = getattr(self.state, 'receive_ready', None)
         async with Redis(connection_pool=self.connection_pool) as client:
             while True:
+                if receive_ready is not None:
+                    await receive_ready.wait()
                 batches = await client.xreadgroup(self.consumer_group_name, self.consumer_name,
                                                  {self.queue_name: ">"}, count=1, block=1000)
                 messages = [(stream, entry_id, fields) for stream, batch in batches for entry_id, fields in batch]
@@ -71,6 +74,8 @@ class BoundedRedisBroker(RedisStreamBroker):
                         self.pending_acks.pop(message_id, None)
 
                     self.pending_acks[task_id] = ack
+                    if receive_ready is not None:
+                        receive_ready.clear()
                     yield AckableMessage(data=payload, ack=ack)
 
     async def ack_message(self, task_id):
