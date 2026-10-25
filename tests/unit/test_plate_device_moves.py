@@ -7,27 +7,65 @@ def move_device_like(source: torch.Tensor, target: torch.Tensor):
     return source.to(target.device)
 
 
+class FPN(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = torch.nn.Conv2d(1, 1, 1, bias=False)
+        self.bn = torch.nn.BatchNorm2d(1, eps=0)
+        with torch.no_grad():
+            self.conv.weight.fill_(0.25)
+            self.bn.weight.fill_(2)
+            self.bn.bias.fill_(0.5)
+            self.bn.running_mean.fill_(0.125)
+            self.bn.running_var.fill_(0.25)
+
+    def forward(self, pixels):
+        return self.bn(self.conv(pixels.reshape(-1, 1, 1, 1))).flatten()
+
+
+class PlateCore(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.backbone = FPN()
+
+
 class PlateMoves(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = PlateCore()
+
     def forward(self, pixels):
         indices = torch.arange(pixels.shape[0], dtype=pixels.dtype, device="cpu")
-        result = pixels
+        result = self.model.backbone(pixels)
         for _ in range(17):
             result = result + move_device_like(indices, pixels)
         return result, pixels.to(device="cpu", copy=True)
 
 
-@pytest.mark.parametrize("size", [0, 1, 17])
-def test_only_internal_device_moves_become_nonblocking(size):
-    from vision_shield.detection.egoblur import _async_device_moves
+class PlateWrapper(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = PlateMoves()
 
-    original = torch.jit.trace(PlateMoves(), torch.ones(3), check_trace=False)
-    candidate = _async_device_moves(original)
+    def forward(self, pixels):
+        return self.model(pixels)
+
+
+@pytest.mark.parametrize("size", [0, 1, 17])
+def test_frozen_plate_keeps_outputs_and_transfer_contract(size):
+    from vision_shield.detection.egoblur import _plate_forward
+
+    original = torch.jit.trace(PlateWrapper().eval(), torch.ones(3), check_trace=False)
+    original_graph = str(original.inlined_graph)
+    candidate = _plate_forward(original)
+    assert not candidate.graph.findAllNodes("aten::batch_norm")
+    assert len(original.inlined_graph.findAllNodes("aten::batch_norm")) == 1
     transfers = candidate.graph.findAllNodes("aten::to")
     assert sum(node.inputsAt(3).toIValue() is True for node in transfers) == 17
     assert str(transfers[-1].inputsAt(3).toIValue()) == "cpu"
     assert transfers[-1].inputsAt(5).toIValue() is False
     assert transfers[-1].inputsAt(6).toIValue() is True
-    assert "move_device_like" in str(original.graph)
+    assert str(original.inlined_graph) == original_graph
 
     pixels = torch.arange(size, dtype=torch.float32)
     with torch.inference_mode(), torch.jit.optimized_execution(False):
@@ -40,7 +78,7 @@ def test_only_internal_device_moves_become_nonblocking(size):
 
 
 def test_unrecognized_device_graph_fails_closed():
-    from vision_shield.detection.egoblur import _async_device_moves
+    from vision_shield.detection.egoblur import _plate_forward
 
-    with pytest.raises(RuntimeError, match="device-transfer graph"):
-        _async_device_moves(torch.jit.trace(torch.nn.Identity(), torch.ones(3)))
+    with pytest.raises(RuntimeError, match="Gen1 .*graph"):
+        _plate_forward(torch.jit.trace(torch.nn.Identity(), torch.ones(3)))
