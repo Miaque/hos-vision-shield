@@ -1,6 +1,8 @@
 """通知交付、安全投影和健康期限的无设施测试。"""
 
+import asyncio
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -48,6 +50,56 @@ async def test_reconnect_wait_is_bounded_and_retains_notification(monkeypatch):
     publisher.publish.side_effect = disconnected
     await deliver(store, publisher, {"task": record(), "token": "token", "attempts": 0})
     assert store.complete_notification.await_args.kwargs["delivered"] is False
+
+
+@pytest.mark.parametrize("failure_at", ["body", "publish", "complete"])
+async def test_dispatch_failure_logs_safe_event_context_and_keeps_other_deliveries(monkeypatch, caplog, failure_at):
+    """派发异常可定位到事件和调用位置，但不泄露异常文本中的凭据。"""
+    from redis.exceptions import ConnectionError
+
+    from vision_shield.jobs import notify
+
+    failed = {"task": record(), "token": "token", "attempts": 2}
+    healthy = {"task": record() | {"id": "other-task"}, "token": "other", "attempts": 0}
+    publisher, store, client = AsyncMock(), AsyncMock(), AsyncMock()
+    store.claim_notifications.side_effect = [[healthy, failed], [], asyncio.CancelledError()]
+    error_type = "ConnectionError" if failure_at == "complete" else "ValueError"
+    failure_site = {"body": "notification_body", "publish": "publish", "complete": "complete"}[failure_at]
+    if failure_at == "body":
+        failed["task"]["updated_at"] = "private-secret"
+
+    async def publish(target, body, event_id):
+        if failure_at == "publish" and event_id.startswith(failed["task"]["id"]):
+            raise ValueError("private-secret")
+
+    async def complete(event, **kwargs):
+        if failure_at == "complete" and event is failed:
+            raise ConnectionError("private-secret")
+        return True
+
+    publisher.publish.side_effect = publish
+    store.complete_notification.side_effect = complete
+    monkeypatch.setattr(notify, "Settings", lambda: Settings(_env_file=None))
+    monkeypatch.setattr(notify, "Redis", SimpleNamespace(from_url=lambda *a, **kw: client))
+    monkeypatch.setattr(notify, "TaskStore", lambda *a: store)
+    monkeypatch.setattr(notify, "AmqpNotifications", lambda *a: publisher)
+    monkeypatch.setattr(notify.asyncio, "sleep", AsyncMock())
+
+    with pytest.raises(asyncio.CancelledError):
+        await notify.main()
+
+    logs = [entry.getMessage() for entry in caplog.records if "通知派发异常" in entry.getMessage()]
+    assert len(logs) == 1
+    assert f"target=event-hub task={failed['task']['id']} sequence=7 attempts=3" in logs[0]
+    assert f"type={error_type}" in logs[0] and f"{failure_site}:" in logs[0]
+    assert "private-secret" not in caplog.text and "private-result" not in caplog.text
+    assert store.claim_notifications.await_count == 3
+    assert any(call.args[0] is healthy and call.kwargs["delivered"]
+               for call in store.complete_notification.await_args_list)
+    if failure_at != "complete":
+        assert not any(call.args[0] is failed for call in store.complete_notification.await_args_list)
+    publisher.close.assert_awaited_once()
+    client.aclose.assert_awaited_once()
 
 
 def test_untrusted_error_text_never_escapes():

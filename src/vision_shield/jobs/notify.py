@@ -7,6 +7,7 @@ import logging
 import os
 import random
 import signal
+import traceback
 from datetime import datetime, timedelta, timezone
 
 from aio_pika.exceptions import AMQPException
@@ -75,8 +76,14 @@ async def main():
                 targets = targets[1:] + targets[:1]
                 results = await asyncio.gather(*(deliver(store, publisher, event) for event in events),
                                                return_exceptions=True)
-                if any(isinstance(result, Exception) for result in results):
-                    logger.error("通知派发异常，持久责任保留等待租约恢复")
+                for event, result in zip(events, results):
+                    if isinstance(result, Exception):
+                        task = event["task"]
+                        # 异常文本可能含连接凭据，只记录类型和调用位置。
+                        at = [f"{frame.name}:{frame.lineno}" for frame in traceback.extract_tb(result.__traceback__)][-12:]
+                        logger.error("通知派发异常，持久责任保留等待租约恢复 target=%s task=%s sequence=%s attempts=%s type=%s at=%s",
+                                     task["notification_target"], task["id"], task["sequence"], event["attempts"] + 1,
+                                     type(result).__name__, at)
             except RedisError:
                 logger.error("通知存储不可用，等待恢复")
             await asyncio.sleep(0.5)
