@@ -283,7 +283,7 @@ MQ headers 为 `X-Vision-Shield-Target` 及 `X-Vision-Shield-Signature`；签名
 
 消费者校验签名、目标、冻结提交身份与序号，数据库提交成功后才 ACK；数据库故障重投，重复和旧序号不重复推进。Platform 与 Hub 都保留 `POST /v1/tasks/query` 批量校准，每批最多 100 项。查询响应不能让旧状态覆盖新通知。
 
-新目标的幂等作用域为 `(notification_target, Idempotency-Key)`，业务 `submission_key` 原样保存。Platform/Hub 首次提交时把目标与业务意图一起持久化，重试不随当前环境变量改路由。克隆数据库中的其他目标任务不允许被当前环境领取、查询、导入或停止；不自动改写它们的归属。旧 NULL 目标仅分别视为原 `platform`、`event-hub`，不能自动认作 `dev.*` 或 `prod.*`。切换目标前须先收敛旧在途任务及通知，不直接更换仍有在途任务的目标或密钥。
+新目标的幂等作用域为 `(notification_target, Idempotency-Key)`，业务 `submission_key` 原样保存。Platform/Hub 首次提交时把目标与业务意图一起持久化，重试不随当前环境变量改路由。历史未登记通知目标的作业沿用原 `platform`、`event-hub` 目标。切换目标前须先收敛旧在途任务及通知，不直接更换仍有在途任务的目标或密钥。
 
 通知目标是路由和幂等作用域，不是 Shield API 的身份认证。API 继续依赖受控网络访问；需要阻止任意调用方跨目标操作时，须另配访问控制。研发和正式还必须使用不同的推流路径，避免共享 GPU 输出覆盖；共享 GPU 容量不会因队列隔离而分开。
 

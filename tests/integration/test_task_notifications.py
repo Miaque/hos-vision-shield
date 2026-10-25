@@ -44,7 +44,7 @@ async def test_replay_is_before_capacity_and_conflict_does_not_overwrite(store):
 
 
 async def test_target_namespaces_separate_environments_and_share_atomic_replays(store):
-    """数据库克隆产生相同业务键时，各环境仍创建独立任务。"""
+    """不同环境使用相同业务键时仍创建独立任务，各自重试只恢复自身任务。"""
     async def create(target):
         return await store.create("image", "upload", "private/input", idempotency_key="same-key",
                                   fingerprint=target, notification_target=target)

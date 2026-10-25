@@ -345,7 +345,7 @@ class TaskStore:
     def _binding_key(key: str, notification_target: str | None = None) -> str:
         """键哈希避免外部文本成为 Redis 路径。"""
         prefix = "vs:idempotency:"
-        # 旧目标沿用原绑定；通用环境目标隔离克隆数据库中相同的业务幂等键。
+        # 旧目标沿用原绑定；通用目标分别保存业务幂等键，避免不同环境互相冲突。
         if notification_target not in (None, "platform", "event-hub"):
             prefix += "target:"
             key = json.dumps([notification_target, key], separators=(",", ":"))
