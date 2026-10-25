@@ -10,6 +10,27 @@ def frame(pts):
     return SimpleNamespace(pts=pts, time_base=Fraction(1, 1000))
 
 
+def test_attempt_origin_keeps_model_loading_as_zero_output_windows(monkeypatch):
+    import runpy
+    from pathlib import Path
+    from vision_shield.media import stream_metrics
+
+    monkeypatch.setattr(stream_metrics.time, 'monotonic', lambda: 130.0)
+    metrics = StreamMetrics(started=100.0)
+    metrics.submit(frame(40), 115.0, Fraction(40, 1000))
+    metrics.written(Fraction(40, 1000), 115.25)
+    stream = metrics.snapshot()
+    assert stream['started_monotonic'] == 100.0
+    stream.update(input_frames=1, queue_frames=0, audio_queue_bytes=0, failed_frames=0, protected_frames=0)
+    row = dict(task=dict(id='task', state='running', stats=dict(
+        processed_frames=1, dropped_frames=0, stream=stream)))
+    evaluate = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'scripts/evaluate-stream-metrics.py'))['summarize']
+    report = evaluate([row])['attempts'][0]
+    assert report['evidence_errors'] == []
+    assert report['observed_duration_seconds'] == 30.0
+    assert [window['fps'] for window in report['ten_second_windows']] == [0.0, 0.1, 0.0]
+
+
 def test_only_unique_written_frames_count_and_keep_receive_latency():
     metrics = StreamMetrics()
     metrics.submit(frame(40), 10.0, Fraction(90040, 1000))

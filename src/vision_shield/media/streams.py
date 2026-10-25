@@ -85,7 +85,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         raise ValueError("Unsupported output protocol")
     buffer = StreamBuffer(config["frame_buffer_size"], config["audio_buffer_seconds"], config["audio_buffer_bytes"], stop)
     writer_done = threading.Event()
-    metrics = StreamMetrics()
+    metrics = StreamMetrics(started=config.get('stream_started_monotonic'))
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
                              detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"))
     frames = None

@@ -140,6 +140,11 @@ async def test_history_stays_bounded_and_marks_interrupted_owner_before_new_atte
     cancel = asyncio.Event()
 
     async def run(*args, **kwargs):
+        origin = args[1]['config']['stream_started_monotonic']
+        history = next(call.kwargs['stream_attempts'] for call in reversed(store.update_owned.call_args_list)
+                       if 'stream_attempts' in call.kwargs)
+        assert origin == history[-1]['started_monotonic']
+        assert origin <= tasks.time.monotonic()
         cancel.set()
         return dict(returncode=-9, cancelled=True)
 

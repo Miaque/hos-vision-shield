@@ -21,8 +21,9 @@ def vcl_digest(payload):
 
 
 class StreamMetrics:
-    def __init__(self):
-        self.attempt_id, self.started = uuid4().hex, time.monotonic()
+    def __init__(self, *, started=None):
+        self.attempt_id = uuid4().hex
+        self.started = time.monotonic() if started is None else started
         self.pending, self.outputs = {}, deque(maxlen=512)
         self.frames = self.packets = self.unmatched = self.missing_receive = 0
         self.repairs = 0

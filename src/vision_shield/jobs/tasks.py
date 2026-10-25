@@ -174,7 +174,8 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
 
     try:
         while not cancel.is_set():
-            attempt = dict(run_id=uuid4().hex, generation=generation, started_at_unix=time.time())
+            attempt = dict(run_id=uuid4().hex, generation=generation, started_at_unix=time.time(),
+                           started_monotonic=time.monotonic())
             history.append(attempt)
             discarded += max(0, len(history) - 32)
             history = history[-32:]
@@ -216,7 +217,8 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
 
                 payload = dict(kind="stream", source=str(original.copy_with(host=address)),
                                publish_url=publish_url, config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid"),
-                                                               "publish_url": record.get("publish_url")},
+                                                               "publish_url": record.get("publish_url"),
+                                                               "stream_started_monotonic": attempt['started_monotonic']},
                                directory=str(settings.media_root.resolve() / task_id / f"attempt-{generation}"))
                 for key in ('detection_interval', 'tracking', 'max_bitrate'):
                     if key in record:

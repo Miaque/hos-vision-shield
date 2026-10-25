@@ -87,6 +87,7 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
     config = Settings(_env_file=None).model_dump(mode="json")
     config["inference_device"] = device
     config["publish_url"] = f"{scheme}://media.test/live/camera?sign=secret"
+    config['stream_started_monotonic'] = time.monotonic() - 25
     if fault:
         with pytest.raises(fault, match="inference failed"):
             streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
@@ -101,6 +102,7 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
     streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
                            Detector(), config, threading.Event(), events.append)
     metrics = events[-1]['stats']['stream']
+    assert metrics['started_monotonic'] == config['stream_started_monotonic']
     assert events[-1]['stream_end']['reason'] == 'source_eof'
     assert events[-1]['stream_end']['attempt_id'] == metrics['attempt_id']
     assert metrics['input_frames'] == metrics['encoded_frames'] == 12
