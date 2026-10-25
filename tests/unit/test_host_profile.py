@@ -108,6 +108,30 @@ def test_candidate_evidence_is_bounded_and_keeps_empty_discovery_results(tmp_pat
     collector.close()
 
 
+def test_final_mask_evidence_keeps_pixel_bounds_empty_frames_and_budget(tmp_path, monkeypatch):
+    from contextlib import ExitStack
+    from vision_shield.redaction import FrameRedactor
+
+    collector = profile.ProfileTimes(tmp_path)
+    boxes = [(-0.2, 1.8, 12.3, 25.1), (22, 1, 23, 4)]
+    monkeypatch.setattr(FrameRedactor, "regions", lambda self, *args, **kwargs: boxes)
+    with ExitStack() as stack:
+        profile.instrument(stack, collector)
+        pixels = SimpleNamespace(shape=(20, 16, 3))
+        assert FrameRedactor.regions(object(), pixels, 0.0) is boxes
+        boxes.clear()
+        assert FrameRedactor.regions(object(), pixels, 0.1) is boxes
+    evidence = collector.report(2)["mask_evidence"]
+    assert evidence["rows"] == [[1, [[0, 1, 13, 20]]], [2, []]]
+    assert evidence["shape"] == [20, 16] and not evidence["truncated"]
+    collector.mask_bytes = evidence["byte_limit"]
+    with profile.scope(frame=3):
+        collector.record_masks(pixels.shape, [])
+    evidence = collector.report(3)["mask_evidence"]
+    assert evidence["truncated"] and len(evidence["rows"]) == 2
+    collector.close()
+
+
 def test_batched_view_forward_is_not_attributed_to_the_last_tile(tmp_path):
     from itertools import batched
 

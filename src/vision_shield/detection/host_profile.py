@@ -7,6 +7,7 @@ from contextvars import ContextVar, copy_context
 from functools import wraps
 import hashlib
 import json
+import math
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
@@ -102,6 +103,21 @@ class ProfileTimes:
         self.frames = 0
         self.measurements = 0
         self.candidates, self.candidate_bytes, self.candidates_truncated = [], 0, False
+        self.masks, self.mask_bytes, self.masks_truncated, self.mask_shape = [], 0, False, None
+
+    def record_masks(self, shape, boxes):
+        height, width = shape[:2]
+        rectangles = [[max(0, math.floor(x1)), max(0, math.floor(y1)),
+                       min(width, math.ceil(x2)), min(height, math.ceil(y2))] for x1, y1, x2, y2 in boxes]
+        row = [CONTEXT.get()["frame"], [box for box in rectangles if box[2] > box[0] and box[3] > box[1]]]
+        size = len(json.dumps(row).encode("utf-8"))
+        with self.lock:
+            self.mask_shape = [height, width]
+            if self.mask_bytes + size > 64 * 1024:
+                self.masks_truncated = True
+                return
+            self.masks.append(row)
+            self.mask_bytes += size
 
     def record_candidates(self, stage, detections):
         context = CONTEXT.get()
@@ -184,6 +200,8 @@ class ProfileTimes:
                     views={name: dict(counts) for name, counts in self.views.items()}, device_samples=self.device_samples,
                     candidate_evidence=dict(first_frames=32, byte_limit=64 * 1024,
                                             truncated=self.candidates_truncated, rows=self.candidates),
+                    mask_evidence=dict(shape=self.mask_shape, byte_limit=64 * 1024,
+                                       truncated=self.masks_truncated, rows=self.masks),
                     notes=["Host-wall scopes include submission/waits; they are not GPU kernel time.",
                            "Nested/concurrent stages must not be summed into total time.",
                            "Steady means calls after the first 10 per group; new input shapes may still initialize.",
@@ -322,6 +340,8 @@ def instrument(stack, collector):
                 result = original(instance, *args, **kwargs)
                 if stage == "quality-detection":
                     collector.record_candidates("accepted", result)
+                if frame:
+                    collector.record_masks(args[0].shape, result)
                 return result
 
         stack.enter_context(patch.object(owner, name, wrapped))
