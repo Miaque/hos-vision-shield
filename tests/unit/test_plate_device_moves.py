@@ -82,3 +82,31 @@ def test_unrecognized_device_graph_fails_closed():
 
     with pytest.raises(RuntimeError, match="Gen1 .*graph"):
         _plate_forward(torch.jit.trace(torch.nn.Identity(), torch.ones(3)))
+
+
+def test_explicit_cpu_backbone_is_folded_without_mutating_live_model(monkeypatch):
+    from vision_shield.detection.egoblur import _plate_forward
+
+    original = torch.jit.trace(PlateWrapper().eval(), torch.ones(3), check_trace=False)
+    backbone = torch.jit.trace(FPN().eval(), torch.ones(3), check_trace=False)
+    before = str(original.inlined_graph)
+    freeze, folded = torch.jit.freeze, []
+
+    def observe(module):
+        folded.append(module)
+        assert all(parameter.device.type == "cpu" for parameter in module.parameters())
+        return freeze(module)
+
+    monkeypatch.setattr(torch.jit, "freeze", observe)
+    candidate = _plate_forward(original, backbone)
+    assert folded == [backbone]
+    assert str(original.inlined_graph) == before
+    assert not candidate.graph.findAllNodes("aten::batch_norm")
+    for size in (0, 1, 17):
+        pixels = torch.arange(size, dtype=torch.float32)
+        with torch.inference_mode(), torch.jit.optimized_execution(False):
+            expected, actual = original(pixels), candidate(original, pixels)
+        assert all(torch.equal(a, b) for a, b in zip(expected, actual, strict=True))
+    with pytest.raises(RuntimeError, match="constant dtype"):
+        _plate_forward(original, backbone.double())
+    assert str(original.inlined_graph) == before

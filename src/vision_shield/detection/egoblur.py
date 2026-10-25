@@ -11,7 +11,7 @@ from vision_shield.detection import Detection
 from vision_shield.detection.timing import measure
 
 
-def _frozen_backbone_graph(model):
+def _frozen_backbone_graph(model, cpu_backbone=None):
     # shortcut: fixed Gen1/TorchScript internals; revalidate the graph and APIs on model or PyTorch upgrades.
     graph = model.graph.copy()
     calls = [node for node in graph.nodes() if node.kind() == "prim::CallMethod"]
@@ -22,8 +22,21 @@ def _frozen_backbone_graph(model):
                  and str(node.inputsAt(0).type()).endswith(".FPN")]
     if len(backbones) != 1:
         raise RuntimeError("Unexpected Gen1 backbone graph")
-    frozen = torch.jit.freeze(model.model.model.backbone)
-    for target, call, replacement in ((wrapper, backbones[0], frozen.inlined_graph),
+    frozen = torch.jit.freeze(model.model.model.backbone if cpu_backbone is None else cpu_backbone)
+    backbone_graph = frozen.inlined_graph.copy()
+    parameter = next(model.parameters())
+    for node in backbone_graph.findAllNodes("prim::Constant"):
+        value = node.output().toIValue()
+        if isinstance(value, torch.Tensor):
+            if value.dtype != parameter.dtype:
+                raise RuntimeError("Unexpected Gen1 backbone constant dtype")
+            with backbone_graph.insert_point_guard(node):
+                transferred = backbone_graph.insertConstant(value.to(parameter.device, non_blocking=True))
+            node.output().replaceAllUsesWith(transferred)
+    # Inference uses another stream; finish the one-time weight copies before exposing the graph.
+    if parameter.is_cuda:
+        torch.cuda.current_stream(parameter.device).synchronize()
+    for target, call, replacement in ((wrapper, backbones[0], backbone_graph),
                                        (graph, calls[0], wrapper)):
         with target.insert_point_guard(call):
             result, = target.insertGraph(replacement, list(call.inputs()))
@@ -37,8 +50,8 @@ def _frozen_backbone_graph(model):
     return graph
 
 
-def _plate_forward(model):
-    graph = _frozen_backbone_graph(model)
+def _plate_forward(model, cpu_backbone=None):
+    graph = _frozen_backbone_graph(model, cpu_backbone)
     moves = [node for node in graph.findAllNodes("aten::to")
              if node.schema().startswith("aten::to.prim_Device(")]
     if len(moves) != 17:
@@ -54,15 +67,17 @@ def _plate_forward(model):
 class _HalfPlate(torch.nn.Module):
     """Keep float normalization and original proposal/ROI logic with half model weights."""
 
-    def __init__(self, model):
+    def __init__(self, model, cpu_backbone=None):
         super().__init__()
         self.model = model
         core = model.model.model
         mean, std = core.pixel_mean.clone(), core.pixel_std.clone()
         model.half()
+        if cpu_backbone is not None:
+            cpu_backbone.half()
         core.pixel_mean, core.pixel_std = mean, std
         # Internal transfers target CUDA; their consumers remain ordered on the model stream.
-        self._forward = _plate_forward(model)
+        self._forward = _plate_forward(model, cpu_backbone)
 
     def forward(self, pixels):
         with torch.autocast("cuda", dtype=torch.float16):

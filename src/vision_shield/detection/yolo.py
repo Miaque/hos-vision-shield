@@ -19,7 +19,9 @@ class Detector(EgoBlurDetector):
             raise ValueError("quality_yolo requires CUDA inference")
         super().__init__(None, plate_path, max_side, box_padding, face_threshold=face_threshold, device=device)
         if torch.cuda.get_device_capability(self.device)[0] >= 8:
-            self.models[1] = _HalfPlate(self.models[1])
+            # Fold static weights on CPU; all forward weights and operations still target the selected CUDA device.
+            backbone = torch.jit.load(str(plate_path), map_location="cpu").eval().model.model.backbone
+            self.models[1] = _HalfPlate(self.models[1], backbone)
         self.face_path, self.sessions = Path(face_path), {}
         self.providers = [self._session(160, 160).get_providers()[0]]
 
