@@ -244,13 +244,13 @@ uv run pytest -q
 
 #### 默认 vhost 与环境配置
 
-所有服务使用默认 vhost `/`（AMQP URI 中写为 `/%2F`），通知连接独立于 Platform/Hub 原有业务 MQ 配置。以下均为占位示例，密码须 URL 编码，四个签名密钥分别生成，不能复用播放密钥或用户 token。
+所有服务使用默认 vhost `/`（AMQP URI 中写为 `/%2F`），通知连接独立于 Platform/Hub 原有业务 MQ 配置。以下均为占位示例，密码须 URL 编码。通知只使用 RabbitMQ 账号和队列权限控制发布与消费，不再配置应用层通知密钥。
 
 Shield 的 `.env.compose`：
 
 ```dotenv
 VISION_SHIELD_NOTIFICATION_AMQP_URL='amqps://shield-publisher:ENCODED_PASSWORD@MQ_HOST:5671/%2F'
-NOTIFICATION_TARGETS='{"dev.platform":{"secret":"REPLACE_WITH_DEV_PLATFORM_64_HEX_SECRET"},"dev.event-hub":{"secret":"REPLACE_WITH_DEV_HUB_64_HEX_SECRET"},"prod.platform":{"secret":"REPLACE_WITH_PROD_PLATFORM_64_HEX_SECRET"},"prod.event-hub":{"secret":"REPLACE_WITH_PROD_HUB_64_HEX_SECRET"}}'
+NOTIFICATION_TARGETS='["dev.platform","dev.event-hub","prod.platform","prod.event-hub"]'
 ```
 
 Platform 和 Event Hub 各部署的环境变量：
@@ -259,17 +259,16 @@ Platform 和 Event Hub 各部署的环境变量：
 VISION_SHIELD_BASE_URL=http://SHIELD_HOST:28000
 VISION_SHIELD_NOTIFICATION_AMQP_URL='amqps://environment-consumer:ENCODED_PASSWORD@MQ_HOST:5671/%2F'
 VISION_SHIELD_NOTIFICATION_TARGET=dev.platform
-VISION_SHIELD_NOTIFICATION_SECRET=REPLACE_WITH_DEV_PLATFORM_64_HEX_SECRET
 ```
 
-| 部署 | 通知目标 | 签名密钥对应 Shield 项 |
-| --- | --- | --- |
-| 研发 Platform | `dev.platform` | `dev.platform.secret` |
-| 研发 Event Hub | `dev.event-hub` | `dev.event-hub.secret` |
-| 正式 Platform | `prod.platform` | `prod.platform.secret` |
-| 正式 Event Hub | `prod.event-hub` | `prod.event-hub.secret` |
+| 部署 | 通知目标 |
+| --- | --- |
+| 研发 Platform | `dev.platform` |
+| 研发 Event Hub | `dev.event-hub` |
+| 正式 Platform | `prod.platform` |
+| 正式 Event Hub | `prod.event-hub` |
 
-Platform 还需独立的 `CAMERA_REDACTION_PLAY_SECRET`（至少 32 字符）；固定外部 FLV 不需要 Platform 内部 HLS 配置。通知消费者分别在 Platform `camera-redaction-worker` 与 Hub `media_redaction_worker` 中启动，不在 API 中启动。更新环境变量后重新创建这些 worker 和 API 容器，单纯 restart 不会更新 Compose 注入的环境变量。
+Platform 播放通过登录、设备权限和共享观看会话鉴权，不再要求 `CAMERA_REDACTION_PLAY_SECRET`，也不再生成额外播放 token。固定外部 FLV 不需要 Platform 内部 HLS 配置。通知消费者分别在 Platform `camera-redaction-worker` 与 Hub `media_redaction_worker` 中启动，不在 API 中启动。更新环境变量后重新创建这些 worker 和 API 容器，单纯 restart 不会更新 Compose 注入的环境变量。
 
 队列固定为 `hos.vision-shield.task-events.v1.<目标>`，例如 `hos.vision-shield.task-events.v1.dev.platform`。使用默认 exchange 按完整队列名直接投递，不修改已有业务 exchange、绑定、策略或队列。首次发布或消费时声明 durable quorum 队列，参数为 `x-max-length=10000`、`x-overflow=reject-publish`、`x-delivery-limit=-1`。最后一项避免暂时数据库故障因 quorum 重投上限丢失消息；消费者延迟 1 秒再 NACK，非法通知直接拒绝，不进行无限重投。
 
@@ -279,11 +278,11 @@ Platform 还需独立的 `CAMERA_REDACTION_PLAY_SECRET`（至少 32 字符）；
 
 独立运行 `python -m vision_shield.jobs.notify`（Compose 已提供 notifier）。任务状态与通知责任原子登记；持久消息、mandatory 路由及 publisher confirm 全部成功后才释放 Shield 的本次通知责任。发布全过程超时 5 秒，失败在 Redis 中指数退避 1—300 秒，仅重试通知，不重新推理。多个 notifier 共享全局最多 4 个、每目标最多 2 个在途通知，目标轮转领取，过期租约可接管。
 
-MQ headers 为 `X-Vision-Shield-Target` 及 `X-Vision-Shield-Signature`；签名是 `HMAC-SHA256(secret, target + "\n" + 原始正文)`，小写十六进制。正文沿用 `schema_version=1`、`event_id=task_id:sequence`、`sequence`、`task_id`、`submission_key`、`kind`、`state`、`desired_state`、`ready`、`occurred_at`、`health`、`error_code`，不含输入、输出 URL 或来源凭据。正文最多 16 KiB。MQ 不使用 HTTP 的五分钟时间窗，允许消费者离线积压；实时流健康仍以原始 `last_output_at` 和 `valid_until` 为准，收信不能延长旧画面期限。
+MQ header `X-Vision-Shield-Target` 标识通知目标，不再发送或校验应用层签名。正文沿用 `schema_version=1`、`event_id=task_id:sequence`、`sequence`、`task_id`、`submission_key`、`kind`、`state`、`desired_state`、`ready`、`occurred_at`、`health`、`error_code`，不含输入、输出 URL 或来源凭据。正文最多 16 KiB。允许消费者离线积压；实时流健康仍以原始 `last_output_at` 和 `valid_until` 为准，收信不能延长旧画面期限。
 
-消费者校验签名、目标、冻结提交身份与序号，数据库提交成功后才 ACK；数据库故障重投，重复和旧序号不重复推进。Platform 与 Hub 都保留 `POST /v1/tasks/query` 批量校准，每批最多 100 项。查询响应不能让旧状态覆盖新通知。
+消费者校验目标、冻结提交身份与序号，数据库提交成功后才 ACK；数据库故障重投，重复和旧序号不重复推进。Platform 与 Hub 都保留 `POST /v1/tasks/query` 批量校准，每批最多 100 项。查询响应不能让旧状态覆盖新通知。
 
-新目标的幂等作用域为 `(notification_target, Idempotency-Key)`，业务 `submission_key` 原样保存。Platform/Hub 首次提交时把目标与业务意图一起持久化，重试不随当前环境变量改路由。历史未登记通知目标的作业沿用原 `platform`、`event-hub` 目标。切换目标前须先收敛旧在途任务及通知，不直接更换仍有在途任务的目标或密钥。
+新目标的幂等作用域为 `(notification_target, Idempotency-Key)`，业务 `submission_key` 原样保存。Platform/Hub 首次提交时把目标与业务意图一起持久化，重试不随当前环境变量改路由。历史未登记通知目标的作业沿用原 `platform`、`event-hub` 目标。切换目标前须先收敛旧在途任务及通知，不直接更换仍有在途任务的目标。
 
 通知目标是路由和幂等作用域，不是 Shield API 的身份认证。API 继续依赖受控网络访问；需要阻止任意调用方跨目标操作时，须另配访问控制。研发和正式还必须使用不同的推流路径，避免共享 GPU 输出覆盖；共享 GPU 容量不会因队列隔离而分开。
 

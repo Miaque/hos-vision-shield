@@ -77,7 +77,7 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
 
 ## Errors
 
-任务状态通知仅通过 RabbitMQ，配置与消息合同见 [README 可靠任务交接](../../../README.md#可靠任务交接)。创建请求可同时传 `Idempotency-Key` 和 `X-Notification-Target`，目标必须在 `NOTIFICATION_TARGETS` 登记。环境目标纳入幂等作用域，MQ 签名覆盖目标和原始正文；不支持 HTTP 回调 URL。
+任务状态通知仅通过 RabbitMQ，配置与消息合同见 [README 可靠任务交接](../../../README.md#可靠任务交接)。创建请求可同时传 `Idempotency-Key` 和 `X-Notification-Target`，目标必须在 `NOTIFICATION_TARGETS` 登记。环境目标纳入幂等作用域，消息来源由 RabbitMQ 账号和队列权限控制；不支持 HTTP 回调 URL。
 
 统一响应：{"error":{"code":"capacity_exceeded","message":"Task capacity is full"}}。
 不暴露内部异常、源码路径、源地址或凭据；参数校验错误也转换为同一外层结构。

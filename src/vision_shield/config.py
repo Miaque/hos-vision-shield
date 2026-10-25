@@ -6,18 +6,11 @@ from pathlib import Path
 from typing import Annotated, Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PositiveSeconds = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 PositiveCount = Annotated[int, Field(gt=0)]
-
-
-class NotificationTarget(BaseModel):
-    """只登记通知目标的独立签名密钥，路由由目标名固定派生。"""
-
-    model_config = {"extra": "forbid"}
-    secret: SecretStr = Field(min_length=32)
 
 
 class Settings(BaseSettings):
@@ -46,8 +39,8 @@ class Settings(BaseSettings):
     message_limit: PositiveCount = 100
     notification_limit: PositiveCount = 1000
     media_disk_high_watermark: Annotated[float, Field(gt=0, lt=1, allow_inf_nan=False)] = 0.95
-    notification_targets: dict[Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$",
-                                                     max_length=64)], NotificationTarget] = Field(default_factory=dict)
+    notification_targets: list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$",
+                                                     max_length=64)]] = Field(default_factory=list)
     vision_shield_notification_amqp_url: SecretStr = SecretStr("")
     frame_buffer_size: PositiveCount = 2
     audio_buffer_seconds: PositiveSeconds = 16

@@ -128,7 +128,7 @@ async def test_upload_race_and_lost_create_response_keep_only_owned_input(redis_
     from vision_shield.api import routes
     monkeypatch.setattr(routes, "require_worker", AsyncMock())
     settings = Settings(_env_file=None, redis_url=redis_url, media_root=tmp_path,
-        vision_shield_notification_amqp_url="amqp://mq/%2F", notification_targets={"event-hub": {"secret": "x" * 32}})
+        vision_shield_notification_amqp_url="amqp://mq/%2F", notification_targets=["event-hub"])
     app = create_app(settings)
     async with app.router.lifespan_context(app), httpx.AsyncClient(
         transport=httpx.ASGITransport(app), base_url="http://test"

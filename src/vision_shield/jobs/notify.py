@@ -41,16 +41,14 @@ def notification_body(task: dict) -> bytes:
     return json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode()
 
 
-async def deliver(store: TaskStore, publisher: AmqpNotifications, settings: Settings, event: dict) -> None:
+async def deliver(store: TaskStore, publisher: AmqpNotifications, event: dict) -> None:
     """持久发布确认后交接责任，失败只重试通知，不重跑推理。"""
     target_id = event["task"]["notification_target"]
-    target = settings.notification_targets[target_id]
     body = notification_body(event["task"])
     delivered = False
     try:
         async with asyncio.timeout(5):
-            await publisher.publish(target_id, body, target.secret.get_secret_value(),
-                                    f"{event['task']['id']}:{event['task']['sequence']}")
+            await publisher.publish(target_id, body, f"{event['task']['id']}:{event['task']['sequence']}")
         delivered = True
     except (AMQPException, OSError, TimeoutError, RuntimeError):
         logger.warning("通知未确认 target=%s task=%s attempts=%s", target_id,
@@ -75,7 +73,7 @@ async def main():
             try:
                 events = await store.claim_notifications(targets=targets)
                 targets = targets[1:] + targets[:1]
-                results = await asyncio.gather(*(deliver(store, publisher, settings, event) for event in events),
+                results = await asyncio.gather(*(deliver(store, publisher, event) for event in events),
                                                return_exceptions=True)
                 if any(isinstance(result, Exception) for result in results):
                     logger.error("通知派发异常，持久责任保留等待租约恢复")

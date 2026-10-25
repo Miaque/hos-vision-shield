@@ -65,7 +65,7 @@ async def test_upload_fingerprint_includes_effective_cadence_and_tracking(tmp_pa
 
     monkeypatch.setattr(routes, "require_worker", AsyncMock())
     app = create_app(Settings(_env_file=None, media_root=tmp_path,
-        vision_shield_notification_amqp_url="amqp://mq/%2F", notification_targets={"event-hub": {"secret": "x" * 32}}))
+        vision_shield_notification_amqp_url="amqp://mq/%2F", notification_targets=["event-hub"]))
     async with app.router.lifespan_context(app), httpx.AsyncClient(
         transport=httpx.ASGITransport(app), base_url="http://test"
     ) as client:

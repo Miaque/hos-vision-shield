@@ -1,4 +1,4 @@
-"""通知签名、安全投影和健康期限的无设施测试。"""
+"""通知交付、安全投影和健康期限的无设施测试。"""
 
 import json
 from unittest.mock import AsyncMock
@@ -21,12 +21,10 @@ def record():
 @pytest.mark.parametrize("failure", [None, TimeoutError(), RuntimeError("negative confirmation")])
 async def test_notification_confirms_only_after_persistent_publish(failure):
     """发布失败保留重试责任，通知不包含来源或成品凭据。"""
-    settings = Settings(_env_file=None, vision_shield_notification_amqp_url="amqp://mq/%2F",
-                        notification_targets={"event-hub": {"secret": "x" * 32}})
     publisher = AsyncMock()
     publisher.publish.side_effect = failure
     store = AsyncMock()
-    await deliver(store, publisher, settings, {"task": record(), "token": "token", "attempts": 0})
+    await deliver(store, publisher, {"task": record(), "token": "token", "attempts": 0})
     body = publisher.publish.await_args.args[1]
     assert b"private-secret" not in body and b"private-result" not in body
     assert json.loads(body)["event_id"].endswith(":7")
@@ -44,13 +42,11 @@ async def test_reconnect_wait_is_bounded_and_retains_notification(monkeypatch):
         assert seconds == 5
         return original_timeout(0.02)
     monkeypatch.setattr(notify.asyncio, "timeout", bounded)
-    settings = Settings(_env_file=None, vision_shield_notification_amqp_url="amqp://mq/%2F",
-                        notification_targets={"event-hub": {"secret": "x" * 32}})
     publisher, store = AsyncMock(), AsyncMock()
     async def disconnected(*args):
         await asyncio.Event().wait()
     publisher.publish.side_effect = disconnected
-    await deliver(store, publisher, settings, {"task": record(), "token": "token", "attempts": 0})
+    await deliver(store, publisher, {"task": record(), "token": "token", "attempts": 0})
     assert store.complete_notification.await_args.kwargs["delivered"] is False
 
 
@@ -71,10 +67,9 @@ def test_health_never_renews_from_observation_or_stale_owner():
     assert stream_health(task | {"last_output_ms": None}, 11000)["valid_until"] is None
 
 
-def test_notification_target_rejects_arbitrary_destinations_and_short_secrets():
-    """目标由部署注册，签名密钥有最小长度。"""
-    for target in ({"unknown": {"url": "http://hub", "secret": "x" * 32}},
-                   {"event-hub": {"url": "http://user:password@hub", "secret": "x" * 32}},
-                   {"event-hub": {"url": "http://hub", "secret": "short"}}):
+def test_notification_target_rejects_arbitrary_destinations():
+    """仅接受合法目标名，不允许通知目标携带任意回调 URL。"""
+    for target in (["http://hub"], ["../hub"], [""]):
         with pytest.raises(ValueError):
-            Settings(_env_file=None, notification_targets=target)
+            Settings(_env_file=None, vision_shield_notification_amqp_url="amqp://mq/%2F",
+                     notification_targets=target)
