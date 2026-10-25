@@ -68,7 +68,7 @@ def test_gpu_batches_keep_profiled_video_and_record_all_view_regions(generated_m
     import json
     from vision_shield.detection import load_detector
 
-    config = Settings(_env_file=None, inference_device="cuda", detection_backend="quality_yolo").model_dump()
+    config = Settings(_env_file=None, debug=True, inference_device="cuda", detection_backend="quality_yolo").model_dump()
     plain, sampled = tmp_path / "plain.mp4", tmp_path / "sampled.mp4"
     detector = load_detector(config)
     detector.detail.tile_side = 160

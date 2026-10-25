@@ -79,7 +79,7 @@ async def test_resource_api_returns_worker_samples_with_age_and_stale_status():
                             zrangebyscore=AsyncMock(side_effect=[[b'worker-1'], [b'worker-2']]),
                             mget=AsyncMock(return_value=[json.dumps(sample), None]))
     app = create_app(Settings(_env_file=None))
-    app.state.settings = Settings(_env_file=None)
+    app.state.settings = Settings(_env_file=None, debug=True)
     app.state.redis = redis
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
         response = await client.get('/v1/diagnostics/resources')
@@ -99,7 +99,7 @@ async def test_resource_api_handles_empty_pools_and_bad_samples(workers, samples
                             zrangebyscore=AsyncMock(side_effect=[workers, []]),
                             mget=AsyncMock(return_value=samples))
     app = create_app(Settings(_env_file=None))
-    app.state.settings = Settings(_env_file=None)
+    app.state.settings = Settings(_env_file=None, debug=True)
     app.state.redis = redis
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
         response = await client.get('/v1/diagnostics/resources')

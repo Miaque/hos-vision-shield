@@ -39,7 +39,8 @@ async def test_probe_success_and_supervisor_timeout(monkeypatch):
     assert reclaimed.is_set()
 
 
-async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
+@pytest.mark.parametrize('debug', [False, True])
+async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch, debug):
     stop, active, reclaimed = asyncio.Event(), asyncio.Event(), asyncio.Event()
     sampling, sampling_stopped = asyncio.Event(), asyncio.Event()
     calls = []
@@ -73,7 +74,7 @@ async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
             reclaimed.set()
         result.callback = callback
         return result
-    monkeypatch.setattr(worker, "Settings", lambda: Settings(_env_file=None, heartbeat_seconds=0.01))
+    monkeypatch.setattr(worker, "Settings", lambda: Settings(_env_file=None, heartbeat_seconds=0.01, debug=debug))
     monkeypatch.setattr(worker, "file_broker", broker)
     monkeypatch.setattr(worker, "Redis", lambda **kw: client)
     monkeypatch.setattr(worker, "probe_models", probe)
@@ -88,7 +89,7 @@ async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
         running.cancel()
         await asyncio.gather(running, return_exceptions=True)
     assert reclaimed.is_set()
-    assert sampling.is_set() and sampling_stopped.is_set()
+    assert sampling.is_set() is debug and sampling_stopped.is_set() is debug
     client.zrem.assert_awaited_once()
     assert client.zrem.call_args.args[0] == "vs:workers:files"
     broker.shutdown.assert_awaited_once()

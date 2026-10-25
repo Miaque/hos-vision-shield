@@ -13,10 +13,11 @@ from vision_shield.api.schemas import Stats
 
 
 @pytest.mark.parametrize("load_fails", [False, True])
-def test_child_model_timing_and_failure_have_no_success(tmp_path, monkeypatch, capsys, load_fails):
+@pytest.mark.parametrize("debug", [False, True])
+def test_child_model_timing_and_failure_have_no_success(tmp_path, monkeypatch, capsys, load_fails, debug):
     from vision_shield import detection
     payload = dict(kind="image", source="rtsp://private:secret@camera/input", directory=str(tmp_path / "attempt"),
-                   config=Settings(_env_file=None).model_dump(mode="json"))
+                   config=Settings(_env_file=None, debug=debug).model_dump(mode="json"))
     monkeypatch.setattr(child.sys, "stdin", io.StringIO(json.dumps(payload) + "\n"))
     monkeypatch.setattr(child.threading, "Thread", lambda **kw: SimpleNamespace(start=lambda: None))
     def load(config):
@@ -29,7 +30,7 @@ def test_child_model_timing_and_failure_have_no_success(tmp_path, monkeypatch, c
     output = capsys.readouterr().out
     events = [json.loads(line) for line in output.splitlines()]
     timings = [event for event in events if "model_load_seconds" in event]
-    assert bool(timings) is not load_fails
+    assert bool(timings) is (debug and not load_fails)
     if timings:
         assert timings[0]["model_load_seconds"] >= 0
     assert not any("result_ref" in event for event in events)
@@ -55,7 +56,7 @@ async def test_task_stage_timings_are_headers_and_do_not_change_the_json_contrac
                   updated_at="2026-10-22T00:00:01Z", error=None,
                   stats=dict(processed_frames=1, dropped_frames=0, elapsed_seconds=2),
                   timings=dict(frame=1.5, inference=1.25, encode=0.1), source_ref="rtsp://private:secret@camera")
-    app = create_app(Settings(_env_file=None))
+    app = create_app(Settings(_env_file=None, debug=True))
     async with app.router.lifespan_context(app), httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
@@ -101,7 +102,7 @@ def test_child_attaches_requested_sampler_and_finishes_only_after_video(tmp_path
     detector = SimpleNamespace(primary=primary)
     source = tmp_path / 'source.mp4'
     payload = dict(kind='video', source=str(source), directory=str(tmp_path / 'attempt'),
-                   profile_detection=True, config=Settings(_env_file=None).model_dump(mode='json'))
+                   profile_detection=True, config=Settings(_env_file=None, debug=True).model_dump(mode='json'))
     monkeypatch.setattr(child.sys, 'stdin', io.StringIO(json.dumps(payload) + '\n'))
     monkeypatch.setattr(child.threading, 'Thread', lambda **kw: SimpleNamespace(start=lambda: None))
     monkeypatch.setattr(detection, 'load_detector', lambda cfg: detector)
@@ -117,7 +118,8 @@ def test_child_attaches_requested_sampler_and_finishes_only_after_video(tmp_path
     assert events[1]['result_ref'].endswith('result.mp4')
 
 
-def test_inference_timing_includes_local_rechecks(monkeypatch):
+@pytest.mark.parametrize('debug', [False, True])
+def test_inference_timing_includes_local_rechecks(monkeypatch, debug):
     import numpy as np
     from vision_shield import redaction
 
@@ -132,13 +134,15 @@ def test_inference_timing_includes_local_rechecks(monkeypatch):
             clock[0] += 0.05
             return [(20, 20, 40, 40)] if self.calls == 1 else []
     detector = Once()
-    redactor = redaction.FrameRedactor(detector)
+    redactor = redaction.FrameRedactor(detector, debug=debug)
     pixels = np.full((100, 100, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
     redactor.apply(pixels, 0.05)
     assert detector.calls == 3, "两次全图和一次局部确认都应实际运行"
-    assert redactor.inference_seconds == pytest.approx(0.15)
-    assert redactor.candidate_timings == pytest.approx({"candidate-primary": 0.09, "candidate-detail": 0.03})
+    assert redactor.inference_seconds == pytest.approx(0.15 if debug else 0)
+    assert redactor.candidate_timings == (pytest.approx({"candidate-primary": 0.09, "candidate-detail": 0.03}) if debug else {})
+    if not debug:
+        assert not any(redactor.detection_stats.values())
 
 
 @pytest.mark.parametrize('fails', [False, True])
@@ -154,7 +158,7 @@ def test_child_host_profile_is_opt_in_and_failure_does_not_publish_output(tmp_pa
     detail = SimpleNamespace(candidates=lambda pixels, **kw: [])
     detector = SimpleNamespace(primary=primary, detail=detail)
     payload = dict(kind='video', source='private-source', directory=str(tmp_path / 'attempt'),
-                   profile_detection=mode, config=Settings(_env_file=None, inference_device='cuda', detection_backend='quality_yolo').model_dump(mode='json'))
+                   profile_detection=mode, config=Settings(_env_file=None, debug=True, inference_device='cuda', detection_backend='quality_yolo').model_dump(mode='json'))
     monkeypatch.setattr(child.sys, 'stdin', io.StringIO(json.dumps(payload) + '\n'))
     monkeypatch.setattr(child.threading, 'Thread', lambda **kw: SimpleNamespace(start=lambda: None))
     monkeypatch.setattr(detection, 'load_detector', lambda cfg: detector)
@@ -180,3 +184,46 @@ def test_child_host_profile_is_opt_in_and_failure_does_not_publish_output(tmp_pa
     assert any('result_ref' in event for event in events) is not fails
     assert (tmp_path / 'attempt/result.mp4').exists() is not fails
     assert video.av.open is original
+
+
+@pytest.mark.parametrize('profile', [True, 'host', 'forward-detail-face'])
+def test_production_child_ignores_preexisting_profile_requests(tmp_path, monkeypatch, capsys, profile):
+    from pathlib import Path
+    from threading import Event
+    from vision_shield import detection
+    from vision_shield.media import video
+
+    detector = SimpleNamespace(primary=SimpleNamespace())
+    monkeypatch.setattr(detection, 'load_detector', lambda cfg: detector)
+    def process(source, target, actual, config, stop, emit):
+        assert not hasattr(actual.primary, 'device_samples')
+        Path(target).write_bytes(b'processed-video')
+    monkeypatch.setattr(video, 'process_video', process)
+    payload = dict(kind='video', source='input.mp4', directory=str(tmp_path), profile_detection=profile,
+                   config=Settings(_env_file=None).model_dump(mode='json'))
+    assert child.process(payload, Event()) == (0, True)
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert events == [dict(result_ref=str(tmp_path / 'result.mp4'))]
+    assert not (tmp_path / 'host-profile').exists()
+
+
+async def test_production_hides_saved_debug_headers_and_stream_samples():
+    from unittest.mock import AsyncMock
+    import httpx
+    from vision_shield.main import create_app
+
+    task_id = '00000000-0000-0000-0000-000000000001'
+    record = dict(id=task_id, kind='stream', state='running', desired_state='run', ready=True,
+                  created_at='2026-10-22T00:00:00Z', updated_at='2026-10-22T00:00:00Z', error=None,
+                  stats=dict(processed_frames=3, stream={'old_samples': 'private'}), timings=dict(frame=1),
+                  video_encoder='libx264', video_decoder='h264', detection_stats=dict(full_frames=3))
+    app = create_app(Settings(_env_file=None))
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url='http://test'
+    ) as client:
+        app.state.store.get = AsyncMock(return_value=record)
+        response = await client.get('/v1/tasks/' + task_id)
+    assert response.status_code == 200 and response.json()['ready']
+    assert response.json()['stats']['processed_frames'] == 3 and 'stream' not in response.json()['stats']
+    assert not {'server-timing', 'x-video-encoder', 'x-video-decoder', 'x-detection-counts'} & response.headers.keys()
+    assert record['stats']['stream'] == {'old_samples': 'private'}

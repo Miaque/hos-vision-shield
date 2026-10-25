@@ -61,7 +61,7 @@ async def test_attempt_history_is_available_without_exception_or_device_profile(
     from vision_shield.main import create_app
 
     history = [dict(attempt_id='ended', reason='source_eof', phase='source_read')]
-    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
     async with app.router.lifespan_context(app), httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url='http://test'
     ) as client:
@@ -120,7 +120,7 @@ def test_same_io_error_is_attributed_to_the_actual_endpoint_or_decoder(monkeypat
     events = []
     with pytest.raises(ConnectionResetError):
         streams.process_stream('rtsp://source', 'rtsp://output', object(),
-                               Settings(_env_file=None).model_dump(), threading.Event(), events.append)
+                               Settings(_env_file=None, debug=True).model_dump(), threading.Event(), events.append)
     ending = events[-1]['stream_end']
     assert ending['phase'] == phase and ending['errno'] == 104
     assert ending['attempt_id'] == events[-1]['stats']['stream']['attempt_id']

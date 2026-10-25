@@ -126,7 +126,7 @@ def test_proposal_uses_current_original_gray_and_restores_small_clear_plate_imme
         shape = (80, 160, 3)
 
     detector = Proposals()
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
     pixels, thumbnail = CUDA(), np.zeros((36, 64, 3), np.float32)
     assert redactor.regions(pixels, 0, thumbnail=thumbnail, gray=blurred) == []
     assert redactor.regions(pixels, .04, thumbnail=thumbnail, gray=blurred) == []

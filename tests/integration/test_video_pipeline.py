@@ -21,7 +21,7 @@ class FixedDetector:
 def test_video_preserves_frames_clocks_and_audio(generated_media, tmp_path, name, interval, tracking):
     source, target = generated_media / name, tmp_path / name
     events = []
-    config = {**Settings(_env_file=None).model_dump(), 'detection_interval': interval, 'tracking': tracking}
+    config = {**Settings(_env_file=None, debug=True).model_dump(), 'detection_interval': interval, 'tracking': tracking}
     process_video(str(source), str(target), FixedDetector(), config, threading.Event(), events.append)
     with av.open(str(source)) as a:
         expected = [frame.pts * frame.time_base for frame in a.decode(video=0)]
@@ -132,7 +132,8 @@ def test_nvenc_preserves_all_frames_clocks_audio_and_requested_mask(generated_me
         assert audio_payloads(source) == audio_payloads(target)
 
 
-def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(generated_media, tmp_path, monkeypatch):
+@pytest.mark.parametrize('debug', [False, True])
+def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(generated_media, tmp_path, monkeypatch, debug):
     import time
 
     # Windows GetTickCount64's 15.6ms ticks cannot measure these 1ms stages reliably.
@@ -152,12 +153,15 @@ def test_final_video_timing_includes_completed_container_and_keeps_frame_clocks(
         except (av.error.FFmpegError, FileNotFoundError):
             complete = False
         events.append((event, complete))
-    process_video(generated_media / "silent.mp4", target, SlowDetector(), Settings(_env_file=None).model_dump(),
+    process_video(generated_media / "silent.mp4", target, SlowDetector(), Settings(_env_file=None, debug=debug).model_dump(),
                   threading.Event(), observe)
     final, complete = events[-1]
     assert complete, "最终计时必须在编码器冲刷和MP4封装关闭后发出"
     assert final["stats"]["processed_frames"] == 24 and final["stats"]["dropped_frames"] == 0
     assert set(final["stats"]) == {"processed_frames", "dropped_frames", "elapsed_seconds"}
+    if not debug:
+        assert all('timings' not in event and 'detection_stats' not in event for event, _ in events)
+        return
     assert 0.024 <= final["timings"]["inference"] <= final["timings"]["frame"]
     assert final["timings"]["encode"] > 0
     assert final["timings"]["frame"] + final["timings"]["encode"] <= final["stats"]["elapsed_seconds"]

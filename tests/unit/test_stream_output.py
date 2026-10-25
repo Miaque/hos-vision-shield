@@ -18,12 +18,13 @@ from vision_shield.media.video import check_streams
 
 
 @pytest.mark.parametrize("scheme", ["rtsp", "rtmp"])
+@pytest.mark.parametrize("debug", [False, True])
 @pytest.mark.parametrize("audio_codec", [None, "aac", "pcm_alaw", "pcm_mulaw"])
 @pytest.mark.parametrize("fault", [None, TimeoutError, RuntimeError])
 @pytest.mark.parametrize("source_bframes", [0, 2])
 @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
     os.getenv("RUN_GPU_TESTS") != "1", reason="requires real NVDEC/GPU mask/NVENC"))])
-def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec, fault, source_bframes, device):
+def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec, fault, source_bframes, device, debug):
     source, target = tmp_path / "source.nut", tmp_path / "output.nut"
     with av.open(str(source), "w") as writer:
         video = writer.add_stream("libx264", rate=12)
@@ -84,7 +85,10 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
 
     monkeypatch.setattr(streams.av, "open", open_endpoint)
     events = []
-    config = Settings(_env_file=None).model_dump(mode="json")
+    config = Settings(_env_file=None, debug=debug).model_dump(mode="json")
+    if not debug:
+        monkeypatch.setattr(streams, 'vcl_digest', lambda _: pytest.fail('Production must not hash frames'))
+        monkeypatch.setattr(streams.StreamMetrics, 'snapshot', lambda _: pytest.fail('Production must not sample output'))
     config["inference_device"] = device
     config["publish_url"] = f"{scheme}://media.test/live/camera?sign=secret"
     config['stream_started_monotonic'] = time.monotonic() - 25
@@ -94,13 +98,24 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
                                    Detector(), config, threading.Event(), events.append)
         assert not any(event.get("output") for event in events)
         assert not target.exists() or target.stat().st_size == 0
-        assert events[-1]['stats']['stream']['encoded_frames'] == 0
-        assert events[-1]['stats']['stream']['failed_frames'] == 1
+        if debug:
+            assert events[-1]['stats']['stream']['encoded_frames'] == 0
+            assert events[-1]['stats']['stream']['failed_frames'] == 1
+        else:
+            assert 'stream' not in events[-1]['stats'] and 'timings' not in events[-1]
         assert events[-1]['stream_end']['phase'] == 'frame_process'
         assert events[-1]['stream_end']['error_type'] == fault.__name__
         return
     streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
                            Detector(), config, threading.Event(), events.append)
+    if not debug:
+        assert events[-1]['stats']['processed_frames'] == 12
+        assert all('stream' not in event.get('stats', {}) and 'timings' not in event and 'detection_stats' not in event for event in events)
+        assert any(event.get('output') and event.get('ready') for event in events)
+        with original_open(str(target)) as reader:
+            output_frames = list(reader.decode(video=0))
+        assert len(output_frames) == 12 and output_frames[-1].to_ndarray(format='rgb24').mean() < 100
+        return
     metrics = events[-1]['stats']['stream']
     assert metrics['started_monotonic'] == config['stream_started_monotonic']
     assert events[-1]['stream_end']['reason'] == 'source_eof'
@@ -178,7 +193,7 @@ def test_realtime_clock_repair_keeps_independent_pictures_and_raw_clocks(tmp_pat
             return [(0, 0, 32, 48)]
 
     events = []
-    config = Settings(_env_file=None).model_dump()
+    config = Settings(_env_file=None, debug=True).model_dump()
     config['inference_device'] = 'cpu'
     def run():
         streams.process_stream('rtsp://camera/source', 'rtsp://output/test', Detector(), config,

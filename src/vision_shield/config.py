@@ -34,6 +34,7 @@ class Settings(BaseSettings):
         env_file=".env", extra="ignore", hide_input_in_errors=True
     )
 
+    debug: bool = False
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:16379/0")
     media_root: Path = Path("data")
     detection_backend: Literal["quality", "quality_yolo", "cpu", "egoblur"] = "quality"

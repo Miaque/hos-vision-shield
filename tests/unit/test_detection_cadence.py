@@ -20,7 +20,7 @@ class MovingTarget:
 
 def test_every_third_frame_keeps_template_tracking_and_all_output_frames():
     detector = MovingTarget()
-    redactor = FrameRedactor(detector, detection_interval=3)
+    redactor = FrameRedactor(detector, detection_interval=3, debug=True)
     texture = np.random.default_rng(76).integers(30, 130, (30, 24, 3), dtype=np.uint8)
     outputs = []
     for index in range(9):
@@ -39,7 +39,7 @@ def test_every_third_frame_keeps_template_tracking_and_all_output_frames():
 def test_new_target_on_skipped_frame_is_delayed_until_next_detection():
     detector = MovingTarget()
     detector.box = None
-    redactor = FrameRedactor(detector, detection_interval=3)
+    redactor = FrameRedactor(detector, detection_interval=3, debug=True)
     pixels = np.full((100, 180, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
     detector.box = (20, 30, 44, 60)
@@ -60,7 +60,7 @@ def test_unsupported_detection_interval_is_rejected(interval):
 async def test_cadence_header_is_video_only_and_retains_private_counters(tmp_path, monkeypatch, kind, interval, status):
     from vision_shield.api import routes
 
-    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
     monkeypatch.setattr(routes, 'require_worker', AsyncMock())
     record = dict(id='00000000-0000-0000-0000-000000000001', kind=kind, state='queued', desired_state='run',
                   ready=False, created_at='2026-10-22T00:00:00Z', updated_at='2026-10-22T00:00:00Z', error=None,

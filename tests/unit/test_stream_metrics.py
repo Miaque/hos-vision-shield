@@ -16,7 +16,7 @@ def test_attempt_origin_keeps_model_loading_as_zero_output_windows(monkeypatch):
     from vision_shield.media import stream_metrics
 
     monkeypatch.setattr(stream_metrics.time, 'monotonic', lambda: 130.0)
-    metrics = StreamMetrics(started=100.0)
+    metrics = StreamMetrics(started=100.0, debug=True)
     metrics.submit(frame(40), 115.0, Fraction(40, 1000))
     metrics.written(Fraction(40, 1000), 115.25)
     stream = metrics.snapshot()
@@ -32,7 +32,7 @@ def test_attempt_origin_keeps_model_loading_as_zero_output_windows(monkeypatch):
 
 
 def test_only_unique_written_frames_count_and_keep_receive_latency():
-    metrics = StreamMetrics()
+    metrics = StreamMetrics(debug=True)
     metrics.submit(frame(40), 10.0, Fraction(90040, 1000))
     assert metrics.snapshot()['encoded_frames'] == 0
     metrics.written(Fraction(40, 1000), 10.25)
@@ -57,7 +57,7 @@ def test_vcl_hash_ignores_annexb_prefixes_parameter_sets_and_padding_but_detects
 
 
 def test_encoded_packet_evidence_survives_output_sample():
-    metrics = StreamMetrics()
+    metrics = StreamMetrics(debug=True)
     metrics.submit(frame(40), 10.0, Fraction(1))
     digest = vcl_digest(b'\x00\x00\x01\x65image')
     metrics.written(Fraction(40,1000),10.25,encoded_bytes=9,encoded_vcl_sha256=digest)
@@ -66,7 +66,7 @@ def test_encoded_packet_evidence_survives_output_sample():
 
 
 def test_missing_receive_clock_is_explicit_and_samples_are_bounded():
-    metrics = StreamMetrics()
+    metrics = StreamMetrics(debug=True)
     for index in range(600):
         metrics.submit(frame(index), None, Fraction(index, 1000))
         metrics.written(Fraction(index, 1000), float(index))
@@ -78,10 +78,21 @@ def test_missing_receive_clock_is_explicit_and_samples_are_bounded():
     assert StreamMetrics().snapshot()['attempt_id'] != result['attempt_id']
 
 
-def test_encoder_backlog_cannot_grow_without_bound():
-    metrics = StreamMetrics()
+@pytest.mark.parametrize('debug', [False, True])
+def test_encoder_backlog_cannot_grow_without_bound(debug):
+    metrics = StreamMetrics(debug=debug)
     for index in range(512):
         metrics.submit(frame(index), 1.0, Fraction(index))
     with pytest.raises(BufferError, match='Encoder backlog'):
         metrics.submit(frame(512), 1.0, Fraction(512))
     assert metrics.snapshot()['encoded_frames'] == 0
+
+
+def test_production_keeps_encoder_guards_without_recording_samples():
+    metrics = StreamMetrics(debug=False)
+    metrics.submit(frame(40), None, object())
+    with pytest.raises(BufferError, match='Duplicate encoder input clock'):
+        metrics.submit(frame(40), None, object())
+    metrics.written(Fraction(40, 1000), 10.25)
+    assert not metrics.outputs and not metrics.pending
+    assert metrics.frames == 1

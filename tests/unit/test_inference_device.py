@@ -16,7 +16,8 @@ def test_device_is_independent_and_cpu_backend_rejects_cuda():
 
 
 @pytest.mark.parametrize("backend", ["quality", "quality_yolo", "egoblur"])
-def test_factory_uses_cuda_for_primary_and_quality_detail(monkeypatch, backend):
+@pytest.mark.parametrize('debug', [False, True])
+def test_factory_uses_cuda_for_primary_and_quality_detail(monkeypatch, backend, debug):
     from types import SimpleNamespace
     from vision_shield.detection import load_detector, quality, egoblur, cuda_detail, yolo
 
@@ -32,11 +33,14 @@ def test_factory_uses_cuda_for_primary_and_quality_detail(monkeypatch, backend):
     monkeypatch.setattr(cuda_detail, "Detector", detail_model)
     monkeypatch.setattr(egoblur, "Detector", lambda *a, **kw: primary.append(kw))
     monkeypatch.setattr(yolo, "Detector", primary_model)
-    detector = load_detector(Settings(_env_file=None, detection_backend=backend, inference_device="cuda").model_dump())
+    detector = load_detector(Settings(_env_file=None, debug=debug, detection_backend=backend, inference_device="cuda").model_dump())
     assert primary[0]["device"] == "cuda"
     assert len(detail) == (1 if backend in {"quality", "quality_yolo"} else 0)
     if backend in {"quality", "quality_yolo"}:
-        assert detector.primary.stage_times is detector.detail.stage_times is detector.stage_times
+        if debug:
+            assert detector.primary.stage_times is detector.detail.stage_times is detector.stage_times
+        else:
+            assert all(not hasattr(owner, 'stage_times') for owner in (detector, detector.primary, detector.detail))
 
 
 def test_unavailable_cuda_fails_before_loading_models(monkeypatch):

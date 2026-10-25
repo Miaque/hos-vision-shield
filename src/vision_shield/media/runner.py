@@ -29,7 +29,7 @@ async def run_process(command: list[str], payload: dict, cancel: asyncio.Event,
                       session=None) -> dict:
     """Confirm media teardown before on_exit; profiling retains a cold, isolated child."""
     if session is not None:
-        if not payload.get('profile_detection'):
+        if not payload.get('profile_detection') or not payload.get('config', {}).get('debug', False):
             return await session.run(payload, cancel, on_event, stop_timeout, on_exit=on_exit)
         await session.close()
     try:
@@ -117,7 +117,7 @@ class MediaProcess:
             if cancel.is_set():
                 return dict(cancelled=True, returncode=0)
             model_config = {key: payload['config'].get(key) for key in (
-                'detection_backend', 'inference_device', 'face_model_path', 'plate_model_path',
+                'debug', 'detection_backend', 'inference_device', 'face_model_path', 'plate_model_path',
                 'egoblur_face_model_path', 'egoblur_plate_model_path', 'detection_max_side', 'detection_box_padding')}
             if self.process is not None and (self.process.returncode is not None or model_config != self.model_config):
                 await self.close()

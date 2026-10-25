@@ -16,10 +16,10 @@ from vision_shield.detection.timing import StageTimes, measure, timed
 
 
 def _timed_candidates(model, pixels, *, kind=None, full_frame=False):
-    started = time.monotonic()
+    started = time.monotonic() if getattr(model, 'stage_times', None) is not None else None
     faces = getattr(model, "proposals", None) if full_frame and kind == "face" else None
     candidates = faces(pixels) if faces else model.candidates(pixels, kind=kind)
-    return candidates, time.monotonic() - started
+    return candidates, time.monotonic() - started if started is not None else 0.0
 
 
 class Detector:
@@ -49,7 +49,7 @@ class Detector:
         self.detail = detail_type(config["face_model_path"], config["plate_model_path"],
                                      self.max_side, self.box_padding, face_threshold=0.3,
                                      parallel=self.inference_device == "cuda", tile_side=1920)
-        if self.inference_device == "cuda":
+        if config.get('debug', False):
             self.stage_times = self.primary.stage_times = self.detail.stage_times = StageTimes()
 
     def detect(self, rgb: np.ndarray) -> list[tuple[float, float, float, float]]:
@@ -143,7 +143,8 @@ class Detector:
                 pad_y = (y2 - y1) * self.box_padding
                 boxes.append(Detection(detection.kind, (max(0, x1 - pad_x), max(0, y1 - pad_y),
                                        min(width, x2 + pad_x), min(height, y2 + pad_y)), detection.score))
-        self.candidate_timings = {"candidate-primary": primary_seconds, "candidate-detail": detail_seconds}
+        if getattr(self, 'stage_times', None) is not None:
+            self.candidate_timings = {"candidate-primary": primary_seconds, "candidate-detail": detail_seconds}
         return boxes
 
     @timed("local-confirm")

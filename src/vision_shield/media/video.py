@@ -92,9 +92,10 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                   stop: Event, emit: Callable[[dict], None]) -> int:
     """Write complete MP4, preserving frame clocks and AAC packets; return frame count."""
     count, started = 0, time.monotonic()
+    debug = config.get('debug', False)
     frame_seconds = encode_seconds = 0.0
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
-                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"))
+                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"), debug=debug)
     with ExitStack() as stack:
         reader = stack.enter_context(av.open(source))
         brand = reader.metadata.get("major_brand", "").lower().strip()
@@ -137,10 +138,11 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                     if previous is None:
                         first = moment
                     previous = moment
-                    stage = time.monotonic()
+                    stage = time.monotonic() if debug else None
                     output = frames.masked(frame, redactor) if frames else masked_frame(frame, redactor)
-                    frame_seconds += time.monotonic() - stage
-                    stage = time.monotonic()
+                    if debug:
+                        frame_seconds += time.monotonic() - stage
+                        stage = time.monotonic()
                     if video is None:
                         video = add_video(writer, output, input_video, device=config.get("inference_device", "cpu"))
                         for audio_packet in pending_audio:
@@ -150,25 +152,27 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                         raise ValueError("Video dimensions changed")
                     for encoded in video.encode(output):
                         writer.mux(encoded)
-                    encode_seconds += time.monotonic() - stage
+                    if debug:
+                        encode_seconds += time.monotonic() - stage
                     count += 1
                     emit({"video_decoder": "h264_nvdec" if frames else "h264",
                           "video_encoder": video.codec_context.name,
-                          "detection_stats": redactor.detection_stats.copy(),
                           "stats": {"processed_frames": count, "dropped_frames": 0,
                                     "elapsed_seconds": time.monotonic() - started},
+                          **({"detection_stats": redactor.detection_stats.copy(),
                           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                                          encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})
+                                          encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))} if debug else {})})
         if not video or not count:
             raise ValueError("No valid video frames")
-        stage = time.monotonic()
+        stage = time.monotonic() if debug else None
         for packet in video.encode():
             writer.mux(packet)
-    encode_seconds += time.monotonic() - stage
+    if debug:
+        encode_seconds += time.monotonic() - stage
     emit({"video_decoder": "h264_nvdec" if frames else "h264",
           "video_encoder": video.codec_context.name,
-          "detection_stats": redactor.detection_stats.copy(),
           "stats": {"processed_frames": count, "dropped_frames": 0, "elapsed_seconds": time.monotonic() - started},
+          **({"detection_stats": redactor.detection_stats.copy(),
           "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                          encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})
+                          encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))} if debug else {})})
     return count

@@ -89,9 +89,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         raise ValueError("Unsupported output protocol")
     buffer = StreamBuffer(config["frame_buffer_size"], config["audio_buffer_seconds"], config["audio_buffer_bytes"], stop)
     writer_done = threading.Event()
-    metrics = StreamMetrics(started=config.get('stream_started_monotonic'))
+    debug = config.get('debug', False)
+    metrics = StreamMetrics(started=config.get('stream_started_monotonic'), debug=debug)
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
-                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"))
+                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"), debug=debug)
     frames = None
     cuda_device = None
     if config.get("inference_device") == "cuda":
@@ -135,7 +136,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 if stop.is_set():
                     break
                 if packet.stream.type == "video":
-                    if packet.pts is not None and packet.time_base is not None:
+                    if debug and packet.pts is not None and packet.time_base is not None:
                         received.setdefault(packet.pts * packet.time_base, time.monotonic())
                         if len(received) > 256:
                             del received[next(iter(received))]
@@ -183,22 +184,23 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             dropped = buffer.dropped
             stream_stats = dict(input_frames=buffer.input_frames, queue_frames=len(buffer.frames),
                                audio_queue_bytes=buffer.audio_size, failed_frames=failed_frames,
-                               protected_frames=0, **metrics.snapshot())
+                               protected_frames=0, **metrics.snapshot()) if debug else None
         emit({**({"stream_end": ending} if force and ending else {}),
               **({"video_decoder": "h264_nvdec" if frames else "h264",
                   "video_encoder": video.codec_context.name} if video else {}),
-              "detection_stats": redactor.detection_stats.copy(),
               "stats": {"processed_frames": count, "dropped_frames": dropped,
-                        "elapsed_seconds": now - started, "stream": stream_stats},
+                        "elapsed_seconds": now - started, **({"stream": stream_stats} if debug else {})},
+              **({"detection_stats": redactor.detection_stats.copy(),
               "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                              encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))})
+                              encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))} if debug else {})})
         last_stats = now
 
     def mux_video(packet):
         nonlocal failed_frames, processing, ending
         # Capture the encoder clock before mux rescales it (notably FLV milliseconds).
         moment = packet.pts * packet.time_base if packet.pts is not None and packet.time_base is not None else None
-        encoded_bytes, encoded_vcl_sha256 = packet.size, vcl_digest(bytes(packet))
+        encoded_bytes = packet.size if debug else None
+        encoded_vcl_sha256 = vcl_digest(bytes(packet)) if debug else None
         try:
             writer.mux(packet)
         except Exception as error:
@@ -244,15 +246,16 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 previous = moment
                 if origin is None:
                     origin = moment
-                stage = time.monotonic()
+                stage = time.monotonic() if debug else None
                 phase = "frame_process"
                 if frames:
                     output = frames.masked(frame, redactor)
                     output.pts = round((moment - origin) / output.time_base)
                 else:
                     output = masked_frame(frame, redactor, origin)
-                frame_seconds += time.monotonic() - stage
-                stage = time.monotonic()
+                if debug:
+                    frame_seconds += time.monotonic() - stage
+                    stage = time.monotonic()
                 if video is None:
                     phase = "encoder_initialize"
                     video_options = dict(live=True, device=config.get("inference_device", "cpu"))
@@ -285,7 +288,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 for packet in video.encode(output):
                     mux_video(packet)
                     published = True
-                encode_seconds += time.monotonic() - stage
+                if debug:
+                    encode_seconds += time.monotonic() - stage
                 # 只有视频包实际写入成功才证明输出；合并到至多每五秒一次。
                 if published and (last_output_report is None or time.monotonic() - last_output_report >= 5):
                     emit({"output": True, "output_monotonic": time.monotonic(), "ready": True})

@@ -170,7 +170,7 @@ async def test_real_preflight_and_consecutive_images_keep_same_model(payload, tm
     command = [sys.executable, '-u', '-m', 'vision_shield.media.child', '--persistent']
     session = runner.MediaProcess(command)
     device = 'cpu' if backend == 'cpu' else 'cuda'
-    payload['config'] = Settings(_env_file=None, detection_backend=backend, inference_device=device).model_dump(mode='json')
+    payload['config'] = Settings(_env_file=None, debug=True, detection_backend=backend, inference_device=device).model_dump(mode='json')
     Image.new('RGB', (320, 240)).save(payload['source'])
     try:
         first, events = await run(session, payload)
@@ -188,12 +188,15 @@ async def test_real_preflight_and_consecutive_images_keep_same_model(payload, tm
         await session.close()
 
 
-async def test_model_settings_change_rebuilds_instead_of_reusing_stale_detector(payload):
+@pytest.mark.parametrize('setting,value', [('detection_max_side', 640), ('debug', True), ('debug', False)])
+async def test_model_settings_change_rebuilds_instead_of_reusing_stale_detector(payload, setting, value):
     session = runner.MediaProcess(COMMAND)
+    if setting == 'debug':
+        payload['config']['debug'] = not value
     try:
         await run(session, payload)
         previous = session.process
-        payload['config']['detection_max_side'] = 640
+        payload['config'][setting] = value
         result, _ = await run(session, payload)
         assert result['returncode'] == 0 and session.process.pid != previous.pid
         assert previous.returncode is not None
@@ -201,8 +204,10 @@ async def test_model_settings_change_rebuilds_instead_of_reusing_stale_detector(
         await session.close()
 
 
-async def test_profiling_reclaims_resident_and_uses_isolated_child(payload):
+@pytest.mark.parametrize('debug', [False, True])
+async def test_profiling_reclaims_resident_and_uses_isolated_child(payload, debug):
     session = runner.MediaProcess(COMMAND)
+    payload['config']['debug'] = debug
     async def received(event):
         pass
     try:
@@ -211,10 +216,15 @@ async def test_profiling_reclaims_resident_and_uses_isolated_child(payload):
         command = [sys.executable, '-u', '-c', 'import os,json; print(json.dumps(dict(pid=os.getpid())),flush=True)']
         result = await runner.run_process(command, {**payload, 'profile_detection': 'host'},
                                          asyncio.Event(), received, session=session)
-        assert result['returncode'] == 0 and result['pid'] != previous.pid
-        assert previous.returncode is not None and session.process is None
+        assert result['returncode'] == 0
+        if debug:
+            assert result['pid'] != previous.pid
+            assert previous.returncode is not None and session.process is None
+        else:
+            assert session.process is previous and result['result_ref']
         result, _ = await run(session, payload)
-        assert result['returncode'] == 0 and session.process.pid != previous.pid
+        assert result['returncode'] == 0
+        assert (session.process.pid != previous.pid) is debug
     finally:
         await session.close()
 
@@ -229,7 +239,7 @@ async def test_original_stream_recovers_model_fault_and_rewarm_without_new_task(
     config = dict(model_failure_file=str(tmp_path / 'model-failed'))
     if probe_fault:
         config.update(probe_failure_file=str(tmp_path / 'probe-failure'), probe_failure_kind=probe_fault)
-    settings = SimpleNamespace(media_root=tmp_path, source_allowlist=['127.0.0.1'], process_stop_timeout=1,
+    settings = SimpleNamespace(media_root=tmp_path, source_allowlist=['127.0.0.1'], process_stop_timeout=1, debug=False,
                                model_dump=lambda **kwargs: config.copy())
     store = SimpleNamespace(update_owned=AsyncMock(return_value=True), get=AsyncMock(return_value=record), finish=AsyncMock())
     publishing, results, cancel = [], [], asyncio.Event()

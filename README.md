@@ -27,7 +27,9 @@ CUDA补充车牌检测恢复原有视图逐张推理，撤回服务器实测没�
 
 GPU离线任务查询的 `Server-Timing` 额外提供主/补预处理、人脸/车牌前向调用、后处理、局部/跟踪复核、拷贝及显式同步的累计主机耗时。计时不增加GPU同步；嵌套、并行项目不能相加，ORT的CPU输出前向调用包含内部等待与下载，不能当作纯GPU内核耗时。详见[分项测量说明](specs/002-compose-cpu-gpu/temporal-optimization.md)。
 
-主车牌设备诊断默认关闭。上传视频时可加 `X-Detection-Profile: 1`，在第64、424、768个合格全图调用采样；`GET /v1/tasks/{id}/diagnostics`读取摘要，添加`?sample=64`等固定索引可下载原始trace。每份最多32 MiB、每任务最多三份，短视频或未进入采样位置返回partial。该模式要求CUDA模型，采样会扰动耗时，其FPS不作为优化验收。
+环境标志 `DEBUG` 默认为 `false`（生产）。优化流程开始前，在本机 `.env` 或容器 `.env.compose` 设置 `DEBUG=true`（调试），重启 API 和全部 worker；容器需重新创建以应用环境变量。生产模式不启动资源采样，不收集详细模型/媒体耗时和逐帧输出证据或计算画面哈希，不返回诊断响应头；诊断接口返回 404，profiling 请求返回 422。任务进度、推流健康判断、模型预检和必要错误日志保留。切回 `DEBUG=false` 后同样需要重启，不会删除已有诊断文件。
+
+调试环境下，主车牌设备诊断仍须显式启用。上传视频时可加 `X-Detection-Profile: 1`，在第64、424、768个合格全图调用采样；`GET /v1/tasks/{id}/diagnostics`读取摘要，添加`?sample=64`等固定索引可下载原始trace。每份最多32 MiB、每任务最多三份，短视频或未进入采样位置返回partial。该模式要求CUDA模型，采样会扰动耗时，其FPS不作为优化验收。
 
 ### 本机 GTX 1080
 
@@ -175,7 +177,7 @@ $tasks.current
 $tasks.queued
 ```
 
-`GET /v1/diagnostics/resources` 查看有效 worker 的 CPU、内存和绑定显卡资源快照。CPU 为 worker 的 Linux cgroup v2 口径，包含媒体子进程；GPU 为所选显卡整卡口径，缺失和陈旧值会明确标记。字段单位、部署步骤及后续优化验收见[资源观测说明](specs/002-compose-cpu-gpu/diagnostics.md)。
+调试环境下，`GET /v1/diagnostics/resources` 查看有效 worker 的 CPU、内存和绑定显卡资源快照。CPU 为 worker 的 Linux cgroup v2 口径，包含媒体子进程；GPU 为所选显卡整卡口径，缺失和陈旧值会明确标记。字段单位、部署步骤及后续优化验收见[资源观测说明](specs/002-compose-cpu-gpu/diagnostics.md)。
 
 默认只监听本机。其他系统接入时，部署方需同时修改启动脚本的API监听、MediaMTX的RTSP监听与 `.env` 的 `RTSP_PUBLIC_BASE_URL` 为可达内网地址，并限制防火墙可达范围。MediaMTX控制API和Redis继续仅监听本机。
 

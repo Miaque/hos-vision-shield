@@ -65,7 +65,7 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
     import asyncio
     import time
 
-    settings = Settings(_env_file=None, redis_url=redis_url, media_root=tmp_path,
+    settings = Settings(_env_file=None, debug=True, redis_url=redis_url, media_root=tmp_path,
                         source_allowlist=["127.0.0.1"], mediamtx_control_url="http://127.0.0.1:1")
     app = create_app(settings)
     async with app.router.lifespan_context(app):
@@ -87,7 +87,7 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
             from types import SimpleNamespace
             from vision_shield.media.stream_metrics import StreamMetrics
 
-            metrics = StreamMetrics()
+            metrics = StreamMetrics(debug=True)
             empty_stats = dict(input_frames=0, queue_frames=0, audio_queue_bytes=0,
                                failed_frames=0, protected_frames=0, **metrics.snapshot())
             await on_event(dict(stats=dict(processed_frames=0, dropped_frames=0, elapsed_seconds=0,
@@ -136,7 +136,7 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
 async def test_stream_failure_diagnostics_are_available_without_exposing_source(tmp_path):
     from unittest.mock import AsyncMock
 
-    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
     failure = dict(type="BufferError", at=["process_stream:200"], generation=1, observed_at_unix=1.0)
     async with app.router.lifespan_context(app), httpx.AsyncClient(
         transport=httpx.ASGITransport(app), base_url="http://test"

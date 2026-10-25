@@ -16,7 +16,8 @@ from vision_shield.media import cuda_frames, streams
 @pytest.mark.parametrize("fault", [None, "decode", "mask", "encode", "mux"])
 @pytest.mark.parametrize("delayed", [False, True])
 @pytest.mark.parametrize("repair", [False, True])
-def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair):
+@pytest.mark.parametrize('debug', [False, True])
+def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug):
     source_video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
     frames = [SimpleNamespace(width=64, height=48, pts=900000 + 3600 * i, time_base=Fraction(1, 90000))
               for i in range(3)]
@@ -102,7 +103,7 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     monkeypatch.setattr(streams.av, "open", open_endpoint)
     monkeypatch.setattr(streams, "add_video", add_video)
     monkeypatch.setattr(streams, "masked_frame", software_mask)
-    config = {**Settings(_env_file=None).model_dump(), "inference_device": "cuda",
+    config = {**Settings(_env_file=None, debug=debug).model_dump(), "inference_device": "cuda",
               "detection_interval": 3, "tracking": "flow"}
     events = []
     stop = threading.Event()
@@ -114,7 +115,7 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         with pytest.raises(RuntimeError, match=f"{fault} failed"):
             process()
         assert not encoded and not any(event.get("output") for event in events)
-        if fault == "mux":
+        if fault == "mux" and debug:
             assert events[-1]['stats']['stream']['failed_frames'] == 1
             assert events[-1]['stats']['stream']['encoded_frames'] == 0
     else:
@@ -124,14 +125,17 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         assert threads["context"] == threads["decode"] != threading.get_ident()
         assert add_video.call_args.kwargs == {"live": True, "device": "cuda"}
         assert events[-1]["stats"]["processed_frames"] == 3
-        assert events[-1]["stats"]["stream"]["encoded_frames"] == 3
-        assert events[-1]["stats"]["stream"]["missing_receive_frames"] == 0
-        assert events[-1]["stats"]["stream"]["timestamp_repairs"] == int(repair)
-        assert [s['source_pts'] for s in events[-1]['stats']['stream']['recent_outputs']] == [
-            '10', '251/25', '251/25' if repair else '252/25']
+        if debug:
+            assert events[-1]["stats"]["stream"]["encoded_frames"] == 3
+            assert events[-1]["stats"]["stream"]["missing_receive_frames"] == 0
+            assert events[-1]["stats"]["stream"]["timestamp_repairs"] == int(repair)
+            assert [s['source_pts'] for s in events[-1]['stats']['stream']['recent_outputs']] == [
+                '10', '251/25', '251/25' if repair else '252/25']
         assert events[-1]["video_decoder"] == "h264_nvdec"
         assert events[-1]["video_encoder"] == "h264_nvenc"
     software_mask.assert_not_called()
+    if not debug:
+        assert all('stream' not in event.get('stats', {}) and 'timings' not in event for event in events)
     assert stop.is_set()
     if fault != "decode":
         assert closed.is_set()

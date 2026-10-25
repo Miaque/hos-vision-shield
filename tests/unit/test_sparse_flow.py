@@ -21,7 +21,7 @@ def test_sparse_flow_follows_translation_and_scale_with_stationary_background():
     matrix = cv2.getRotationMatrix2D((90, 75), 0, 1.12)
     matrix[:, 2] += (8, 4)
     current = cv2.warpAffine(previous, matrix, (220, 160), borderValue=180)
-    redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.gray = previous
     box = redactor._flow(current, (60, 50, 120, 100))
     expected = [64.4, 51, 131.6, 107]
@@ -30,7 +30,7 @@ def test_sparse_flow_follows_translation_and_scale_with_stationary_background():
 
 @pytest.mark.parametrize('current', ['blank', 'unrelated'])
 def test_flow_rejects_occlusion_or_inconsistent_points(current):
-    redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.gray = texture()
     gray = np.full((160, 220), 180, np.uint8) if current == 'blank' else np.random.default_rng(92).integers(0, 255, (160, 220), np.uint8)
     assert redactor._flow(gray, (60, 50, 120, 100)) is None
@@ -38,7 +38,7 @@ def test_flow_rejects_occlusion_or_inconsistent_points(current):
 
 def test_failed_flow_forces_full_detection_on_the_skipped_frame():
     detector = MovingTarget()
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
     pixels = np.full((100, 180, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
     detector.box = (70, 30, 94, 60)
@@ -50,7 +50,7 @@ def test_failed_flow_forces_full_detection_on_the_skipped_frame():
 
 
 def test_scene_reset_forces_detection_instead_of_publishing_an_unmasked_skip():
-    redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.apply(np.full((100, 180, 3), 80, np.uint8), 0)
     output = redactor.apply(np.full((100, 180, 3), 180, np.uint8), 0.04)
     assert (output[30:60, 20:44] == 64).all()
@@ -69,7 +69,7 @@ def test_stale_plate_flow_rechecks_when_original_template_rejects_background(mon
             return []
 
     detector = Plates()
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
     monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
     monkeypatch.setattr(redactor, '_follow', lambda gray, box, reference=None: box if template_valid else None)
     monkeypatch.setattr(redactor, '_recheck', lambda *a: None)
@@ -86,7 +86,7 @@ def test_stale_plate_flow_rechecks_when_original_template_rejects_background(mon
 def test_good_flow_skips_inference_but_does_not_renew_detection_lifetime():
     detector = MovingTarget()
     detector.box = (60, 50, 120, 100)
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
     pixels = np.repeat(texture()[:, :, None], 3, axis=2)
     redactor.apply(pixels, 0)
     output = redactor.apply(pixels, 0.04)
@@ -98,7 +98,7 @@ def test_good_flow_skips_inference_but_does_not_renew_detection_lifetime():
 
 
 def test_forward_backward_inconsistency_cannot_be_accepted_as_motion(monkeypatch):
-    redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.gray = texture()
     calls = 0
 
@@ -123,7 +123,7 @@ def test_face_recheck_covers_new_or_partially_entering_target(monkeypatch, first
         detect_faces = detect_regions
 
     detector = Proposals()
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
     monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
     pixels = np.full((160, 220, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
@@ -141,7 +141,7 @@ def test_full_frame_face_detection_renews_lifetime_on_each_frame(monkeypatch):
 
         detect_faces = detect_regions
 
-    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow', debug=True)
     monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
     pixels = np.full((160, 220, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
@@ -160,7 +160,7 @@ def test_unconfirmed_proposal_never_creates_a_mask():
         def plate_proposals(self, pixels):
             return [Detection('plate', (60, 50, 120, 100), .4)]
 
-    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow', debug=True)
     pixels = np.full((160, 220, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
     np.testing.assert_array_equal(redactor.apply(pixels, .04), pixels)
@@ -181,7 +181,7 @@ def test_proposal_inference_is_included_in_the_existing_inference_time(monkeypat
             clock[0] += .01
             return []
 
-    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(Proposals(), detection_interval=3, tracking='flow', debug=True)
     pixels = np.full((160, 220, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
     redactor.apply(pixels, .04)
@@ -210,7 +210,7 @@ def test_face_proposal_rechecks_only_faces_unless_a_plate_also_needs_confirmatio
             return [c for c in self.proposals(pixels) if c.kind == 'plate']
 
     detector = Proposals()
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
     pixels = np.full((160, 220, 3), 180, np.uint8)
     redactor.apply(pixels, 0)
     detector.face = True
@@ -238,7 +238,7 @@ def test_auxiliary_only_face_extent_is_checked_on_every_non_joint_frame(monkeypa
         def detect_faces(self, pixels):
             return [Detection('face', (60, 50, 100, 105), .8)]
 
-    redactor = FrameRedactor(PartialPrimary(), detection_interval=3, tracking='flow')
+    redactor = FrameRedactor(PartialPrimary(), detection_interval=3, tracking='flow', debug=True)
     monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
     pixels = np.full((160, 220, 3), 180, np.uint8)
     redactor.apply(pixels, 0)

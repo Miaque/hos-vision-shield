@@ -50,7 +50,7 @@ async def test_requested_device_profile_passes_to_child_and_is_stored_without_st
                   desired_state='run', profile_detection=profile_mode, detection_interval=interval, tracking=tracking)
     store = SimpleNamespace(claim=AsyncMock(return_value=record), get=AsyncMock(return_value=record),
                             heartbeat=AsyncMock(return_value=True), finish=AsyncMock(), update_owned=AsyncMock())
-    monkeypatch.setattr(tasks, 'Settings', lambda: Settings(_env_file=None, media_root=tmp_path))
+    monkeypatch.setattr(tasks, 'Settings', lambda: Settings(_env_file=None, media_root=tmp_path, debug=True))
     monkeypatch.setattr(tasks, 'TaskStore', lambda *a: store)
     monkeypatch.setattr(tasks, 'Redis', lambda **kw: None)
     profile = dict(state='complete', samples=[dict(frame=64)])

@@ -99,7 +99,8 @@ async def execute(task_id, broker, context):
                 await asyncio.gather(stopping, return_exceptions=True)
 
         async def event_received(event):
-            log_model_timing(event, task_id, generation)
+            if settings.debug:
+                log_model_timing(event, task_id, generation)
             if event.get("failure_type"):
                 logger.warning("task=%s media failure type=%s", task_id, event["failure_type"])
             if "stats" in event or "device_profile" in event or "detection_stats" in event:
@@ -110,7 +111,7 @@ async def execute(task_id, broker, context):
         if not cancel.is_set():
             payload = dict(kind=record["kind"], source=str(source), directory=str(directory),
                            config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid")})
-            if record.get('profile_detection'):
+            if settings.debug and record.get('profile_detection'):
                 payload['profile_detection'] = record['profile_detection']
             if record.get('detection_interval'):
                 payload['config']['detection_interval'] = record['detection_interval']
@@ -194,7 +195,8 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                 await store.update_owned(task_id, owner, generation, state="connecting", ready=False)
 
                 async def event_received(event):
-                    log_model_timing(event, task_id, generation)
+                    if settings.debug:
+                        log_model_timing(event, task_id, generation)
                     if event.get("failure_type"):
                         logging.getLogger(__name__).warning("task=%s media failure type=%s at=%s", task_id, event["failure_type"], event.get("failure_at"))
                     values = {}

@@ -27,6 +27,8 @@ router = APIRouter(prefix="/v1")
 
 def public(request, task, now_ms=None):
     """只暴露公共字段，健康只依据共享存储中的实际输出和租约。"""
+    if not request.app.state.settings.debug:
+        task = task | {'stats': {key: value for key, value in task['stats'].items() if key != 'stream'}}
     if task["kind"] == "stream" and "generation" in task:
         observed = now_ms if now_ms is not None else task.get("_observed_ms", int(datetime.now(timezone.utc).timestamp() * 1000))
         health = stream_health(task, observed)
@@ -52,6 +54,8 @@ async def replay(request, key, fingerprint):
 
 @router.get('/diagnostics/resources', response_model=ResourcesResponse)
 async def resources(request: Request):
+    if not request.app.state.settings.debug:
+        raise HTTPException(404, 'diagnostics_disabled')
     client = request.app.state.redis
     seconds, micros = await client.time()
     now = seconds + micros / 1_000_000
@@ -146,6 +150,8 @@ async def upload(request: Request, response: Response,
                      description='仅视频：1沿用主车牌全图CUDA采样；host记录调用分布；forward-*按真实前向序号采样指定模型。诊断FPS不作吞吐验收')):
     key, target_id = creation_headers(request)
     settings = request.app.state.settings
+    if profile_detection is not None and not settings.debug:
+        raise HTTPException(422, 'diagnostics_disabled')
     profile_mode = True if profile_detection == '1' else profile_detection or False
     directory, keep_input, submission_unknown = None, False, False
     try:
@@ -256,13 +262,13 @@ async def get_task(task_id: UUID, request: Request, response: Response):
     task = await request.app.state.store.get(str(task_id))
     if task is None:
         raise HTTPException(404, "task_not_found")
-    if task.get("video_encoder") in {"libx264", "h264_nvenc"}:
+    if request.app.state.settings.debug and task.get("video_encoder") in {"libx264", "h264_nvenc"}:
         response.headers["X-Video-Encoder"] = task["video_encoder"]
-    if task.get("video_decoder") in {"h264", "h264_nvdec"}:
+    if request.app.state.settings.debug and task.get("video_decoder") in {"h264", "h264_nvdec"}:
         response.headers["X-Video-Decoder"] = task["video_decoder"]
-    if task.get('detection_stats'):
+    if request.app.state.settings.debug and task.get('detection_stats'):
         response.headers['X-Detection-Counts'] = json.dumps(task['detection_stats'], separators=(',', ':'))
-    if task.get("timings"):
+    if request.app.state.settings.debug and task.get("timings"):
         response.headers["Server-Timing"] = ", ".join(
             f"task-{name};dur={task['timings'][name] * 1000:.3f}"
             for name in ("frame", "inference", "encode", "candidate-primary", "candidate-detail", *STAGES)
@@ -273,6 +279,8 @@ async def get_task(task_id: UUID, request: Request, response: Response):
 @router.get('/tasks/{task_id}/diagnostics')
 async def detection_diagnostics(task_id: UUID, request: Request,
                                 sample: int | None = Query(default=None, json_schema_extra={'enum': list(CHECKPOINTS)})):
+    if not request.app.state.settings.debug:
+        raise HTTPException(404, 'diagnostics_disabled')
     if sample is not None and sample not in CHECKPOINTS:
         raise HTTPException(422, 'invalid_input')
     task = await request.app.state.store.get(str(task_id))

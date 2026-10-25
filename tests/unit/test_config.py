@@ -9,6 +9,7 @@ from vision_shield.config import Settings
 @pytest.mark.parametrize(
     "values",
     [
+        {"debug": "invalid"},
         {"file_task_limit": 0},
         {"stream_task_limit": -1},
         {"message_limit": 0},
@@ -31,6 +32,7 @@ def test_invalid_settings_fail_at_startup(values):
 
 def test_defaults_are_bounded_and_sources_are_denied():
     settings = Settings(_env_file=None)
+    assert settings.debug is False
     assert settings.file_task_limit == settings.stream_task_limit == 100
     assert settings.frame_buffer_size == 2
     assert settings.source_allowlist == []
@@ -46,10 +48,12 @@ def test_allowlist_accepts_exact_hosts_addresses_and_networks():
 
 
 def test_environment_values_are_loaded_without_exposing_redis_secret(monkeypatch):
+    monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("FILE_TASK_LIMIT", "3")
     monkeypatch.setenv("SOURCE_ALLOWLIST", '["camera.local"]')
     monkeypatch.setenv("REDIS_URL", "redis://:private-password@localhost:6379/0")
     settings = Settings(_env_file=None)
+    assert settings.debug is True
     assert settings.file_task_limit == 3
     assert settings.source_allowlist == ["camera.local"]
     assert "private-password" not in repr(settings)

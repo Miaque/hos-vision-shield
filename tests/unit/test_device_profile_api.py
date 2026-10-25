@@ -26,7 +26,7 @@ def test_profile_header_and_sample_choices_are_described_in_openapi():
 async def test_only_explicit_video_profile_request_reaches_worker(tmp_path, monkeypatch, kind, header, status):
     from vision_shield.api import routes
 
-    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
     monkeypatch.setattr(routes, 'require_worker', AsyncMock())
     record = dict(id='00000000-0000-0000-0000-000000000001', kind=kind, state='queued', desired_state='run',
                   ready=False, created_at='2026-10-22T00:00:00Z', updated_at='2026-10-22T00:00:00Z', error=None,
@@ -46,7 +46,7 @@ async def test_only_explicit_video_profile_request_reaches_worker(tmp_path, monk
 
 
 async def test_profile_summary_and_trace_are_scoped_to_owned_task_directory(tmp_path):
-    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
     task_id = '00000000-0000-0000-0000-000000000001'
     directory = tmp_path / task_id / 'attempt-1'
     directory.mkdir(parents=True)
@@ -93,7 +93,7 @@ async def test_trace_resolved_outside_task_is_not_downloadable(tmp_path, monkeyp
     def redirected(path, *args, **kwargs):
         return outside if path.name == 'plate-profile-64.json' else resolve(path, *args, **kwargs)
     monkeypatch.setattr(Path, 'resolve', redirected)
-    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
     async with app.router.lifespan_context(app), httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url='http://test'
     ) as client:
@@ -104,7 +104,7 @@ async def test_trace_resolved_outside_task_is_not_downloadable(tmp_path, monkeyp
 
 @pytest.mark.parametrize('mode', ['forward-primary-face', 'forward-detail-plate'])
 async def test_named_model_trace_uses_validated_task_relative_path(tmp_path, mode):
-    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
     task_id = '00000000-0000-0000-0000-000000000001'
     directory = tmp_path / task_id / 'attempt-1/host-profile'
     directory.mkdir(parents=True)
@@ -118,3 +118,20 @@ async def test_named_model_trace_uses_validated_task_relative_path(tmp_path, mod
         assert (await client.get(url)).json() == dict(traceEvents=[])
         record['device_profile']['mode'] = '../../private'
         assert (await client.get(url)).status_code == 409
+
+
+async def test_production_disables_diagnostics_and_profile_requests_before_io(tmp_path):
+    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url='http://test'
+    ) as client:
+        app.state.store.get = AsyncMock(side_effect=AssertionError('No diagnostic reads in production'))
+        app.state.store.create = AsyncMock()
+        app.state.redis.time = AsyncMock(side_effect=AssertionError('No resource reads in production'))
+        for path in ('/v1/diagnostics/resources', '/v1/tasks/00000000-0000-0000-0000-000000000001/diagnostics'):
+            assert (await client.get(path)).status_code == 404
+        response = await client.post('/v1/file-tasks/uploads', headers={'X-Detection-Profile': 'host'},
+                                     data={'kind': 'video'}, files={'file': ('input.mp4', b'video', 'video/mp4')})
+        assert response.status_code == 422 and response.json()['error']['code'] == 'diagnostics_disabled'
+        app.state.store.create.assert_not_called()
+        assert list(tmp_path.iterdir()) == []

@@ -21,7 +21,8 @@ def vcl_digest(payload):
 
 
 class StreamMetrics:
-    def __init__(self, *, started=None):
+    def __init__(self, *, started=None, debug=False):
+        self.debug = debug
         self.attempt_id = uuid4().hex
         self.started = time.monotonic() if started is None else started
         self.pending, self.outputs = {}, deque(maxlen=512)
@@ -34,7 +35,9 @@ class StreamMetrics:
         moment = frame.pts * frame.time_base
         if moment in self.pending:
             raise BufferError('Duplicate encoder input clock')
-        self.pending[moment] = (received_at, str(source_pts), str(source_pts if timeline_pts is None else timeline_pts), timestamp_repaired)
+        # Production retains encoder backlog/clock guards without collecting frame evidence.
+        self.pending[moment] = ((received_at, str(source_pts), str(source_pts if timeline_pts is None else timeline_pts), timestamp_repaired)
+                                if self.debug else ())
         self.repairs += timestamp_repaired
 
     def written(self, moment, now, *, encoded_bytes=None, encoded_vcl_sha256=None):
@@ -44,8 +47,10 @@ class StreamMetrics:
         if sample is None:
             self.unmatched += 1
             return
-        received_at, source_pts, timeline_pts, repaired = sample
         self.frames += 1
+        if not self.debug:
+            return
+        received_at, source_pts, timeline_pts, repaired = sample
         self.missing_receive += received_at is None
         self.outputs.append(dict(sequence=self.frames, source_pts=source_pts, timeline_pts=timeline_pts, timestamp_repaired=repaired,
             encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256,

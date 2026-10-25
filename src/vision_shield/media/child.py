@@ -27,6 +27,7 @@ def process(payload, stop, detector=None, *, on_initialized=None):
 
     try:
         cfg = payload["config"]
+        debug = cfg.get('debug', False)
         if payload["kind"] == "probe":
             from vision_shield.detection.preflight import run_preflight
             report = run_preflight(cfg)
@@ -43,7 +44,7 @@ def process(payload, stop, detector=None, *, on_initialized=None):
 
         directory = Path(payload["directory"])
         directory.mkdir(parents=True, exist_ok=True)
-        profile_mode = payload.get('profile_detection')
+        profile_mode = payload.get('profile_detection') if debug else None
         if isinstance(profile_mode, str):
             from vision_shield.detection.host_profile import FORWARDS, ProfileTimes, instrument
 
@@ -54,7 +55,7 @@ def process(payload, stop, detector=None, *, on_initialized=None):
                                      device_stage=None if profile_mode == 'host' else profile_mode)
             observers.callback(collector.close)
             instrument(observers, collector)
-        loading = time.monotonic()
+        loading = time.monotonic() if debug else None
         reused = detector is not None
         if detector is None:
             detector = load_detector(cfg)
@@ -69,8 +70,9 @@ def process(payload, stop, detector=None, *, on_initialized=None):
         Image.init()
         if on_initialized:
             on_initialized()
-        load_seconds = 0.0 if reused else time.monotonic() - loading
-        emit({"model_load_seconds": load_seconds, "model_reused": reused})
+        if debug:
+            load_seconds = 0.0 if reused else time.monotonic() - loading
+            emit({"model_load_seconds": load_seconds, "model_reused": reused})
         if collector:
             from vision_shield.detection.host_profile import instrument_candidates, runtime_metadata
 
@@ -94,7 +96,7 @@ def process(payload, stop, detector=None, *, on_initialized=None):
                                                        "elapsed_seconds": time.monotonic() - started}})
         elif payload["kind"] == "video":
             sampler = None
-            if payload.get('profile_detection') and collector is None:
+            if profile_mode and collector is None:
                 from vision_shield.detection.device_profile import DeviceSamples
 
                 primary = getattr(detector, 'primary', detector)
@@ -176,15 +178,18 @@ def main(*, persistent=False):
         from PIL import Image
 
         cfg = payload['config']
+        debug = cfg.get('debug', False)
         models = verify_models(cfg)
         validate_device(cfg.get('inference_device', 'cpu'))
-        loading = time.monotonic()
+        loading = time.monotonic() if debug else None
         detector = load_detector(cfg)
         Image.init()
-        load_seconds = time.monotonic() - loading
-        warming = time.monotonic()
-        report = {**run_inference(cfg, detector), 'models': models,
-                  'model_load_seconds': load_seconds, 'warmup_seconds': time.monotonic() - warming}
+        if debug:
+            load_seconds = time.monotonic() - loading
+            warming = time.monotonic()
+        report = {**run_inference(cfg, detector), 'models': models}
+        if debug:
+            report.update(model_load_seconds=load_seconds, warmup_seconds=time.monotonic() - warming)
     except Exception as error:
         from vision_shield.detection.preflight import PreflightError
         emit(dict(preflight_error=str(error) if isinstance(error, PreflightError) else '模型预检失败：内部异常',

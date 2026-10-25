@@ -51,7 +51,11 @@ async def probe_models(settings: Settings, stop: asyncio.Event, session=None) ->
         raise RuntimeError("模型预检超时，子进程已回收") from None
     if "probe" not in result or result.get("returncode") != 0 or result.get("cancelled") or stop.is_set():
         raise RuntimeError(result.get("preflight_error") or "模型预检失败或已停止")
-    logging.getLogger(__name__).info("模型预检通过：%s", json.dumps(result["probe"], ensure_ascii=False))
+    logger = logging.getLogger(__name__)
+    if settings.debug:
+        logger.info("模型预检通过：%s", json.dumps(result["probe"], ensure_ascii=False))
+    else:
+        logger.info("模型预检通过")
 
 
 async def main(pool, stop=None):
@@ -86,7 +90,8 @@ async def main(pool, stop=None):
         await broker.startup()
         receiver = Receiver(broker, max_async_tasks=1, max_prefetch=0, wait_tasks_timeout=settings.process_stop_timeout)
         heartbeat = asyncio.create_task(announce())
-        resources = asyncio.create_task(observe_resources(client, pool, worker_id, settings.inference_device))
+        if settings.debug:
+            resources = asyncio.create_task(observe_resources(client, pool, worker_id, settings.inference_device))
         receiver.run_startup = False
         await receiver.listen(stop)
     finally:

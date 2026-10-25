@@ -5,8 +5,10 @@ from vision_shield.config import Settings
 from vision_shield.detection import Detection
 
 
-def test_candidate_timings_keep_each_model_span_without_changing_masks(monkeypatch):
+@pytest.mark.parametrize('debug', [False, True])
+def test_candidate_timings_keep_each_model_span_without_changing_masks(monkeypatch, debug):
     from vision_shield.detection import quality
+    from vision_shield.detection.timing import StageTimes
 
     clock = [0.0]
     monkeypatch.setattr(quality.time, "monotonic", lambda: clock[0])
@@ -23,9 +25,11 @@ def test_candidate_timings_keep_each_model_span_without_changing_masks(monkeypat
     detector.inference_device, detector.box_padding = "cpu", 0
     region = Detection("face", (2, 2, 8, 8), 0.9)
     detector.primary, detector.detail = Fixed(0.03, [region]), Fixed(0.02, [])
+    if debug:
+        detector.stage_times = detector.primary.stage_times = detector.detail.stage_times = StageTimes()
     pixels = np.full((12, 12, 3), 180, np.uint8)
     assert detector.detect_regions(pixels) == [region]
-    assert detector.candidate_timings == pytest.approx({"candidate-primary": 0.03, "candidate-detail": 0.02})
+    assert getattr(detector, 'candidate_timings', {}) == (pytest.approx({"candidate-primary": 0.03, "candidate-detail": 0.02}) if debug else {})
     assert (pixels == 180).all()
 
 

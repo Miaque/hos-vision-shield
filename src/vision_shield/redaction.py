@@ -50,7 +50,7 @@ class _Track(NamedTuple):
 class FrameRedactor:
     """Follow confirmed masks briefly; only actual detections may renew their lifetime."""
 
-    def __init__(self, detector, *, mode="solid", detection_interval=1, tracking="template"):
+    def __init__(self, detector, *, mode="solid", detection_interval=1, tracking="template", debug=False):
         if mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
         if type(detection_interval) is not int or detection_interval not in (1, 3):
@@ -65,7 +65,8 @@ class FrameRedactor:
             self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0,
                                         proposal_frames=0, proposal_rechecks=0, face_rechecks=0)
         self.detector = detector
-        self.stage_times = getattr(detector, "stage_times", None)
+        self.debug = debug
+        self.stage_times = getattr(detector, "stage_times", None) if debug else None
         self.history = deque(maxlen=128)
         self.previous, self.shape, self.moment = None, None, None
         self.gray = None
@@ -106,26 +107,31 @@ class FrameRedactor:
                         and self._follow(gray, track.box, track.reference) is None):
                     flow_boxes[old] = None
                 if flow_boxes[old] is None:
-                    self.detection_stats["flow_failures"] += 1
+                    if self.debug:
+                        self.detection_stats["flow_failures"] += 1
                     recheck = True
             if not recheck and getattr(self.detector, "plate_proposals", None):
                 with source_view(gray):
                     recheck = self._proposal_recheck(pixels, flow_boxes)
-                if recheck:
+                if recheck and self.debug:
                     self.detection_stats["proposal_rechecks"] += 1
             if recheck:
                 face_only = False
-                self.detection_stats["full_rechecks"] += 1
+                if self.debug:
+                    self.detection_stats["full_rechecks"] += 1
                 detect = True
             else:
-                self.detection_stats["flow_updates"] += len(flow_boxes)
+                if self.debug:
+                    self.detection_stats["flow_updates"] += len(flow_boxes)
                 if face_only:
-                    self.detection_stats["face_rechecks"] += 1
+                    if self.debug:
+                        self.detection_stats["face_rechecks"] += 1
                     detect = True
         with source_view(gray), measure(self, "track-face-recheck" if face_only else "track-recheck") if recheck or face_only else nullcontext():
             detections = (self._merge_detections(self._detections(pixels, face_only=True) if face_only
                                                else self._detections(pixels)) if detect else [])
-        self.detection_stats["full_frames" if detect and not face_only else "skipped_frames"] += 1
+        if self.debug:
+            self.detection_stats["full_frames" if detect and not face_only else "skipped_frames"] += 1
         boxes = [detection.box for detection in detections]
         retained, history = [], []
         pairs = sorted(((self._overlap(track.box, detection.box), old, new)
@@ -177,7 +183,7 @@ class FrameRedactor:
         return boxes + retained
 
     def _detections(self, pixels, kind=None, *, face_only=False):
-        started = time.monotonic()
+        started = time.monotonic() if self.debug else None
         regions = self.detector.detect_faces if face_only else getattr(self.detector, "detect_regions", None)
         if regions:
             detections = regions(pixels, kind=kind) if kind else regions(pixels)
@@ -189,9 +195,10 @@ class FrameRedactor:
                     or not all(math.isfinite(v) for v in (*detection.box, detection.score))
                     or not 0 <= detection.score <= 1 or x2 <= x1 or y2 <= y1):
                 raise ValueError("Invalid detector output")
-        self.inference_seconds += time.monotonic() - started
-        for name, seconds in getattr(self.detector, "candidate_timings", {}).items():
-            self.candidate_timings[name] = self.candidate_timings.get(name, 0.0) + seconds
+        if self.debug:
+            self.inference_seconds += time.monotonic() - started
+            for name, seconds in getattr(self.detector, "candidate_timings", {}).items():
+                self.candidate_timings[name] = self.candidate_timings.get(name, 0.0) + seconds
         return detections
 
     @staticmethod
@@ -313,10 +320,12 @@ class FrameRedactor:
 
     @timed("track-probe")
     def _proposal_recheck(self, pixels, flow_boxes):
-        self.detection_stats["proposal_frames"] += 1
-        started = time.monotonic()
+        if self.debug:
+            self.detection_stats["proposal_frames"] += 1
+        started = time.monotonic() if self.debug else None
         proposals = self.detector.plate_proposals(pixels)
-        self.inference_seconds += time.monotonic() - started
+        if self.debug:
+            self.inference_seconds += time.monotonic() - started
         plate_work = getattr(self.detector, "plate_needs_work", None)
         for candidate in proposals:
             x, y, a, b = candidate.box
@@ -339,7 +348,8 @@ class FrameRedactor:
 
     @timed("track-confirm")
     def _recheck(self, pixels, box, kind="", gray=None):
-        self.detection_stats["local_rechecks"] += 1
+        if self.debug:
+            self.detection_stats["local_rechecks"] += 1
         x1, y1, x2, y2 = box
         size = max(96, 3 * max(x2 - x1, y2 - y1))
         left, top = max(0, math.floor((x1 + x2 - size) / 2)), max(0, math.floor((y1 + y2 - size) / 2))

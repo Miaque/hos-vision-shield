@@ -1,5 +1,7 @@
 # Worker 资源观测与后续优化
 
+本文诊断能力仅在 `DEBUG=true` 时启用。默认 `DEBUG=false` 为生产环境：worker 不启动资源采样，不收集详细耗时或逐帧输出证据；诊断接口返回 404，上传携带 `X-Detection-Profile` 返回 422。API 不返回诊断响应头或旧任务的 `stats.stream` 样本。调整本机 `.env` 或容器 `.env.compose` 后须重启 API 和全部 worker，容器须重新创建以应用变量；正常进度、输出健康判断和故障处理继续运行。
+
 ## 本轮已实现的接口
 
 `GET /v1/diagnostics/resources` 返回当前有有效租约的文件、流 worker，以及各 worker 最近完成的资源采样。采样在 worker 端执行，不将 API 容器资源当作视频处理资源；不改变既有任务响应和处理流程。没有新增依赖。
