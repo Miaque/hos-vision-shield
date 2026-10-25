@@ -3,7 +3,10 @@ import os
 from pathlib import Path
 import socket
 import sys
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
+import httpx
 from PIL import Image
 import pytest
 
@@ -212,5 +215,55 @@ async def test_profiling_reclaims_resident_and_uses_isolated_child(payload):
         assert previous.returncode is not None and session.process is None
         result, _ = await run(session, payload)
         assert result['returncode'] == 0 and session.process.pid != previous.pid
+    finally:
+        await session.close()
+
+
+@pytest.mark.parametrize('probe_fault', [None, 'runtime', 'device', 'invalid', 'hash'])
+async def test_original_stream_recovers_model_fault_and_rewarm_without_new_task(tmp_path, monkeypatch, probe_fault):
+    from vision_shield.jobs import tasks
+
+    session = runner.MediaProcess(COMMAND)
+    record = dict(id='same-task', kind='stream', desired_state='run', generation=1,
+                  source_ref='rtsp://127.0.0.1/model-once', publish_url='rtmp://output')
+    config = dict(model_failure_file=str(tmp_path / 'model-failed'))
+    if probe_fault:
+        config.update(probe_failure_file=str(tmp_path / 'probe-failure'), probe_failure_kind=probe_fault)
+    settings = SimpleNamespace(media_root=tmp_path, source_allowlist=['127.0.0.1'], process_stop_timeout=1,
+                               model_dump=lambda **kwargs: config.copy())
+    store = SimpleNamespace(update_owned=AsyncMock(return_value=True), get=AsyncMock(return_value=record), finish=AsyncMock())
+    publishing, results, cancel = [], [], asyncio.Event()
+    publisher = SimpleNamespace(prepare=AsyncMock(return_value='rtmp://output'), close=AsyncMock(return_value=True))
+    monkeypatch.setattr(tasks, 'Publisher', lambda *args: publisher)
+    monkeypatch.setattr(tasks, 'validate_source', AsyncMock(return_value=(httpx.URL(record['source_ref']), '127.0.0.1')))
+
+    async def run(command, payload, stopping, on_event, timeout, **kwargs):
+        async def received(event):
+            await on_event(event)
+            if 'publishing' in event:
+                publishing.append(event['publishing'])
+                if len(publishing) == 2:
+                    cancel.set()
+        result = await runner.run_process(command, payload, stopping, received, timeout, **kwargs)
+        results.append(result)
+        return result
+
+    monkeypatch.setattr(tasks, 'run_process', run)
+    try:
+        await asyncio.wait_for(tasks.run_stream(record, store, settings, cancel, 'owner', 1, session=session), 45)
+        assert results[0]['retryable'] and results[0]['failure_type'] == 'RuntimeError'
+        assert record['desired_state'] == 'run'
+        assert any(call.kwargs.get('state') == 'recovering' for call in store.update_owned.call_args_list)
+        if probe_fault in {'invalid', 'hash'}:
+            assert len(publishing) == 1 and len(results) == 2
+            assert not results[-1]['retryable'] and session.process is None
+            assert store.finish.call_args.args[3] == 'failed'
+        else:
+            assert len(publishing) == 2 and publishing[0]['pid'] != publishing[1]['pid']
+            assert all(event['loads'] == 1 for event in publishing)
+            store.finish.assert_not_called()
+            assert len(results) == (3 if probe_fault else 2)
+            assert all(result['retryable'] for result in results[:-1])
+        assert 'private:secret' not in str(results)
     finally:
         await session.close()

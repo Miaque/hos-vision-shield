@@ -11,6 +11,10 @@ class PreflightError(RuntimeError):
     """仅携带文件、角色和阶段的有限启动诊断。"""
 
 
+class DeviceUnavailableError(PreflightError):
+    """A lost CUDA device may become available when the running stream retries."""
+
+
 def verify_models(config: dict) -> list[dict]:
     """按后端选择既有清单，逐个流式校验权重哈希和可读权限。"""
     backend = config["detection_backend"]
@@ -60,7 +64,7 @@ def validate_device(device: str) -> None:
         raise PreflightError("模型预检失败：GPU_DEVICE_ID 必须是单个卡号或完整 GPU UUID")
     import torch
     if not torch.cuda.is_available():
-        raise PreflightError("模型预检失败：CUDA 不可用")
+        raise DeviceUnavailableError("模型预检失败：CUDA 不可用")
     if identifier is not None and torch.cuda.device_count() != 1:
         raise PreflightError("模型预检失败：部署必须仅有唯一 CUDA 可见设备")
 

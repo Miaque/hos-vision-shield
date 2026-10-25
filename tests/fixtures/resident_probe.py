@@ -10,15 +10,31 @@ from types import SimpleNamespace
 from vision_shield import detection
 from vision_shield.detection import preflight
 from vision_shield.detection.timing import StageTimes
+from vision_shield.detection.quality import _timed_candidates
 from vision_shield.media import child, images, streams
 
 
 loads = 0
 
 
+def fail_model():
+    def candidates(*args, **kwargs):
+        raise RuntimeError('private:secret model execution failed')
+    _timed_candidates(SimpleNamespace(candidates=candidates), object())
+
+
 def load(config):
     global loads
     loads += 1
+    marker = Path(config['probe_failure_file']) if config.get('probe_failure_file') else None
+    if marker and marker.exists():
+        fault = marker.read_text('utf-8')
+        marker.unlink()
+        if fault == 'runtime':
+            fail_model()
+        if fault == 'device':
+            raise preflight.DeviceUnavailableError('模型预检失败：CUDA 不可用')
+        raise ValueError('Invalid model configuration')
     return SimpleNamespace(stage_times=StageTimes(), candidate_timings={}, _proposal_candidates=None)
 
 
@@ -37,6 +53,13 @@ def stream(source, target, detector, config, stop, emit):
         publisher.listen()
         emit(dict(publishing=dict(pid=os.getpid(), loads=loads, source=source,
                                   port=publisher.getsockname()[1])))
+        if source.rsplit('/', 1)[-1] == 'model-once':
+            marker = Path(config['model_failure_file'])
+            if not marker.exists():
+                marker.touch()
+                if config.get('probe_failure_file'):
+                    Path(config['probe_failure_file']).write_text(config['probe_failure_kind'], 'utf-8')
+                fail_model()
         if source == 'retry':
             raise OSError('retryable connection loss')
         if source == 'fatal':
@@ -48,7 +71,14 @@ def stream(source, target, detector, config, stop, emit):
 
 
 detection.load_detector = load
-preflight.verify_models = lambda config: []
+def verify(config):
+    marker = Path(config['probe_failure_file']) if config.get('probe_failure_file') else None
+    if marker and marker.exists() and marker.read_text('utf-8') == 'hash':
+        raise preflight.PreflightError('Model hash mismatch')
+    return []
+
+
+preflight.verify_models = verify
 preflight.validate_device = lambda device: None
 preflight.run_inference = lambda config, detector=None: dict(device='cpu', loads=loads)
 images.process_image = image

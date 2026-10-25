@@ -183,6 +183,28 @@ async def test_fatal_child_failure_is_saved_before_terminal_state(monkeypatch):
     store.finish.assert_awaited_once()
 
 
+async def test_stop_during_model_recovery_does_not_start_another_attempt(monkeypatch):
+    from vision_shield.jobs import tasks
+
+    record = dict(id='job', kind='stream', desired_state='run', generation=1, source_ref='rtsp://input')
+    cancel = asyncio.Event()
+    async def update(*args, **values):
+        if values.get('state') == 'recovering':
+            record['desired_state'] = 'stopped'
+            cancel.set()
+        return True
+    store = SimpleNamespace(update_owned=AsyncMock(side_effect=update), get=AsyncMock(return_value=record), finish=AsyncMock())
+    publisher = SimpleNamespace(prepare=AsyncMock(return_value='rtsp://output'), close=AsyncMock(return_value=True))
+    monkeypatch.setattr(tasks, 'Publisher', lambda *args: publisher)
+    monkeypatch.setattr(tasks, 'validate_source', AsyncMock(return_value=(httpx.URL(record['source_ref']), '127.0.0.1')))
+    run = AsyncMock(return_value=dict(returncode=1, retryable=True, failure_type='RuntimeError',
+                                    error=dict(code='processing_failed', message='Model runtime failed')))
+    monkeypatch.setattr(tasks, 'run_process', run)
+    await tasks.run_stream(record, store, Settings(_env_file=None), cancel, 'owner', 1)
+    run.assert_awaited_once()
+    assert store.finish.call_args.args[3] == 'stopped'
+
+
 @pytest.mark.parametrize('resident', [False, True])
 async def test_external_publisher_stop_persists_reason_before_releasing_ownership(monkeypatch, resident):
     from vision_shield.jobs import tasks
