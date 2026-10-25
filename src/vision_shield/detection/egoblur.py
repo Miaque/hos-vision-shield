@@ -11,38 +11,6 @@ from vision_shield.detection import Detection
 from vision_shield.detection.timing import measure
 
 
-def _shared_mask_indices(graph):
-    groups = {}
-    for node in graph.findAllNodes("aten::index"):
-        indices = node.inputsAt(1).node()
-        if indices.kind() == "prim::ListConstruct" and indices.inputsSize() == 1:
-            mask = indices.inputsAt(0)
-            if mask.node().kind() in ("aten::__and__", "aten::gt"):
-                groups.setdefault(mask, []).append(node)
-    if sorted((mask.node().kind(), len(users)) for mask, users in groups.items()) != [
-            ("aten::__and__", 3), ("aten::gt", 2)]:
-        raise RuntimeError("Unexpected Gen1 shared-mask graph")
-    ordered = list(graph.nodes())
-    for mask, users in groups.items():
-        rank = 1 if mask.node().kind() == "aten::__and__" else 2
-        existing = [node for node in ordered if node.kind() == "aten::nonzero" and node.inputsAt(0) == mask]
-        if len(existing) != rank - 1 or (existing and ordered.index(existing[0]) >= ordered.index(users[0])):
-            raise RuntimeError("Unexpected Gen1 filter indices")
-        with graph.insert_point_guard(users[0]):
-            selected = existing[0].output() if existing else graph.insertNode(graph.create("aten::nonzero", [mask])).output()
-            dimension = graph.insertConstant(1)
-            columns = [graph.insertNode(graph.create("aten::select", [selected, dimension, graph.insertConstant(axis)])).output()
-                       for axis in range(rank)]
-            indices = graph.create("prim::ListConstruct", columns)
-            indices.output().setType(users[0].inputsAt(1).type())
-            graph.insertNode(indices)
-        for node in users:
-            node.replaceInput(1, indices.output())
-    torch._C._jit_pass_dce(graph)
-    graph.lint()
-    return graph
-
-
 def _async_device_moves(model):
     # shortcut: fixed Gen1/TorchScript internals; revalidate the graph and APIs on model or PyTorch upgrades.
     graph = model.inlined_graph.copy()
@@ -54,7 +22,7 @@ def _async_device_moves(model):
         asynchronous = graph.insertConstant(True)
     for node in moves:
         node.replaceInput(3, asynchronous)
-    _shared_mask_indices(graph)
+    graph.lint()
     return torch._C._create_function_from_graph("plate_async_device_moves", graph)
 
 
