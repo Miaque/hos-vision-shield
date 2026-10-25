@@ -189,7 +189,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                                      stream_attempts_discarded=discarded)
             ending, phase, finish_error = {}, "source_validate", None
             try:
-                original, address = await validate_source(record["source_ref"], settings.source_allowlist, ("rtsp",))
+                original, address = await validate_source(record["source_ref"], settings.source_allowlist, ("rtsp", "rtmp"))
                 phase = "publisher_prepare"
                 publish_url = await publisher.prepare(record, owner, generation)
                 await store.update_owned(task_id, owner, generation, state="connecting", ready=False)
@@ -225,6 +225,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                 payload = dict(kind="stream", source=str(original.copy_with(host=address)),
                                publish_url=publish_url, config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid"),
                                                                "publish_url": record.get("publish_url"),
+                                                               "source_url": record["source_ref"],
                                                                "stream_started_monotonic": attempt['started_monotonic']},
                                directory=str(settings.media_root.resolve() / task_id / f"attempt-{generation}"))
                 for key in ('detection_interval', 'tracking', 'max_bitrate'):

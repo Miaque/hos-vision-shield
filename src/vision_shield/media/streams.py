@@ -83,7 +83,7 @@ class StreamBuffer:
 
 def process_stream(source: str, target: str, detector: "Detector", config: dict,
                    stop: threading.Event, emit: Callable[[dict], None]) -> None:
-    """Read RTSP and publish RTSP/RTMP; emit only processed frames and bounded stats."""
+    """Read RTSP/RTMP and publish RTSP/RTMP; emit only processed frames and bounded stats."""
     protocol = httpx.URL(target).scheme
     if protocol not in {"rtsp", "rtmp"}:
         raise ValueError("Unsupported output protocol")
@@ -116,8 +116,14 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             # RTSP SDP supplies codec parameters; long probing creates an audio burst.
             # shortcut: video-only RTCP clock trial; restore audio after timing recovery is validated.
             phase = "source_open"
-            source_reader = av.open(source, options={"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768",
-                                                    "allowed_media_types": "video"},
+            options = {"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768",
+                       "allowed_media_types": "video"}
+            if httpx.URL(source).scheme == "rtmp":
+                original = httpx.URL(config.get("source_url") or source)
+                options = {"rtmp_tcurl": str(original.copy_with(path=original.path.rsplit("/", 1)[0],
+                           query=None, username="", password="")),
+                           "rw_timeout": str(round(config["rtsp_read_timeout"] * 1_000_000))}
+            source_reader = av.open(source, options=options,
                                     timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
             phase = "source_validate"
             video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"))

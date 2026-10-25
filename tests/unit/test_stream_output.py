@@ -24,7 +24,9 @@ from vision_shield.media.video import check_streams
 @pytest.mark.parametrize("source_bframes", [0, 2])
 @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
     os.getenv("RUN_GPU_TESTS") != "1", reason="requires real NVDEC/GPU mask/NVENC"))])
-def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monkeypatch, scheme, audio_codec, fault, source_bframes, device, debug):
+def test_stream_output_muxes_processed_video_and_compatible_audio(
+    tmp_path, monkeypatch, scheme, audio_codec, fault, source_bframes, device, debug, input_scheme="rtsp",
+):
     source, target = tmp_path / "source.nut", tmp_path / "output.nut"
     with av.open(str(source), "w") as writer:
         video = writer.add_stream("libx264", rate=12)
@@ -70,7 +72,8 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
             self.container.close()
 
     def open_endpoint(url, *args, **kwargs):
-        if url.startswith("rtsp://camera/"):
+        if url.startswith(f"{input_scheme}://camera/"):
+            opened["source_options"] = kwargs.get("options")
             return Reader({key: kwargs[key] for key in ("hwaccel",) if key in kwargs})
         opened.update(url=url, **kwargs)
         return original_open(str(target), "w", format="flv" if scheme == "rtmp" else "nut")
@@ -91,10 +94,11 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
         monkeypatch.setattr(streams.StreamMetrics, 'snapshot', lambda _: pytest.fail('Production must not sample output'))
     config["inference_device"] = device
     config["publish_url"] = f"{scheme}://media.test/live/camera?sign=secret"
+    config["source_url"] = f"{input_scheme}://vendor.test/g3/camera?token=source"
     config['stream_started_monotonic'] = time.monotonic() - 25
     if fault:
         with pytest.raises(fault, match="inference failed"):
-            streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
+            streams.process_stream(f"{input_scheme}://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
                                    Detector(), config, threading.Event(), events.append)
         assert not any(event.get("output") for event in events)
         assert not target.exists() or target.stat().st_size == 0
@@ -106,7 +110,7 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
         assert events[-1]['stream_end']['phase'] == 'frame_process'
         assert events[-1]['stream_end']['error_type'] == fault.__name__
         return
-    streams.process_stream("rtsp://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
+    streams.process_stream(f"{input_scheme}://camera/source", f"{scheme}://127.0.0.1/live/camera?sign=secret",
                            Detector(), config, threading.Event(), events.append)
     if not debug:
         assert events[-1]['stats']['processed_frames'] == 12
@@ -129,6 +133,9 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
     assert [sample['sequence'] for sample in metrics['recent_outputs']] == list(range(1, 13))
     assert all(sample['latency_seconds'] >= 0 for sample in metrics['recent_outputs'])
     assert opened["format"] == ("flv" if scheme == "rtmp" else "rtsp")
+    if input_scheme == "rtmp":
+        assert "rtsp_transport" not in opened["source_options"]
+        assert opened["source_options"]["rtmp_tcurl"] == "rtmp://vendor.test/g3"
     if scheme == "rtmp":
         assert "rtsp_transport" not in opened["options"]
         assert opened["options"]["rtmp_tcurl"] == "rtmp://media.test/live"
@@ -156,6 +163,14 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(tmp_path, monk
     if audio_codec:
         with original_open(str(target)) as reader:
             assert sum(frame.samples for frame in reader.decode(audio=0)) > 0
+
+
+@pytest.mark.parametrize("audio_codec", [None, "aac"])
+def test_rtmp_input_preserves_vendor_host_and_outputs_redacted_flv(tmp_path, monkeypatch, audio_codec):
+    """真实编解码沿用同一遮挡链，RTMP 域名不被 DNS 固定改写。"""
+    test_stream_output_muxes_processed_video_and_compatible_audio(
+        tmp_path, monkeypatch, "rtmp", audio_codec, None, 0, "cpu", True, input_scheme="rtmp",
+    )
 
 
 @pytest.mark.parametrize('clocks,duration,expected', [

@@ -101,7 +101,7 @@ async def create_stream(data: StreamInput, request: Request, response: Response,
     if task is not None:
         response.headers["Location"] = f"/v1/tasks/{task['id']}"
         return public(request, task)
-    await validate_source(data.url, settings.source_allowlist, ("rtsp",))
+    await validate_source(data.url, settings.source_allowlist, ("rtsp", "rtmp"))
     if data.publish_url is not None:
         await validate_source(data.publish_url, settings.source_allowlist, ("rtsp", "rtmp"))
     await require_worker(request.app.state.redis, "stream", settings.lease_seconds)

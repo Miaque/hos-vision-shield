@@ -7,17 +7,20 @@ from vision_shield.main import create_app
 from vision_shield.jobs import tasks
 
 
+@pytest.mark.parametrize("input_scheme", ["rtsp", "rtmp"])
 @pytest.mark.parametrize("publish_url", [None, "rtsp://127.0.0.1/custom?token=secret", "rtmp://127.0.0.1/live/custom?sign=secret"])
 @pytest.mark.parametrize("cadence", [False, True])
 @pytest.mark.parametrize("playback_url", [None, 'https://play.example/live/camera.m3u8?token=play'])
-async def test_stream_intent_is_stoppable_without_a_file_result(redis_url, tmp_path, publish_url, cadence, playback_url):
+async def test_stream_intent_is_stoppable_without_a_file_result(
+    redis_url, tmp_path, publish_url, cadence, playback_url, input_scheme,
+):
     app = create_app(Settings(_env_file=None, redis_url=redis_url, media_root=tmp_path, source_allowlist=["127.0.0.1"]))
     async with app.router.lifespan_context(app), httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         redis = app.state.redis
         await redis.flushdb()
         seconds, micros = await redis.time()
         await redis.zadd("vs:workers:streams", {"test": seconds * 1000 + micros // 1000})
-        body = {"url": "rtsp://127.0.0.1/source"}
+        body = {"url": f"{input_scheme}://127.0.0.1/source"}
         if publish_url:
             body["publish_url"] = publish_url
         if playback_url:

@@ -1,6 +1,6 @@
 # Vision Shield
 
-Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP 流中的人脸和车牌深灰色遮挡或马赛克，不做识别或音频脱敏。
+Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP/RTMP 实时流中的人脸和车牌深灰色遮挡或马赛克，不做识别或音频脱敏。
 支持直接在 Windows 本机运行；服务器另提供 CPU／指定单卡 GPU 的 Docker Compose 部署。
 项目以 `main` 分支作为主干。
 
@@ -144,6 +144,8 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -
 ```
 
 `POST /v1/stream-tasks` 可选 `publish_url` 指定完整推流地址，协议由地址决定；可选 `playback_url` 指定接收平台的完整播放地址（HTTP/HTTPS/RTSP/RTMP）：
+
+输入 `url` 支持 RTSP 和 RTMP，均须授权来源域名及其实际 IP。RTMP 输入保留原厂 URL、签名和 `tcUrl` 域名，通过同一逐帧检测、遮挡、编码和任务恢复链路处理，不另加转流服务。推流目标也须在允许列表中。`ready` 表示已有实际脱敏输出；外部固定播放地址仍须在接收平台验证，不能据此承诺浏览器播放。接入码力时应通过厂商接口的 `livetype=1` 获取 RTMP，不能将 FLV 地址替换协议当作 RTMP。
 
 ```json
 {
