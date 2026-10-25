@@ -16,20 +16,21 @@ from taskiq.receiver import Receiver
 from vision_shield.config import Settings
 from vision_shield.jobs.tasks import file_broker, stream_broker
 from vision_shield.jobs.diagnostics import observe_resources
-from vision_shield.media.runner import run_process
+from vision_shield.media.runner import MediaProcess, run_process
 
 PROBE_TIMEOUT = 120
 
 
-async def probe_models(settings: Settings, stop: asyncio.Event) -> None:
-    """预检受现有子进程监督，成功事件和正常退出缺一不可。"""
+async def probe_models(settings: Settings, stop: asyncio.Event, session=None) -> None:
+    """预检须收到成功报告和完成确认，常驻进程保留同一模型。"""
     async def event_received(event):
         pass
     try:
         async with asyncio.timeout(PROBE_TIMEOUT):
             result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                        dict(kind="probe", config=settings.model_dump(mode="json")),
-                                       stop, event_received, settings.process_stop_timeout)
+                                       stop, event_received, settings.process_stop_timeout,
+                                       **({'session': session} if session is not None else {}))
     except TimeoutError:
         raise RuntimeError("模型预检超时，子进程已回收") from None
     if "probe" not in result or result.get("returncode") != 0 or result.get("cancelled") or stop.is_set():
@@ -56,12 +57,14 @@ async def main(pool, stop=None):
             await asyncio.sleep(settings.heartbeat_seconds)
 
     heartbeat = resources = None
+    session = MediaProcess([sys.executable, '-u', '-m', 'vision_shield.media.child', '--persistent'])
     try:
-        await probe_models(settings, stop)
+        await probe_models(settings, stop, session)
         if stop.is_set():
             return
         broker = file_broker if pool == "files" else stream_broker
         broker.state.stop_event = stop
+        broker.state.media_process = session
         broker.is_worker_process = True
         client = Redis(connection_pool=broker.connection_pool)
         await broker.startup()
@@ -82,13 +85,16 @@ async def main(pool, stop=None):
             if client:
                 await client.zrem(f"vs:workers:{pool}", worker_id)
         finally:
-            if broker:
-                await broker.shutdown()
-            if client:
-                await client.aclose()
-            if os.name != "nt":
-                for signum in (signal.SIGTERM, signal.SIGINT):
-                    loop.remove_signal_handler(signum)
+            try:
+                if broker:
+                    await broker.shutdown()
+                if client:
+                    await client.aclose()
+            finally:
+                await session.close()
+                if os.name != "nt":
+                    for signum in (signal.SIGTERM, signal.SIGINT):
+                        loop.remove_signal_handler(signum)
 
 
 if __name__ == "__main__":

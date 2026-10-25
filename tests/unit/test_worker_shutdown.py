@@ -69,9 +69,13 @@ async def test_requested_device_profile_passes_to_child_and_is_stored_without_st
 
 
 @pytest.mark.parametrize("mode", [None, "solid", "mosaic"])
-async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize('resident', [False, True])
+async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path, monkeypatch, mode, resident):
     stop = asyncio.Event()
     broker = SimpleNamespace(connection_pool=None, state=SimpleNamespace(stop_event=stop), ack_message=AsyncMock())
+    session = object() if resident else None
+    if resident:
+        broker.state.media_process = session
     record = dict(id="job", kind="image", generation=1, source_kind="url", source_ref="http://approved/input", desired_state="run")
     store = SimpleNamespace(claim=AsyncMock(return_value=record), get=AsyncMock(return_value=record),
                             heartbeat=AsyncMock(return_value=True), finish=AsyncMock(), update_owned=AsyncMock())
@@ -81,7 +85,8 @@ async def test_remote_file_download_keeps_deployment_event_and_finishes(tmp_path
     monkeypatch.setattr(tasks, "download", AsyncMock())
     if mode is not None:
         record["redaction_mode"] = mode
-    async def run(command, payload, cancel, on_event, timeout):
+    async def run(command, payload, cancel, on_event, timeout, **kwargs):
+        assert kwargs.get('session') is session
         assert payload["config"]["redaction_mode"] == (mode or "solid")
         await on_event(dict(stats=dict(processed_frames=1, dropped_frames=0, elapsed_seconds=2),
                             timings=dict(frame=1.5, inference=1.25, encode=0.1), video_encoder="h264_nvenc", video_decoder="h264_nvdec"))

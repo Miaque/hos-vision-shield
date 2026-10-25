@@ -65,7 +65,7 @@ def validate_device(device: str) -> None:
         raise PreflightError("模型预检失败：部署必须仅有唯一 CUDA 可见设备")
 
 
-def run_inference(config: dict) -> dict:
+def run_inference(config: dict, detector=None) -> dict:
     """复用工厂实际推理合成帧，并执行非空 NMS 验证目标设备算子。"""
     import numpy as np
     import torch
@@ -74,7 +74,8 @@ def run_inference(config: dict) -> dict:
 
     device = config.get("inference_device", "cpu")
     validate_device(device)
-    detector = load_detector(config)
+    if detector is None:
+        detector = load_detector(config)
     detector.detect(np.zeros((320, 320, 3), dtype=np.uint8))
     primary = getattr(detector, "primary", detector)
     model_devices = sorted({tensor.device.type for model in getattr(primary, "models", []) if model is not None

@@ -1,8 +1,9 @@
-"""One media attempt. EOF on the private control pipe revokes this process."""
+"""Isolated or resident media execution; parent-pipe EOF revokes either mode."""
 
 import json
 import os
 from pathlib import Path
+from queue import Queue
 import sys
 import threading
 import time
@@ -19,33 +20,20 @@ def emit(event):
     print(json.dumps(event), flush=True)
 
 
-def main():
-    payload = json.loads(sys.stdin.readline())
-    stop = threading.Event()
+def process(payload, stop, detector=None, *, on_initialized=None):
     observers = ExitStack()
     collector = None
-
-    def watch_parent():
-        for line in sys.stdin:
-            if json.loads(line).get("stop"):
-                stop.set()
-        # The supervisor died; no detached process may keep a camera/publisher alive.
-        os._exit(3)
-
-    # Linux 在冷加载前监听父管道，防止父进程退出后遗留加载中的模型进程。
-    if os.name != "nt":
-        threading.Thread(target=watch_parent, daemon=True).start()
 
     try:
         cfg = payload["config"]
         if payload["kind"] == "probe":
             from vision_shield.detection.preflight import run_preflight
             report = run_preflight(cfg)
-            if os.name == "nt":
-                threading.Thread(target=watch_parent, daemon=True).start()
+            if on_initialized:
+                on_initialized()
             if not stop.is_set():
                 emit({"probe": report})
-            return
+            return 0, True
         from vision_shield.detection import load_detector
         from vision_shield.media.images import process_image
         from vision_shield.media.video import process_video
@@ -66,23 +54,31 @@ def main():
             observers.callback(collector.close)
             instrument(observers, collector)
         loading = time.monotonic()
-        detector = load_detector(cfg)
+        reused = detector is not None
+        if detector is None:
+            detector = load_detector(cfg)
+        else:
+            for owner in (detector, getattr(detector, 'primary', None), getattr(detector, 'detail', None)):
+                timing = getattr(owner, 'stage_times', None)
+                if timing is not None:
+                    timing.reset()
+                for name, value in (('candidate_timings', {}), ('_proposal_candidates', None)):
+                    if hasattr(owner, name):
+                        setattr(owner, name, value)
         Image.init()
-        load_seconds = time.monotonic() - loading
-        emit({"model_load_seconds": load_seconds})
+        if on_initialized:
+            on_initialized()
+        load_seconds = 0.0 if reused else time.monotonic() - loading
+        emit({"model_load_seconds": load_seconds, "model_reused": reused})
         if collector:
             from vision_shield.detection.host_profile import instrument_candidates, runtime_metadata
 
             instrument_candidates(detector.primary, 'primary', collector)
             instrument_candidates(detector.detail, 'detail', collector)
             metadata = runtime_metadata(detector, cfg)
-        # Windows numerical DLL initialization can deadlock against a blocking
-        # CRT stdin reader. Load dependencies before starting the control thread.
-        if os.name == "nt":
-            threading.Thread(target=watch_parent, daemon=True).start()
         started = time.monotonic()
         if stop.is_set():
-            return
+            return 0, True
         if payload["kind"] == "image":
             with Image.open(payload["source"]) as source:
                 suffix = ".jpg" if source.format == "JPEG" else ".png"
@@ -91,7 +87,7 @@ def main():
             process_image(payload["source"], temporary, detector, cfg["max_image_pixels"],
                           redaction_mode=cfg.get("redaction_mode", "solid"))
             if stop.is_set():
-                return
+                return 0, True
             temporary.replace(result)
             emit({"result_ref": str(result), "stats": {"processed_frames": 1, "dropped_frames": 0,
                                                        "elapsed_seconds": time.monotonic() - started}})
@@ -123,23 +119,87 @@ def main():
             emit({"reconnect": True})
         else:
             raise ValueError("Unsupported task kind")
+        return 0, True
     except Exception as error:
         if collector:
             emit({'device_profile': dict(state='failed', mode=profile_mode, reason=type(error).__name__)})
         if payload["kind"] == "probe":
             from vision_shield.detection.preflight import PreflightError
             emit({"preflight_error": str(error) if isinstance(error, PreflightError) else "模型预检失败：内部异常"})
-            sys.exit(1)
+            return 1, False
         retryable = payload["kind"] == "stream" and isinstance(error, RETRYABLE_STREAM_ERRORS)
         code = "storage_full" if isinstance(error, OSError) and error.errno == 28 else "processing_failed"
         emit({"retryable": retryable, "failure_type": type(error).__name__,
               **({"failure_errno": error.errno} if isinstance(getattr(error, "errno", None), int) else {}),
               "failure_at": [f"{frame.name}:{frame.lineno}" for frame in traceback.extract_tb(error.__traceback__)],
               "error": {"code": code, "message": code.replace("_", " ")}})
-        sys.exit(1)
+        from vision_shield.media.streams import StreamCleanupError
+        return 1, retryable and not isinstance(error, StreamCleanupError)
     finally:
         observers.close()
 
 
+def main(*, persistent=False):
+    payload = json.loads(sys.stdin.readline())
+    stop = threading.Event()
+    pending = Queue(maxsize=1)
+
+    def watch_parent():
+        nonlocal stop
+        for line in sys.stdin:
+            message = json.loads(line)
+            if message.get('stop'):
+                stop.set()
+            else:
+                stop = threading.Event()
+                pending.put((message, stop))
+        # EOF revokes an active or idle resident, including its CUDA context.
+        os._exit(3)
+
+    watcher = threading.Thread(target=watch_parent, daemon=True)
+    if os.name != 'nt':
+        watcher.start()
+    if not persistent:
+        # Windows CRT stdin reads must start after numerical DLL/model initialization.
+        code, _ = process(payload, stop, on_initialized=watcher.start if os.name == 'nt' else None)
+        if code:
+            raise SystemExit(code)
+        return
+
+    try:
+        from vision_shield.detection import load_detector
+        from vision_shield.detection.preflight import verify_models, validate_device, run_inference
+        # Load media dependencies before starting the Windows CRT control reader.
+        from vision_shield.media import images, video, streams
+        from PIL import Image
+
+        cfg = payload['config']
+        models = verify_models(cfg)
+        validate_device(cfg.get('inference_device', 'cpu'))
+        loading = time.monotonic()
+        detector = load_detector(cfg)
+        Image.init()
+        load_seconds = time.monotonic() - loading
+        warming = time.monotonic()
+        report = {**run_inference(cfg, detector), 'models': models,
+                  'model_load_seconds': load_seconds, 'warmup_seconds': time.monotonic() - warming}
+    except Exception as error:
+        from vision_shield.detection.preflight import PreflightError
+        emit(dict(preflight_error=str(error) if isinstance(error, PreflightError) else '模型预检失败：内部异常',
+                  error=dict(code='processing_failed', message='Model preflight failed')))
+        emit(dict(complete=True, returncode=1, reusable=False))
+        return
+    if os.name == 'nt':
+        watcher.start()
+    emit(dict(probe=report))
+    emit(dict(complete=True, returncode=0, reusable=True))
+    while True:
+        payload, task_stop = pending.get()
+        code, reusable = process(payload, task_stop, detector)
+        emit(dict(complete=True, returncode=code, reusable=reusable))
+        if not reusable:
+            return
+
+
 if __name__ == "__main__":
-    main()
+    main(persistent='--persistent' in sys.argv)

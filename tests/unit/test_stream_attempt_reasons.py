@@ -183,7 +183,8 @@ async def test_fatal_child_failure_is_saved_before_terminal_state(monkeypatch):
     store.finish.assert_awaited_once()
 
 
-async def test_external_publisher_stop_persists_reason_before_releasing_ownership(monkeypatch):
+@pytest.mark.parametrize('resident', [False, True])
+async def test_external_publisher_stop_persists_reason_before_releasing_ownership(monkeypatch, resident):
     from vision_shield.jobs import tasks
 
     record = dict(id='job', kind='stream', desired_state='stopped', generation=1,
@@ -197,9 +198,10 @@ async def test_external_publisher_stop_persists_reason_before_releasing_ownershi
         saved.update(copy.deepcopy(values))
         return True
 
-    async def close(*args, process_exited=False):
+    async def close(*args, process_exited=False, media_closed=False):
         nonlocal terminal
-        if process_exited:
+        if process_exited or media_closed:
+            assert media_closed == resident
             assert saved['stream_attempts'][-1]['reason'] == 'stop_requested'
             terminal = True
         return True
@@ -211,12 +213,14 @@ async def test_external_publisher_stop_persists_reason_before_releasing_ownershi
     cancel = asyncio.Event()
 
     async def run(*args, **kwargs):
+        assert kwargs.get('session') is session
         await args[3](dict(stream_end=dict(reason='stop_requested', phase='source_read', attempt_id='ended')))
         cancel.set()
         await kwargs['on_exit']()
         return dict(returncode=0, cancelled=True)
 
     monkeypatch.setattr(tasks, 'run_process', run)
+    session = object() if resident else None
     await tasks.run_stream(record, store, Settings(_env_file=None), cancel, 'owner', 1,
-                           cancellation=dict(reason='stop_requested', phase='worker_control'))
+                           cancellation=dict(reason='stop_requested', phase='worker_control'), session=session)
     assert terminal and saved['stream_attempts'][-1]['attempt_id'] == 'ended'

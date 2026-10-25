@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from pathlib import Path
 import socket
 import sys
 
@@ -15,7 +16,7 @@ from vision_shield.jobs.reconcile import reconcile_once
 from vision_shield.jobs.store import TaskStore
 from vision_shield.main import create_app
 from vision_shield.media.publisher import Publisher
-from vision_shield.media.runner import run_process
+from vision_shield.media.runner import MediaProcess, run_process
 
 
 @pytest.fixture(params=["rtsp", "rtmp"])
@@ -207,6 +208,34 @@ async def test_failed_spawn_can_confirm_no_child_exists(tmp_path):
     with pytest.raises(OSError):
         await run_process([str(tmp_path / "missing-program")], {}, asyncio.Event(), on_event, on_exit=on_exit)
     assert confirmed == [True]
+
+
+async def test_resident_completion_confirms_external_stop_after_socket_closes(external_stream, tmp_path):
+    store, publisher, owned = external_stream
+    session = MediaProcess([sys.executable, '-u', str(Path(__file__).parents[1] / 'fixtures/resident_probe.py'), '--persistent'])
+    cancel, publishing, confirmed = asyncio.Event(), {}, []
+    async def event_received(event):
+        if 'publishing' in event:
+            publishing.update(event['publishing'])
+            await store.request_stop(owned['id'], 'stopped')
+            await expire(store, owned)
+            await store.recover_expired()
+            assert not await publisher.close(owned)
+            cancel.set()
+    async def media_closed():
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', publishing['port']))
+        assert session.process.returncode is None
+        assert await publisher.close(owned, 'owner', owned['generation'], media_closed=True)
+        confirmed.append(True)
+    try:
+        result = await asyncio.wait_for(session.run(dict(kind='stream', source='camera',
+            publish_url=owned['publish_url'], directory=str(tmp_path), config={}),
+            cancel, event_received, 1, on_exit=media_closed), 20)
+        assert result['cancelled'] and confirmed == [True]
+        assert (await store.get(owned['id']))['state'] == 'stopped'
+    finally:
+        await session.close()
 
 
 @pytest.mark.parametrize("media_status,expected", [(200, 200), (503, 503)])

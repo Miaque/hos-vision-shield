@@ -19,6 +19,10 @@ if TYPE_CHECKING:
     from vision_shield.detection import Detector
 
 
+class StreamCleanupError(OSError):
+    """A timed-out input reader requires process reclamation before reuse."""
+
+
 class StreamBuffer:
     def __init__(self, frame_limit, audio_seconds, audio_bytes, stop):
         self.frame_limit, self.audio_seconds, self.audio_limit = frame_limit, audio_seconds, audio_bytes
@@ -314,3 +318,5 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         writer_done.set()
         reader.join(timeout=config["rtsp_read_timeout"] + 1)
         report(force=True)
+        if reader.is_alive():
+            raise StreamCleanupError("Source reader did not stop")

@@ -50,7 +50,7 @@ async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
         await asyncio.Event().wait()
     broker.listen = listen
     client = SimpleNamespace(time=AsyncMock(return_value=(1, 0)), zadd=AsyncMock(), zrem=AsyncMock(), aclose=AsyncMock())
-    async def probe(settings, stopping):
+    async def probe(settings, stopping, session):
         calls.append("probe")
         assert not broker.startup.called and not client.zadd.called
     async def observe(resource_client, pool, worker_id, device):
@@ -63,6 +63,8 @@ async def test_worker_waits_for_probe_and_stops_saturated_receiver(monkeypatch):
     receiver_class = worker.Receiver
     def receiver(*args, **kwargs):
         assert calls == ["probe"]
+        assert isinstance(broker.state.media_process, worker.MediaProcess)
+        assert kwargs['max_async_tasks'] == 1 and kwargs['max_prefetch'] == 0
         result = receiver_class(*args, **kwargs)
         async def callback(message, raise_err=False):
             active.set()

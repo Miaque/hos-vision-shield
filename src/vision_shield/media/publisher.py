@@ -15,10 +15,11 @@ class Publisher:
         return await self.store.publisher_change(task_id, operation, **arguments)
 
     async def close(self, task: dict, owner_id: str | None = None, generation: int | None = None,
-                    *, process_exited: bool = False) -> bool:
+                    *, process_exited: bool = False, media_closed: bool = False) -> bool:
         if task.get("publish_url"):
+            # 常驻进程仅在媒体句柄和读取线程全部关闭后确认，与强杀回收同样可撤销发布权。
             return bool(await self._change(task["id"], "external_close", owner_id=owner_id,
-                                          generation=generation, process_exited=process_exited))
+                                          generation=generation, process_exited=process_exited or media_closed))
         frozen = await self._change(task["id"], "freeze", owner_id=owner_id, generation=generation)
         if not frozen:
             return False

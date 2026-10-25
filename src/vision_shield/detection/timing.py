@@ -35,6 +35,10 @@ class StageTimes:
         with self.lock:
             return self.seconds.copy()
 
+    def reset(self):
+        with self.lock:
+            self.seconds = dict.fromkeys(STAGES, 0.0)
+
 
 def measure(owner, name):
     timing = getattr(owner, "stage_times", None)

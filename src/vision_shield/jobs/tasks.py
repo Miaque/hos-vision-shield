@@ -22,8 +22,9 @@ from vision_shield.media.attempts import failure_details
 def log_model_timing(event: dict, task_id: str, generation: int) -> None:
     """模型冷加载单独记日志，不混入既有媒体处理 stats。"""
     if "model_load_seconds" in event:
-        logging.getLogger(__name__).info("task=%s generation=%s 模型加载耗时=%.3fs",
-                                         task_id, generation, event["model_load_seconds"])
+        logging.getLogger(__name__).info("task=%s generation=%s 模型%s耗时=%.3fs",
+                                         task_id, generation, '复用' if event.get('model_reused') else '加载',
+                                         event["model_load_seconds"])
 
 
 async def execute(task_id, broker, context):
@@ -31,6 +32,7 @@ async def execute(task_id, broker, context):
     if deployment_stop is not None and deployment_stop.is_set():
         return
     settings = Settings()
+    session = getattr(broker.state, 'media_process', None)
     client = Redis(connection_pool=broker.connection_pool)
     store = TaskStore(client, settings.file_task_limit, settings.stream_task_limit, settings.lease_seconds)
     owner = str(uuid4())
@@ -73,7 +75,8 @@ async def execute(task_id, broker, context):
     controller = asyncio.create_task(control())
     try:
         if record["kind"] == "stream":
-            await run_stream(record, store, settings, cancel, owner, generation, cancellation=cancellation)
+            await run_stream(record, store, settings, cancel, owner, generation,
+                             cancellation=cancellation, session=session)
             return
         root = settings.media_root.resolve()
         directory = root / task_id / f"attempt-{generation}"
@@ -114,7 +117,8 @@ async def execute(task_id, broker, context):
             if record.get('tracking'):
                 payload['config']['tracking'] = record['tracking']
             result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
-                                       payload, cancel, event_received, settings.process_stop_timeout)
+                                       payload, cancel, event_received, settings.process_stop_timeout,
+                                       **({'session': session} if session is not None else {}))
         current = await store.get(task_id)
         if deployment_stop is not None and deployment_stop.is_set() and current and current["desired_state"] == "run":
             # 未完成文件交给失租约恢复，不将部署停机写成处理失败。
@@ -144,7 +148,7 @@ async def execute(task_id, broker, context):
         logger.info("task=%s generation=%s execution ended", task_id, generation)
 
 
-async def run_stream(record, store, settings, cancel, owner, generation, *, cancellation=None):
+async def run_stream(record, store, settings, cancel, owner, generation, *, cancellation=None, session=None):
     task_id, retry = record["id"], 0
     publisher = Publisher(store, settings)
     history = list(record.get("stream_attempts", []))
@@ -158,7 +162,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
         await store.update_owned(task_id, owner, generation, stream_attempts=history,
                                  stream_attempts_discarded=discarded)
 
-    async def child_exited():
+    async def media_closed():
         nonlocal phase
         if cancel.is_set():
             ending.update(cancellation or dict(reason="control_cancelled", phase="worker_control"))
@@ -167,7 +171,8 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
         # External teardown may finalize the task and release ownership in this callback.
         await persist_ending()
         try:
-            await publisher.close(record, owner, generation, process_exited=True)
+            await publisher.close(record, owner, generation,
+                                  **({'media_closed': True} if session is not None else {'process_exited': True}))
         except Exception:
             phase = "publisher_close"
             raise
@@ -226,7 +231,8 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                 phase = "child_process"
                 result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                            payload, cancel, event_received, settings.process_stop_timeout,
-                                           on_exit=child_exited if record.get("publish_url") else None)
+                                            on_exit=media_closed if record.get("publish_url") else None,
+                                            **({'session': session} if session is not None else {}))
                 if not ending:
                     ending.update(reason="child_exit", phase=phase, returncode=result.get("returncode"))
                 ending["returncode"] = result.get("returncode")
