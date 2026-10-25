@@ -43,6 +43,20 @@ async def test_replay_is_before_capacity_and_conflict_does_not_overwrite(store):
     assert (await store.get(tasks[0]["id"]))["source_ref"] == "private/input"
 
 
+async def test_target_namespaces_separate_environments_and_share_atomic_replays(store):
+    """数据库克隆产生相同业务键时，各环境仍创建独立任务。"""
+    async def create(target):
+        return await store.create("image", "upload", "private/input", idempotency_key="same-key",
+                                  fingerprint=target, notification_target=target)
+    first, second = await asyncio.gather(create("dev.event-hub"), create("prod.event-hub"))
+    assert first["id"] != second["id"]
+    assert (await create("dev.event-hub"))["id"] == first["id"]
+    assert (await store.replay("same-key", "dev.event-hub", notification_target="dev.event-hub"))["id"] == first["id"]
+    assert await store.replay("same-key", "unused", notification_target="other.event-hub") is None
+    assert first["submission_key"] == "same-key"
+    assert store._binding_key('["dev.event-hub","same-key"]') != store._binding_key("same-key", "dev.event-hub")
+
+
 @pytest.mark.parametrize("terminal", ["succeeded", "cancelled", "worker_lost"])
 async def test_all_file_terminal_paths_persist_notification_with_state(store, terminal):
     """正常完成、排队取消和失租约均在同一 Lua 中登记通知。"""
@@ -114,7 +128,7 @@ async def test_upload_race_and_lost_create_response_keep_only_owned_input(redis_
     from vision_shield.api import routes
     monkeypatch.setattr(routes, "require_worker", AsyncMock())
     settings = Settings(_env_file=None, redis_url=redis_url, media_root=tmp_path,
-        notification_targets={"event-hub": {"url": "http://hub/internal", "secret": "x" * 32}})
+        vision_shield_notification_amqp_url="amqp://mq/%2F", notification_targets={"event-hub": {"secret": "x" * 32}})
     app = create_app(settings)
     async with app.router.lifespan_context(app), httpx.AsyncClient(
         transport=httpx.ASGITransport(app), base_url="http://test"

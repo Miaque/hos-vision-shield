@@ -49,7 +49,8 @@ def creation_headers(request):
 
 async def replay(request, key, fingerprint):
     """已接纳意图不受当前 worker 或新任务容量影响。"""
-    return await request.app.state.store.replay(key, fingerprint) if key else None
+    return await request.app.state.store.replay(key, fingerprint,
+        notification_target=request.headers.get("X-Notification-Target")) if key else None
 
 
 @router.get('/diagnostics/resources', response_model=ResourcesResponse)

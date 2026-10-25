@@ -240,19 +240,54 @@ uv run pytest -q
 
 创建三个入口均支持可选 `Idempotency-Key`（1—128 个可打印 ASCII 字符，不能全为空白）。同键同有效参数与上传内容返回同一任务的当前状态，终态也可恢复；同键不同输入返回 409。上传指纹使用文件 SHA256，不包含随机目录。旧调用不传新请求头时保持原接纳方式。
 
-需要通知时再传 `X-Notification-Target: event-hub` 或 `platform`，且必须同时传幂等键。部署通过 `NOTIFICATION_TARGETS` JSON 注册固定内部地址和独立密钥，例如下面的占位配置；实际地址必须能从服务器访问，不能使用浏览器的本地转发地址作为服务器回调目标。
+通知只通过 RabbitMQ 交付，不再支持 HTTP 回调。创建任务时传 `X-Notification-Target` 和 `Idempotency-Key`；前者必须在 Shield 的 `NOTIFICATION_TARGETS` 中登记。目标为最多 64 字符的小写字母、数字、连字符及点分段标识，不写死环境名称。普通手工任务可以不订阅通知。
 
-```json
-{"event-hub":{"url":"http://hub.internal/api/v1/internal/media-redaction/task-events","secret":"REPLACE_WITH_AT_LEAST_32_RANDOM_CHARS"},"platform":{"url":"http://platform.internal/api/v1/device/external/media-redaction/task-events","secret":"REPLACE_WITH_ANOTHER_RANDOM_SECRET"}}
+#### 默认 vhost 与环境配置
+
+所有服务使用默认 vhost `/`（AMQP URI 中写为 `/%2F`），通知连接独立于 Platform/Hub 原有业务 MQ 配置。以下均为占位示例，密码须 URL 编码，四个签名密钥分别生成，不能复用播放密钥或用户 token。
+
+Shield 的 `.env.compose`：
+
+```dotenv
+VISION_SHIELD_NOTIFICATION_AMQP_URL='amqps://shield-publisher:ENCODED_PASSWORD@MQ_HOST:5671/%2F'
+NOTIFICATION_TARGETS='{"dev.platform":{"secret":"REPLACE_WITH_DEV_PLATFORM_64_HEX_SECRET"},"dev.event-hub":{"secret":"REPLACE_WITH_DEV_HUB_64_HEX_SECRET"},"prod.platform":{"secret":"REPLACE_WITH_PROD_PLATFORM_64_HEX_SECRET"},"prod.event-hub":{"secret":"REPLACE_WITH_PROD_HUB_64_HEX_SECRET"}}'
 ```
 
-独立运行 `python -m vision_shield.jobs.notify`（Compose 已提供 notifier）。任务状态与通知责任原子登记，HTTP 仅 2xx 才确认；重试重新签名，超时 5 秒，指数退避 1—300 秒。多个 notifier 共享全局最多 4 个在途通知、每目标最多 2 个和可接管租约。通知头为 `X-Vision-Shield-Timestamp` Unix 秒及 `X-Vision-Shield-Signature`，签名为 HMAC-SHA256(secret, timestamp + "." + 原始正文)。正文只含 schema_version、event_id、sequence、task_id、submission_key、kind、state、desired_state、ready、occurred_at、health 和安全 error_code，不含媒体或来源凭据。
+Platform 和 Event Hub 各部署的环境变量：
 
-新增 `POST /v1/tasks/query`，正文 `{"task_ids":["任务UUID"]}`，每批 1—100 项，返回 `items` 与 `missing_ids`，包含已退出活跃集合的终态。创建、查询及通知均带单调 `sequence`；接收方必须按序合并，不能让旧查询覆盖新通知。直播 `health` 由当前 Worker 租约和实际脱敏输出计算，`valid_until` 不晚于最后输出后 45 秒；查询成功不能延长健康。
+```dotenv
+VISION_SHIELD_BASE_URL=http://SHIELD_HOST:28000
+VISION_SHIELD_NOTIFICATION_AMQP_URL='amqps://environment-consumer:ENCODED_PASSWORD@MQ_HOST:5671/%2F'
+VISION_SHIELD_NOTIFICATION_TARGET=dev.platform
+VISION_SHIELD_NOTIFICATION_SECRET=REPLACE_WITH_DEV_PLATFORM_64_HEX_SECRET
+```
 
-`NOTIFICATION_LIMIT` 默认 1000，任务创建时预留通知责任额度；文件终态确认后释放，直播保持至最终 stopped/failed 确认。容量满返回 429/Retry-After，已存在幂等键仍可恢复。`MEDIA_DISK_HIGH_WATERMARK` 默认 0.95，磁盘达到高水位拒绝新任务。Redis 必须持久化并配置 noeviction；部署前核验 Redis 与媒体盘容量。通知确认不会删除输入或成品，本期没有自动清理。
+| 部署 | 通知目标 | 签名密钥对应 Shield 项 |
+| --- | --- | --- |
+| 研发 Platform | `dev.platform` | `dev.platform.secret` |
+| 研发 Event Hub | `dev.event-hub` | `dev.event-hub.secret` |
+| 正式 Platform | `prod.platform` | `prod.platform.secret` |
+| 正式 Event Hub | `prod.event-hub` | `prod.event-hub.secret` |
 
-Hub 收到通知只表示状态交接；完整结果仍由 Hub 下载、校验、上传 MinIO，随后更新 Platform 告警文件信息。该集成的业务闭环和浏览器播放仍须联调验收，单独通知成功不代表已交付。
+Platform 还需独立的 `CAMERA_REDACTION_PLAY_SECRET`（至少 32 字符）；固定外部 FLV 不需要 Platform 内部 HLS 配置。通知消费者分别在 Platform `camera-redaction-worker` 与 Hub `media_redaction_worker` 中启动，不在 API 中启动。更新环境变量后重新创建这些 worker 和 API 容器，单纯 restart 不会更新 Compose 注入的环境变量。
+
+队列固定为 `hos.vision-shield.task-events.v1.<目标>`，例如 `hos.vision-shield.task-events.v1.dev.platform`。使用默认 exchange 按完整队列名直接投递，不修改已有业务 exchange、绑定、策略或队列。首次发布或消费时声明 durable quorum 队列，参数为 `x-max-length=10000`、`x-overflow=reject-publish`、`x-delivery-limit=-1`。最后一项避免暂时数据库故障因 quorum 重投上限丢失消息；消费者延迟 1 秒再 NACK，非法通知直接拒绝，不进行无限重投。
+
+部署前在 RabbitMQ 管理界面只读核查四个队列名是否已存在；若同名但属性不符，停止部署并处理命名冲突，不删除或重建已有队列。通知账号仅授权其所需的上述队列；Shield 账号可发布所有已登记目标，各环境消费者只读取自己的队列。代码不会修改 broker 账号权限。RabbitMQ 必须支持 quorum 队列。
+
+#### 持久交接与补偿
+
+独立运行 `python -m vision_shield.jobs.notify`（Compose 已提供 notifier）。任务状态与通知责任原子登记；持久消息、mandatory 路由及 publisher confirm 全部成功后才释放 Shield 的本次通知责任。发布全过程超时 5 秒，失败在 Redis 中指数退避 1—300 秒，仅重试通知，不重新推理。多个 notifier 共享全局最多 4 个、每目标最多 2 个在途通知，目标轮转领取，过期租约可接管。
+
+MQ headers 为 `X-Vision-Shield-Target` 及 `X-Vision-Shield-Signature`；签名是 `HMAC-SHA256(secret, target + "\n" + 原始正文)`，小写十六进制。正文沿用 `schema_version=1`、`event_id=task_id:sequence`、`sequence`、`task_id`、`submission_key`、`kind`、`state`、`desired_state`、`ready`、`occurred_at`、`health`、`error_code`，不含输入、输出 URL 或来源凭据。正文最多 16 KiB。MQ 不使用 HTTP 的五分钟时间窗，允许消费者离线积压；实时流健康仍以原始 `last_output_at` 和 `valid_until` 为准，收信不能延长旧画面期限。
+
+消费者校验签名、目标、冻结提交身份与序号，数据库提交成功后才 ACK；数据库故障重投，重复和旧序号不重复推进。Platform 与 Hub 都保留 `POST /v1/tasks/query` 批量校准，每批最多 100 项。查询响应不能让旧状态覆盖新通知。
+
+新目标的幂等作用域为 `(notification_target, Idempotency-Key)`，业务 `submission_key` 原样保存。Platform/Hub 首次提交时把目标与业务意图一起持久化，重试不随当前环境变量改路由。克隆数据库中的其他目标任务不允许被当前环境领取、查询、导入或停止；不自动改写它们的归属。旧 NULL 目标仅分别视为原 `platform`、`event-hub`，不能自动认作 `dev.*` 或 `prod.*`。切换目标前须先收敛旧在途任务及通知，不直接更换仍有在途任务的目标或密钥。
+
+通知目标是路由和幂等作用域，不是 Shield API 的身份认证。API 继续依赖受控网络访问；需要阻止任意调用方跨目标操作时，须另配访问控制。研发和正式还必须使用不同的推流路径，避免共享 GPU 输出覆盖；共享 GPU 容量不会因队列隔离而分开。
+
+`NOTIFICATION_LIMIT` 默认 1000，创建时预留责任额度；文件终态被 broker 确认后释放，直播保持至最终 stopped/failed 发布确认。满额返回 429/Retry-After，既有幂等键仍可恢复。Redis 必须持久化且 noeviction。通知发布确认不表示业务已经归档，Hub 仍需下载、校验、上传 MinIO 并更新告警；本期不自动删除原件或成品。
 
 ### Platform 内部 HLS 对接
 

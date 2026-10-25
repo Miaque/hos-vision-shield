@@ -270,7 +270,7 @@ class TaskStore:
     async def _change(self, task_id, operation, arguments, limit=0):
         result = await self.client.eval(
             TRANSITION, 5, f"vs:task:{task_id}", "vs:active:files", "vs:active:streams",
-            self._binding_key(arguments.get("submission_key") or ""), "vs:notifications:outstanding",
+            self._binding_key(arguments.get("submission_key") or "", arguments.get("notification_target")), "vs:notifications:outstanding",
             operation, json.dumps(arguments), self.lease_ms, limit,
             datetime.now(timezone.utc).isoformat(),
             self.notification_limit,
@@ -342,13 +342,18 @@ class TaskStore:
         return json.loads(payload) | {"_observed_ms": clock[0] * 1000 + clock[1] // 1000} if payload else None
 
     @staticmethod
-    def _binding_key(key: str) -> str:
+    def _binding_key(key: str, notification_target: str | None = None) -> str:
         """键哈希避免外部文本成为 Redis 路径。"""
-        return "vs:idempotency:" + hashlib.sha256(key.encode()).hexdigest()
+        prefix = "vs:idempotency:"
+        # 旧目标沿用原绑定；通用环境目标隔离克隆数据库中相同的业务幂等键。
+        if notification_target not in (None, "platform", "event-hub"):
+            prefix += "target:"
+            key = json.dumps([notification_target, key], separators=(",", ":"))
+        return prefix + hashlib.sha256(key.encode()).hexdigest()
 
-    async def replay(self, key: str, fingerprint: str) -> dict | None:
+    async def replay(self, key: str, fingerprint: str, *, notification_target: str | None = None) -> dict | None:
         """在 worker 可用性与新容量检查前找回已接纳任务。"""
-        task_id = await self.client.get(self._binding_key(key))
+        task_id = await self.client.get(self._binding_key(key, notification_target))
         if not task_id:
             return None
         record = await self.get(task_id.decode() if isinstance(task_id, bytes) else task_id)

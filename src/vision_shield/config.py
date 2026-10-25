@@ -14,19 +14,10 @@ PositiveCount = Annotated[int, Field(gt=0)]
 
 
 class NotificationTarget(BaseModel):
-    """由部署方登记回调地址与独立签名密钥，不接受请求指定地址。"""
+    """只登记通知目标的独立签名密钥，路由由目标名固定派生。"""
 
-    url: str
+    model_config = {"extra": "forbid"}
     secret: SecretStr = Field(min_length=32)
-
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, value: str) -> str:
-        """回调只允许固定 HTTP 地址，禁止重定向所需的凭据和片段。"""
-        url = urlsplit(value)
-        if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.query or url.fragment:
-            raise ValueError("通知目标必须是无凭据、查询或片段的 HTTP 地址")
-        return value
 
 
 class Settings(BaseSettings):
@@ -55,7 +46,9 @@ class Settings(BaseSettings):
     message_limit: PositiveCount = 100
     notification_limit: PositiveCount = 1000
     media_disk_high_watermark: Annotated[float, Field(gt=0, lt=1, allow_inf_nan=False)] = 0.95
-    notification_targets: dict[Literal["event-hub", "platform"], NotificationTarget] = Field(default_factory=dict)
+    notification_targets: dict[Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$",
+                                                     max_length=64)], NotificationTarget] = Field(default_factory=dict)
+    vision_shield_notification_amqp_url: SecretStr = SecretStr("")
     frame_buffer_size: PositiveCount = 2
     audio_buffer_seconds: PositiveSeconds = 16
     audio_buffer_bytes: PositiveCount = 4 * 1024 * 1024
@@ -83,6 +76,15 @@ class Settings(BaseSettings):
         url = urlsplit(value.get_secret_value())
         if url.scheme not in {"redis", "rediss"} or not url.hostname:
             raise ValueError("REDIS_URL must use redis:// or rediss://")
+        return value
+
+    @field_validator("vision_shield_notification_amqp_url")
+    @classmethod
+    def validate_amqp_url(cls, value: SecretStr) -> SecretStr:
+        """独立通知连接只允许 AMQP，凭据不进入错误信息。"""
+        raw = value.get_secret_value()
+        if raw and (urlsplit(raw).scheme not in {"amqp", "amqps"} or not urlsplit(raw).hostname):
+            raise ValueError("通知连接必须使用 amqp:// 或 amqps://")
         return value
 
     @field_validator("mediamtx_control_url", "rtsp_public_base_url", "rtsp_publish_base_url")
@@ -118,6 +120,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_lease(self) -> Self:
+        if self.notification_targets and not self.vision_shield_notification_amqp_url.get_secret_value():
+            raise ValueError("AMQP 通知必须配置 VISION_SHIELD_NOTIFICATION_AMQP_URL")
         if self.detection_backend == "quality_yolo" and self.inference_device != "cuda":
             raise ValueError("quality_yolo requires CUDA inference")
         if self.detection_backend == "cpu" and self.inference_device == "cuda":

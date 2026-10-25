@@ -1,11 +1,8 @@
 """通知签名、安全投影和健康期限的无设施测试。"""
 
-import hashlib
-import hmac
 import json
 from unittest.mock import AsyncMock
 
-import httpx
 import pytest
 
 from vision_shield.config import Settings
@@ -21,25 +18,40 @@ def record():
                 _observed_ms=100000, error=None, source_ref="private-secret", result_ref="private-result")
 
 
-@pytest.mark.parametrize("status", [202, 401, 410, 503, 302])
-async def test_notification_signature_and_confirmation(status):
-    """只有 2xx 交接责任，重定向不能把签名发送给其他地址。"""
-    secret = "x" * 32
-    settings = Settings(_env_file=None, notification_targets={"event-hub": {
-        "url": "http://hub/internal/events", "secret": secret}})
-    def respond(request):
-        timestamp = request.headers["X-Vision-Shield-Timestamp"]
-        expected = hmac.new(secret.encode(), timestamp.encode() + b"." + request.content,
-                            hashlib.sha256).hexdigest()
-        assert hmac.compare_digest(request.headers["X-Vision-Shield-Signature"], expected)
-        assert b"private-secret" not in request.content and b"private-result" not in request.content
-        assert json.loads(request.content)["event_id"].endswith(":7")
-        return httpx.Response(status, headers={"Location": "http://untrusted"})
+@pytest.mark.parametrize("failure", [None, TimeoutError(), RuntimeError("negative confirmation")])
+async def test_notification_confirms_only_after_persistent_publish(failure):
+    """发布失败保留重试责任，通知不包含来源或成品凭据。"""
+    settings = Settings(_env_file=None, vision_shield_notification_amqp_url="amqp://mq/%2F",
+                        notification_targets={"event-hub": {"secret": "x" * 32}})
+    publisher = AsyncMock()
+    publisher.publish.side_effect = failure
     store = AsyncMock()
-    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        await deliver(store, client, settings, dict(task=record(), token="token", attempts=0))
-    assert store.complete_notification.await_args.kwargs["delivered"] is (status == 202)
+    await deliver(store, publisher, settings, {"task": record(), "token": "token", "attempts": 0})
+    body = publisher.publish.await_args.args[1]
+    assert b"private-secret" not in body and b"private-result" not in body
+    assert json.loads(body)["event_id"].endswith(":7")
+    assert store.complete_notification.await_args.kwargs["delivered"] is (failure is None)
     assert 1 <= store.complete_notification.await_args.kwargs["delay_seconds"] <= 300
+
+
+async def test_reconnect_wait_is_bounded_and_retains_notification(monkeypatch):
+    """即使 AMQP 库在重连前等待，Redis 通知租约也不能被永久占用。"""
+    import asyncio
+
+    from vision_shield.jobs import notify
+    original_timeout = asyncio.timeout
+    def bounded(seconds):
+        assert seconds == 5
+        return original_timeout(0.02)
+    monkeypatch.setattr(notify.asyncio, "timeout", bounded)
+    settings = Settings(_env_file=None, vision_shield_notification_amqp_url="amqp://mq/%2F",
+                        notification_targets={"event-hub": {"secret": "x" * 32}})
+    publisher, store = AsyncMock(), AsyncMock()
+    async def disconnected(*args):
+        await asyncio.Event().wait()
+    publisher.publish.side_effect = disconnected
+    await deliver(store, publisher, settings, {"task": record(), "token": "token", "attempts": 0})
+    assert store.complete_notification.await_args.kwargs["delivered"] is False
 
 
 def test_untrusted_error_text_never_escapes():

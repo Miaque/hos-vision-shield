@@ -1,23 +1,21 @@
-"""独立通知进程：有界领取、短 HTTP 投递、持久退避和可接管租约。"""
+"""独立通知进程：有界领取、MQ 发布确认、持久退避和可接管租约。"""
 
 import asyncio
 import contextlib
-import hashlib
-import hmac
 import json
 import logging
 import os
 import random
 import signal
-import time
 from datetime import datetime, timedelta, timezone
 
-import httpx
+from aio_pika.exceptions import AMQPException
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from vision_shield.api.schemas import StreamHealth
 from vision_shield.config import Settings
+from vision_shield.jobs.amqp_notifications import AmqpNotifications
 from vision_shield.jobs.store import TaskStore, stream_health
 
 logger = logging.getLogger(__name__)
@@ -43,27 +41,20 @@ def notification_body(task: dict) -> bytes:
     return json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode()
 
 
-async def deliver(store: TaskStore, client: httpx.AsyncClient, settings: Settings, event: dict) -> None:
-    """每次重试重新签名；非 2xx 和网络故障只重试通知，不重跑推理。"""
+async def deliver(store: TaskStore, publisher: AmqpNotifications, settings: Settings, event: dict) -> None:
+    """持久发布确认后交接责任，失败只重试通知，不重跑推理。"""
     target_id = event["task"]["notification_target"]
     target = settings.notification_targets[target_id]
     body = notification_body(event["task"])
-    timestamp = str(int(time.time()))
-    signature = hmac.new(target.secret.get_secret_value().encode(), timestamp.encode() + b"." + body,
-                         hashlib.sha256).hexdigest()
     delivered = False
-    status = None
     try:
-        response = await client.post(target.url, content=body, headers={
-            "Content-Type": "application/json", "X-Vision-Shield-Timestamp": timestamp,
-            "X-Vision-Shield-Signature": signature}, timeout=5, follow_redirects=False)
-        status = response.status_code
-        delivered = 200 <= status < 300
-    except httpx.HTTPError:
-        pass
-    if not delivered:
-        logger.warning("通知未确认 target=%s task=%s status=%s attempts=%s", target_id,
-                       event["task"]["id"], status, event["attempts"] + 1)
+        async with asyncio.timeout(5):
+            await publisher.publish(target_id, body, target.secret.get_secret_value(),
+                                    f"{event['task']['id']}:{event['task']['sequence']}")
+        delivered = True
+    except (AMQPException, OSError, TimeoutError, RuntimeError):
+        logger.warning("通知未确认 target=%s task=%s attempts=%s", target_id,
+                       event["task"]["id"], event["attempts"] + 1)
     delay = min(300, 2 ** min(event["attempts"], 9) * random.uniform(1, 1.25))
     await store.complete_notification(event, delivered=delivered, delay_seconds=delay)
 
@@ -77,19 +68,22 @@ async def main():
             asyncio.get_running_loop().add_signal_handler(signum, current.cancel)
     redis = Redis.from_url(settings.redis_url.get_secret_value(), socket_connect_timeout=2, socket_timeout=2)
     store = TaskStore(redis)
+    publisher = AmqpNotifications(settings.vision_shield_notification_amqp_url.get_secret_value())
+    targets = tuple(settings.notification_targets)
     try:
-        async with httpx.AsyncClient(trust_env=False, limits=httpx.Limits(max_connections=4)) as client:
-            while True:
-                try:
-                    events = await store.claim_notifications(targets=tuple(settings.notification_targets))
-                    results = await asyncio.gather(*(deliver(store, client, settings, event) for event in events),
-                                                   return_exceptions=True)
-                    if any(isinstance(result, Exception) for result in results):
-                        logger.error("通知派发异常，持久责任保留等待租约恢复")
-                except RedisError:
-                    logger.error("通知存储不可用，等待恢复")
-                await asyncio.sleep(0.5)
+        while True:
+            try:
+                events = await store.claim_notifications(targets=targets)
+                targets = targets[1:] + targets[:1]
+                results = await asyncio.gather(*(deliver(store, publisher, settings, event) for event in events),
+                                               return_exceptions=True)
+                if any(isinstance(result, Exception) for result in results):
+                    logger.error("通知派发异常，持久责任保留等待租约恢复")
+            except RedisError:
+                logger.error("通知存储不可用，等待恢复")
+            await asyncio.sleep(0.5)
     finally:
+        await publisher.close()
         await redis.aclose()
 
 
