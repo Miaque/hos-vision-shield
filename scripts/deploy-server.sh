@@ -22,10 +22,6 @@ main() {
         return 1
     fi
     docker-compose version >/dev/null
-    if (( $# == 0 )) && [[ "$(git branch --show-current)" != main ]]; then
-        printf '当前不在 main，请显式指定要部署的远程分支。\n' >&2
-        return 1
-    fi
     if ! git diff --quiet HEAD --; then
         printf '存在未提交的跟踪文件修改，请先处理后再部署。\n' >&2
         return 1

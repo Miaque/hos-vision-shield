@@ -222,7 +222,7 @@ git status --short
 
 ### 后续日常更新
 
-GPU 服务器使用 `scripts/deploy-server.sh [远程分支]` 或 `scripts/deploy-server.sh --tag 标签`。前提是当前目录已经接入 Git，保留原 `.env.compose`，且原部署项目名为 `vision-shield`。推荐 tag 固定每次对照及回退版本。不传参数仍要求当前位于 `main` 并部署 `origin/main`；显式传入分支时允许安全切换到该分支。脚本可从任意目录以实际脚本路径调用，会自动进入仓库根目录。
+GPU 服务器使用 `scripts/deploy-server.sh [远程分支]` 或 `scripts/deploy-server.sh --tag 标签`。前提是当前目录已经接入 Git，保留原 `.env.compose`，且原部署项目名为 `vision-shield`。推荐 tag 固定每次对照及回退版本。不传参数会从当前分支或 detached HEAD 安全切换到 `main`，并部署最新的 `origin/main`；显式传入分支时允许安全切换到该分支。脚本可从任意目录以实际脚本路径调用，会自动进入仓库根目录。旧脚本若限制无参数调用时的当前分支，可先显式传 `main` 更新到新版。
 
 开发机先提交并推送变更；第一次使用时，在服务器仓库根目录获取脚本：
 

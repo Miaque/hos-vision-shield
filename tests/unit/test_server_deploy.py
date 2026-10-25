@@ -97,13 +97,11 @@ def test_server_deployment_stops_on_compose_failure(deployment, failure, forbidd
     assert "部署完成" not in result.stdout
 
 
-@pytest.mark.parametrize("problem", ["dirty", "ahead", "diverged", "wrong_branch", "fetch"])
+@pytest.mark.parametrize("problem", ["dirty", "ahead", "diverged", "fetch"])
 def test_server_deployment_rejects_unsynchronised_source(deployment, problem):
     d = deployment
     if problem == "fetch":
         d.git("remote", "set-url", "origin", str(d.remote / "missing"), cwd=d.server)
-    elif problem == "wrong_branch":
-        d.git("switch", "-c", "feature/local", cwd=d.server)
     else:
         if problem == "ahead":
             d.git("pull", "--ff-only", "origin", "main", cwd=d.server)
@@ -114,6 +112,23 @@ def test_server_deployment_rejects_unsynchronised_source(deployment, problem):
     assert result.returncode != 0
     assert " build" not in d.log.read_text("utf-8")
     assert " up " not in d.log.read_text("utf-8")
+
+
+def test_server_deployment_defaults_to_origin_main_from_another_branch(deployment):
+    d = deployment
+    branch = "feature/local"
+    d.git("switch", "-c", branch, cwd=d.server)
+    (d.server / "app.txt").write_text("local branch work", encoding="utf-8")
+    d.commit(d.server)
+    original_branch = d.git("rev-parse", branch, cwd=d.server)
+
+    result = d.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert d.git("branch", "--show-current", cwd=d.server) == "main"
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == d.git("rev-parse", "main", cwd=d.remote)
+    assert d.git("rev-parse", branch, cwd=d.server) == original_branch
+    assert (d.server / "app.txt").read_text("utf-8") == "latest"
 
 
 def test_server_deployment_survives_updating_its_own_script(deployment):
@@ -231,8 +246,9 @@ def test_server_deployment_selects_an_exact_tag_without_moving_branches(deployme
     result = d.run("--tag", tag)
     assert result.returncode == 0, result.stdout + result.stderr
     assert d.git("rev-parse", "HEAD", cwd=d.server) == fixed_commit
-    result = d.run("main")
+    result = d.run()
     assert result.returncode == 0, result.stdout + result.stderr
+    assert d.git("branch", "--show-current", cwd=d.server) == "main"
     assert (d.server / "app.txt").read_text("utf-8") == "next release"
 
 
