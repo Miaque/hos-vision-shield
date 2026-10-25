@@ -20,8 +20,7 @@ def test_half_plate_uses_selected_supported_gpu(monkeypatch, capability, half):
     import torch
     from vision_shield.detection import egoblur, yolo
 
-    original, replacement, devices, wrapped, loaded = object(), object(), [], [], []
-    backbone = object()
+    original, replacement, devices, wrapped = object(), object(), [], []
 
     def initialize(self, *args, **kwargs):
         self.device, self.models = torch.device("cuda", 2), [None, original]
@@ -29,18 +28,10 @@ def test_half_plate_uses_selected_supported_gpu(monkeypatch, capability, half):
     monkeypatch.setattr(egoblur.Detector, "__init__", initialize)
     monkeypatch.setattr(yolo.Detector, "_session", lambda *a: SimpleNamespace(get_providers=lambda: ["CUDAExecutionProvider"]))
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: devices.append(device) or capability)
-    def load(path, *, map_location):
-        loaded.append((path, map_location))
-        result = SimpleNamespace(model=SimpleNamespace(model=SimpleNamespace(backbone=backbone)))
-        result.eval = lambda: result
-        return result
-
-    monkeypatch.setattr(torch.jit, "load", load)
-    monkeypatch.setattr(yolo, "_HalfPlate", lambda model, cpu_backbone: wrapped.append((model, cpu_backbone)) or replacement)
+    monkeypatch.setattr(yolo, "_HalfPlate", lambda model: wrapped.append(model) or replacement)
     detector = yolo.Detector("face", "plate")
     assert devices == [torch.device("cuda", 2)]
-    assert wrapped == ([(original, backbone)] if half else [])
-    assert loaded == ([("plate", "cpu")] if half else [])
+    assert wrapped == ([original] if half else [])
     assert detector.models == [None, replacement if half else original]
 
 
