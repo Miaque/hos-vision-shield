@@ -26,3 +26,22 @@
 
 本地完整 unit 集合 794 通过、96 项按 CUDA 条件跳过；另补三个形状/精度拒绝回归。
 禁止固定地址复用的变异被缓存/独立输出测试捕获，恢复源码后通过。完整 GPU 执行仍未本地验证。
+
+## 服务器结果：失败并撤回
+
+候选 `30286c0` / `exp-20261026-a-detail-plate-graph-01` 通过 worker 预检，但没有通过实际混合负载。
+G3 运行约 69 秒后在 frame_process 阶段失败；堆栈经过局部放大复查，最终由
+`cpu.decode_plates` 的非正宽高校验抛出 `ValueError: Invalid plate dimensions`。
+这是模型输出异常，不能归为源 EOF，也不能跳过校验或丢弃问题帧来维持运行。
+两个并发 GPU 文件均在处理 512 帧后失败，媒体耗时分别为 24.245 / 22.584 秒，没有完整输出。
+rfm 的短时速度不能作为双流双文件条件下的有效收益。
+
+已通过受限部署脚本撤回到 `7ba2d5f` / `exp-20261026-a-stream-default-flow-01`，保留三帧检测与光流修正。
+本地同步撤回执行图和固定地址缓存改动，恢复该版本的检测实现与测试；未修改检测阈值或输出校验。
+确切根因尚未定位，现有堆栈不能证明是哪一种执行图/绑定交互造成异常；后续须先完成独立 CUDA
+完整文件验证，再考虑在线候选。CPU 测试及 worker 预检不足以证明实际 CUDA 输出正确。
+
+失败任务与 attempt 诊断保存在忽略目录 `data/validation/route-a-rfm25-20261026-01/graph/` 及
+`graph-g3-failure-diagnostics.json`，不提交带签名的播放地址。用户重新打开平台观看会话后，
+新的 G3、rfm 任务均恢复 running；G3 已出现 flow_updates，rfm 出现 skipped_frames / face_rechecks。
+后续恢复观测保存于 `rollback-reopened/`，不与候选或旧任务的窗口合并。
