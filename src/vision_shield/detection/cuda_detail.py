@@ -91,7 +91,8 @@ class Detector(CPUDetector):
         self.face_model, self.face_sessions = model.SerializeToString(), {}
         self.plate_model, self.plate_sessions = _batch_plate_model(onnx.load(str(plate_path))), {}
         self.face = ort.InferenceSession(self.face_model, sess_options=options, providers=providers)
-        self.plate = ort.InferenceSession(str(plate_path), sess_options=options, providers=providers)
+        self.plate = ort.InferenceSession(str(plate_path), sess_options=options,
+            providers=[("CUDAExecutionProvider", {**providers[0][1], "enable_cuda_graph": "1"})])
         for session in (self.face, self.plate):
             session.disable_fallback()
             if session.get_providers()[0] != "CUDAExecutionProvider":
@@ -99,6 +100,13 @@ class Detector(CPUDetector):
         self.providers = [self.face.get_providers()[0], self.plate.get_providers()[0]]
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.view_stream, self.face_stream, self.plate_stream = [torch.cuda.Stream(device=self.device) for _ in range(3)]
+        self.plate_bindings = {}
+        self.plate_no_graph = ort.RunOptions()
+        self.plate_no_graph.add_run_config_entry("gpu_graph_id", "-1")
+        # Capture before model threads start; business frames only replay fixed batch 1/2 graphs.
+        for batch in (1, 2):
+            with torch.cuda.stream(self.plate_stream):
+                self._plate_forward(torch.zeros((batch, 3, 320, 320), device=self.device))
 
     @timed("session-detail-face")
     def _face_session(self, height, width):
@@ -144,7 +152,7 @@ class Detector(CPUDetector):
             options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
             session = ort.InferenceSession(self.plate_model, sess_options=options,
                 providers=[("CUDAExecutionProvider", {"device_id": self.device.index, "use_tf32": 0,
-                                                       "cudnn_conv_algo_search": "HEURISTIC"})])
+                                                       "cudnn_conv_algo_search": "HEURISTIC", "enable_cuda_graph": "1"})])
             session.disable_fallback()
             if session.get_providers()[0] != "CUDAExecutionProvider":
                 raise RuntimeError("Plate CUDA provider was not activated")
@@ -224,11 +232,30 @@ class Detector(CPUDetector):
 
     def _plate_forward(self, blob):
         if isinstance(blob, torch.Tensor):
-            from vision_shield.detection.cuda_pixels import run
-
-            return run(self._plate_session(blob.shape[0]), blob, self.plate_stream, timing=self, stage="forward-detail-plate")[0]
+            batch = blob.shape[0]
+            if batch not in (1, 2) or tuple(blob.shape[1:]) != (3, 320, 320) or blob.dtype != torch.float32:
+                raise ValueError("Unsupported plate graph input")
+            session = self._plate_session(batch)
+            if batch not in self.plate_bindings:
+                source = torch.empty(tuple(blob.shape), dtype=torch.float32, device=self.device)
+                output = torch.empty((batch, 6300, 15), dtype=torch.float32, device=self.device)
+                binding = session.io_binding()
+                binding.bind_input(session.get_inputs()[0].name, "cuda", self.device.index,
+                                   np.float32, tuple(source.shape), source.data_ptr())
+                binding.bind_output(session.get_outputs()[0].name, "cuda", self.device.index,
+                                    np.float32, tuple(output.shape), output.data_ptr())
+                self.plate_bindings[batch] = binding, source, output
+            binding, source, output = self.plate_bindings[batch]
+            with torch.cuda.stream(self.plate_stream), measure(self, "prepare-detail"):
+                source.copy_(blob)
+            with measure(self, "explicit-sync"):
+                self.plate_stream.synchronize()
+            with measure(self, "forward-detail-plate"):
+                session.run_with_iobinding(binding)
+            with measure(self, "output-copy"):
+                return output.cpu().numpy()
         with measure(self, "forward-detail-plate"):
-            return self.plate.run(None, {self.plate.get_inputs()[0].name: blob})[0]
+            return self.plate.run(None, {self.plate.get_inputs()[0].name: blob}, run_options=self.plate_no_graph)[0]
 
     @timed("prepare-detail")
     def _plate_input(self, bgr):

@@ -2,6 +2,104 @@ import numpy as np
 import pytest
 
 
+def test_plate_graph_reuses_bound_addresses_and_returns_independent_outputs(monkeypatch):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    import torch
+    from vision_shield.detection.cuda_detail import Detector
+
+    allocations, bindings, pointers = [], [], []
+    empty = torch.empty
+
+    def allocate(*shape, **kwargs):
+        assert kwargs.pop('device') == torch.device('cuda', 2)
+        tensor = empty(*shape, **kwargs)
+        allocations.append(tensor)
+        return tensor
+
+    class Binding:
+        def bind_input(self, name, device, index, dtype, shape, pointer):
+            self.input = pointer
+
+        def bind_output(self, name, device, index, dtype, shape, pointer):
+            self.output = pointer
+
+    class Session:
+        def get_inputs(self):
+            return [SimpleNamespace(name='input')]
+
+        def get_outputs(self):
+            return [SimpleNamespace(name='output')]
+
+        def io_binding(self):
+            binding = Binding(); bindings.append(binding)
+            return binding
+
+        def run_with_iobinding(self, binding):
+            pointers.append((binding.input, binding.output))
+            source = next(t for t in allocations if t.data_ptr() == binding.input)
+            target = next(t for t in allocations if t.data_ptr() == binding.output)
+            target.fill_(source.flatten()[0].item())
+
+    detector = Detector.__new__(Detector)
+    detector.device = torch.device('cuda', 2)
+    detector.plate_stream = SimpleNamespace(synchronize=lambda: None)
+    detector.plate_bindings = {}
+    detector._plate_session = lambda batch: Session()
+    monkeypatch.setattr(torch, 'empty', allocate)
+    monkeypatch.setattr(torch.cuda, 'stream', lambda stream: nullcontext())
+    monkeypatch.setattr(torch.Tensor, 'cpu', lambda tensor: tensor.clone())
+    first = detector._plate_forward(torch.ones((1, 3, 320, 320)))
+    second = detector._plate_forward(torch.full((1, 3, 320, 320), 2.))
+    third = detector._plate_forward(torch.full((2, 3, 320, 320), 3.))
+    assert len(bindings) == 2 and len(allocations) == 4
+    assert pointers[0] == pointers[1] and pointers[2] != pointers[1]
+    assert first.shape == second.shape == (1, 6300, 15) and third.shape == (2, 6300, 15)
+    assert (first == 1).all() and (second == 2).all() and (third == 3).all()
+
+
+def test_numpy_plate_confirmation_explicitly_disables_graph_capture():
+    from types import SimpleNamespace
+    from vision_shield.detection.cuda_detail import Detector
+
+    expected = np.zeros((1, 6300, 15), np.float32)
+    calls = []
+    detector = Detector.__new__(Detector)
+    detector.plate_no_graph = object()
+    detector.plate = SimpleNamespace(get_inputs=lambda: [SimpleNamespace(name='input')],
+                                    run=lambda *a, **kw: calls.append((a, kw)) or [expected])
+    assert detector._plate_forward(np.zeros((1, 3, 320, 320), np.float32)) is expected
+    assert calls[0][1]['run_options'] is detector.plate_no_graph
+
+
+def test_plate_graph_failure_propagates_without_returning_cached_output(monkeypatch):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    import torch
+    from vision_shield.detection.cuda_detail import Detector
+
+    def fail(binding):
+        raise RuntimeError('graph failed')
+
+    detector = Detector.__new__(Detector)
+    detector.plate_stream = SimpleNamespace(synchronize=lambda: None)
+    detector._plate_session = lambda batch: SimpleNamespace(run_with_iobinding=fail)
+    detector.plate_bindings = {1: (object(), torch.empty((1, 3, 320, 320)), torch.ones((1, 6300, 15)))}
+    monkeypatch.setattr(torch.cuda, 'stream', lambda stream: nullcontext())
+    with pytest.raises(RuntimeError, match='graph failed'):
+        detector._plate_forward(torch.zeros((1, 3, 320, 320)))
+
+
+@pytest.mark.parametrize('shape,dtype', [((3, 3, 320, 320), 'float32'),
+    ((1, 3, 64, 64), 'float32'), ((1, 3, 320, 320), 'float16')])
+def test_plate_graph_rejects_changed_shape_or_precision_before_inference(shape, dtype):
+    import torch
+    from vision_shield.detection.cuda_detail import Detector
+
+    with pytest.raises(ValueError, match='Unsupported plate graph input'):
+        Detector.__new__(Detector)._plate_forward(torch.zeros(shape, dtype=getattr(torch, dtype)))
+
+
 def test_yunet_decode_keeps_stride_coordinates_and_score():
     from vision_shield.detection.cuda_detail import decode_faces
 
@@ -58,6 +156,7 @@ def test_fixed_face_sessions_keep_dimensions_device_and_bounded_lifetime(monkeyp
         def __init__(self, model, *, sess_options, providers):
             assert model == b"same-weights"
             assert providers[0][1]["device_id"] == 2
+            assert 'enable_cuda_graph' not in providers[0][1]
             assert sess_options.entries["session.disable_cpu_ep_fallback"] == "1"
             self.dimensions, self.disabled = sess_options.dimensions, False
             created.append(self)
@@ -160,6 +259,7 @@ def test_plate_sessions_keep_selected_device_fixed_batch_and_original_singleton(
         def __init__(self, model, *, sess_options, providers):
             assert model == b"batch-weights"
             assert providers[0][1]["device_id"] == 2
+            assert providers[0][1]['enable_cuda_graph'] == '1'
             assert sess_options.entries["session.disable_cpu_ep_fallback"] == "1"
             self.batch, self.disabled = sess_options.dimensions["batch"], False
             created.append(self)
