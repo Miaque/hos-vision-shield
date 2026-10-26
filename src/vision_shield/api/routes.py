@@ -83,15 +83,16 @@ async def resources(request: Request):
 @router.post("/stream-tasks", response_model=TaskResponse, status_code=202)
 async def create_stream(data: StreamInput, request: Request, response: Response,
                         detection_interval: Literal['1', '3'] | None = Header(default=None, alias='X-Detection-Interval',
-                            description='路线 A 实验调度；省略时逐帧，3 配合 flow 验证；不丢解码或输出帧'),
+                            description='实时流默认每三帧全量检测；解码、遮挡和输出仍逐帧执行'),
                         tracking: Literal['template', 'flow'] | None = Header(default=None, alias='X-Tracking-Mode',
-                            description='flow 须显式配合检测间隔 3；质量及实时性能需独立验证')):
+                            description='默认检测间隔 3 配合 flow；显式间隔 1 时默认 template')):
     key, target = creation_headers(request)
     settings = request.app.state.settings
-    if tracking == 'flow' and detection_interval != '3':
+    interval = int(detection_interval or '3')
+    mode = tracking or ('flow' if interval == 3 else 'template')
+    if mode == 'flow' and interval != 3:
         raise HTTPException(422, 'invalid_input')
-    options = {**({'detection_interval': 3} if detection_interval == '3' else {}),
-               **({'tracking': 'flow'} if tracking == 'flow' else {}),
+    options = {'detection_interval': interval, 'tracking': mode,
                **({'audio_enabled': False} if not data.audio_enabled else {})}
     fingerprint = request_fingerprint(kind="stream", source_kind="rtsp", source_digest=data.url,
                                       redaction_mode=data.redaction_mode, notification_target=target,

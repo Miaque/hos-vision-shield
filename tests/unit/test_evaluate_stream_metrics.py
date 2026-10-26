@@ -57,6 +57,19 @@ def test_no_rounding_up_a_below_20_fps_window():
     assert result['all_complete_10s_windows_at_least_20_fps'] is False
 
 
+@pytest.mark.parametrize('count,expected', [(249, False), (250, True)])
+def test_rfm_25_fps_gate_keeps_exact_boundary_and_empty_startup(count, expected):
+    row = observation(count=count)
+    for i, sample in enumerate(row['task']['stats']['stream']['recent_outputs']):
+        sample.update(source_pts=str(i / 25), received_monotonic=100 + i / 25,
+                      encoded_monotonic=100 + i / 25 + .01)
+    result = evaluate([row])['attempts'][0]
+    assert result['all_complete_10s_windows_at_least_25_fps'] is expected
+    row['task']['stats']['stream']['sampled_monotonic'] = 120
+    result = evaluate([row])['attempts'][0]
+    assert result['all_complete_10s_windows_at_least_25_fps'] is False
+
+
 @pytest.mark.parametrize('change', ['conflict', 'source_clock', 'negative_latency'])
 def test_invalid_sample_evidence_is_rejected(change):
     row = observation()

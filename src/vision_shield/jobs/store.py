@@ -323,9 +323,9 @@ class TaskStore:
         )
         if profile_detection:
             task['profile_detection'] = profile_detection
-        if detection_interval != 1:
+        if kind == 'stream' or detection_interval != 1:
             task['detection_interval'] = detection_interval
-        if tracking != 'template':
+        if kind == 'stream' or tracking != 'template':
             task['tracking'] = tracking
         if publish_url is not None:
             task["publish_url"] = publish_url

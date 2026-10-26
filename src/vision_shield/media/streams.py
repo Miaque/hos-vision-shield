@@ -161,8 +161,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     debug = config.get('debug', False)
     audio_enabled = config.get("audio_enabled", True)
     metrics = StreamMetrics(started=config.get('stream_started_monotonic'), debug=debug)
+    interval = config.get('detection_interval', 3)
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
-                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"), debug=debug)
+                               detection_interval=interval,
+                               tracking=config.get('tracking', 'flow' if interval == 3 else 'template'), debug=debug)
     frames = None
     cuda_device = None
     if config.get("inference_device") == "cuda":

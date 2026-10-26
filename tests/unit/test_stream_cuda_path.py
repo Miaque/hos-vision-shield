@@ -17,7 +17,7 @@ from vision_shield.media import cuda_frames, streams
 @pytest.mark.parametrize("delayed", [False, True])
 @pytest.mark.parametrize("repair", [False, True])
 @pytest.mark.parametrize('debug', [False, True])
-def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False, with_audio=False):
+def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False, with_audio=False, default_schedule=False):
     source_video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
     frames = [SimpleNamespace(width=64, height=48, pts=900000 + 3600 * i, time_base=Fraction(1, 90000))
               for i in range(3)]
@@ -110,6 +110,9 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     monkeypatch.setattr(streams, "masked_frame", software_mask)
     config = {**Settings(_env_file=None, debug=debug).model_dump(), "inference_device": "cuda",
               "detection_interval": 3, "tracking": "flow"}
+    if default_schedule:
+        config.pop('detection_interval')
+        config.pop('tracking')
     if muted:
         config["audio_enabled"] = False
     events = []
@@ -160,4 +163,10 @@ def test_audible_rtmp_repairs_video_clock_before_cuda_masking(monkeypatch):
     """有声帧在 GPU 遮罩及编码前完成时钟修复，原始 PTS 仍用于诊断。"""
     test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
         monkeypatch, fault=None, delayed=False, repair=True, debug=True, with_audio=True,
+    )
+
+
+def test_stream_without_experimental_headers_uses_route_a_on_cuda_path(monkeypatch):
+    test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
+        monkeypatch, fault=None, delayed=False, repair=False, debug=True, default_schedule=True,
     )
