@@ -140,6 +140,44 @@ def test_unconfirmed_plate_keeps_original_failed_flow_detection(monkeypatch, unc
     assert redactor.detection_stats['template_fallbacks'] == int(not unconfirmed)
 
 
+@pytest.mark.parametrize('kind,lookahead,blurred,expected_calls', [
+    ('plate', True, True, 0), ('plate', True, False, 1),
+    ('plate', False, True, 1), ('face', True, True, 1)])
+def test_only_blurred_original_plate_pixels_can_skip_lookahead_local_models(kind, lookahead, blurred, expected_calls):
+    from types import SimpleNamespace
+    from vision_shield.detection.plate_readability import needs_plate_work
+
+    calls = []
+    detector = SimpleNamespace(plate_needs_work=needs_plate_work,
+        detect_regions=lambda *args, **kwargs: calls.append(kwargs) or [])
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
+    redactor._plate_template_fallback = lookahead
+    gray = np.full((160, 220), 180, np.uint8) if blurred else texture()
+    # The enlarged/color view must not replace the unscaled source evidence.
+    pixels = np.repeat(texture()[:, :, None], 3, axis=2)
+    assert redactor._recheck(pixels, (60, 50, 100, 70), kind, gray) is None
+    assert len(calls) == expected_calls
+    assert redactor.detection_stats['local_rechecks'] == expected_calls
+    if not expected_calls:
+        assert redactor.detection_stats['blurred_plate_rechecks'] == 1
+
+
+def test_plate_local_confirmation_resumes_as_soon_as_original_pixels_gain_detail():
+    from types import SimpleNamespace
+    from vision_shield.detection.plate_readability import needs_plate_work
+
+    detector = SimpleNamespace(plate_needs_work=needs_plate_work,
+        detect_regions=lambda *args, **kwargs: [Detection('plate', (106, 133, 214, 187), .9)])
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
+    redactor._plate_template_fallback = True
+    pixels = np.repeat(texture()[:, :, None], 3, axis=2)
+    box = (60, 50, 100, 70)
+    assert redactor._recheck(pixels, box, 'plate', np.full((160, 220), 180, np.uint8)) is None
+    confirmed = redactor._recheck(pixels, box, 'plate', texture())
+    assert confirmed is not None and redactor._overlap(box, confirmed) > .9
+    assert redactor.detection_stats['local_rechecks'] == 1
+
+
 def test_forward_backward_inconsistency_cannot_be_accepted_as_motion(monkeypatch):
     redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.gray = texture()
