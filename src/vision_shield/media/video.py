@@ -74,6 +74,8 @@ def add_video(writer, frame, source, live=False, *, device="cpu", max_bitrate=No
         video.bit_rate = 0
         video.options = {"preset": "p6", "tune": "ull" if live else "hq", "rc": "vbr", "cq": "19",
                          "gpu": str(torch.cuda.current_device()), "bf": "0" if live else "3"}
+        if live:
+            video.options["delay"] = "0"  # Release processed pictures even when the next live input stalls.
     else:
         video.options = ({"preset": "ultrafast", "tune": "zerolatency", "bf": "0"} if live
                          else {"preset": "slow", "crf": "23"})

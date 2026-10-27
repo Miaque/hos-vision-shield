@@ -92,6 +92,7 @@ def test_cuda_frames_go_directly_to_nvenc_with_the_selected_context_and_color_me
     assert video.codec_context.colorspace == 1 and video.codec_context.color_range == 2
     assert video.options["tune"] == ("ull" if live else "hq")
     assert video.options["bf"] == ("0" if live else "3")
+    assert video.options.get('delay') == ('0' if live else None)
     if live:
         assert video.codec_context.gop_size == 15
 
@@ -110,7 +111,7 @@ def test_live_encoder_caps_rate_while_retaining_resolution_and_clock(monkeypatch
     assert video.codec_context.gop_size == 25
     if device == "cuda":
         assert video.bit_rate == 0
-        assert video.options == dict(preset='p6', tune='ull', rc='vbr', cq='19', gpu='2', bf='0',
+        assert video.options == dict(preset='p6', tune='ull', rc='vbr', cq='19', gpu='2', bf='0', delay='0',
                                      maxrate='20000000', bufsize='20000000')
     else:
         assert video.options == {'preset': 'ultrafast', 'tune': 'zerolatency', 'bf': '0',

@@ -14,6 +14,34 @@ from tests.integration.test_video_pipeline import FixedDetector
 
 
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
+def test_live_nvenc_returns_each_frame_without_waiting_for_future_input(generated_media, tmp_path):
+    from itertools import islice
+    from vision_shield.media.cuda_frames import CUDAFrames, hwaccel
+    from vision_shield.media.video import add_video
+    from vision_shield.redaction import FrameRedactor
+
+    frames, redactor = CUDAFrames(), FrameRedactor(FixedDetector())
+    target = tmp_path / 'immediate.nut'
+    expected = []
+    with av.open(generated_media / 'silent.mp4', hwaccel=hwaccel(frames.device)) as reader, av.open(str(target), 'w', format='nut') as writer:
+        video = None
+        for source in islice(reader.decode(video=0), 12):
+            output = frames.masked(source, redactor)
+            expected.append(output.pts * output.time_base)
+            if video is None:
+                video = add_video(writer, output, reader.streams.video[0], live=True, device='cuda')
+            packets = video.encode(output)
+            assert len(packets) == 1, 'A processed live picture must not wait for the next input'
+            assert packets[0].pts * packets[0].time_base == expected[-1]
+            writer.mux(packets[0])
+        assert not video.encode()
+    with av.open(str(target)) as reader:
+        decoded = list(reader.decode(video=0))
+    assert len(decoded) == 12
+    assert [frame.pts * frame.time_base for frame in decoded] == expected
+
+
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
 @pytest.mark.parametrize('tracking', ['template', 'flow'])
 def test_every_third_gpu_detection_preserves_all_frames_clocks_and_audio(generated_media, tmp_path, tracking):
     from tests.integration.test_media_probe import audio_payloads
