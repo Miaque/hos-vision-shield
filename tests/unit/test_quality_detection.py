@@ -59,6 +59,30 @@ def test_cuda_candidates_share_one_prepared_frame():
     assert len(preparations) == 1 and len(received) == 2
 
 
+def test_global_plate_candidates_keep_detection_active_until_confirmed(monkeypatch):
+    from types import SimpleNamespace
+    from vision_shield.detection.quality import Detector
+
+    weak = Detection('plate', (2, 2, 18, 10), .4)
+    detector = Detector.__new__(Detector)
+    detector.inference_device, detector.box_padding = 'cpu', 0
+    detector.primary = SimpleNamespace(candidates=lambda *args, **kwargs: [weak])
+    detector.detail = SimpleNamespace(candidates=lambda *args, **kwargs: [])
+    monkeypatch.setattr(detector, 'plate_needs_work', lambda *args: False)
+    pixels = np.full((24, 24, 3), 180, np.uint8)
+    assert detector.detect_regions(pixels) == []
+    assert detector.has_unconfirmed_plates
+    detector.primary = detector.detail
+    assert detector.detect_faces(pixels) == []
+    assert detector.detect_regions(pixels, kind='plate') == []
+    assert detector.has_unconfirmed_plates
+    assert detector.detect_regions(pixels) == []
+    assert not detector.has_unconfirmed_plates
+    detector.primary = SimpleNamespace(candidates=lambda *args, **kwargs: [Detection('plate', weak.box, .9)])
+    assert detector.detect_regions(pixels)
+    assert not detector.has_unconfirmed_plates
+
+
 def test_quality_is_default_and_requires_both_primary_and_detail_models(monkeypatch):
     from vision_shield.detection import load_detector, quality
 

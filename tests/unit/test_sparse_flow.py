@@ -97,6 +97,49 @@ def test_good_flow_skips_inference_but_does_not_renew_detection_lifetime():
     assert redactor.detection_stats['skipped_frames'] == 1
 
 
+@pytest.mark.parametrize('matched', [False, True])
+def test_lookahead_local_plate_renewal_keeps_the_existing_smoothing_margin(monkeypatch, matched):
+    class Plates:
+        visible = True
+
+        def detect_regions(self, pixels):
+            return [Detection('plate', (60, 50, 100, 70), .9)] if self.visible else []
+
+    detector = Plates()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    redactor._plate_template_fallback = True
+    monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
+    monkeypatch.setattr(redactor, '_follow', lambda gray, box, reference=None: box)
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    detector.visible = False
+    for index in range(1, 6):
+        redactor.apply(pixels, index * .04)
+    monkeypatch.setattr(redactor, '_follow', lambda gray, box, reference=None: box if matched else None)
+    monkeypatch.setattr(redactor, '_recheck', lambda *args: (66, 50, 104, 70))
+    output = redactor.apply(pixels, .24)
+    assert (output[50:70, 62:104] == 64).all()
+
+
+@pytest.mark.parametrize('unconfirmed', [False, True])
+def test_unconfirmed_plate_keeps_original_failed_flow_detection(monkeypatch, unconfirmed):
+    class Plates:
+        has_unconfirmed_plates = unconfirmed
+
+        def detect_regions(self, pixels):
+            return [Detection('plate', (60, 50, 100, 70), .9)]
+
+    redactor = FrameRedactor(Plates(), detection_interval=3, tracking='flow', debug=True)
+    redactor._plate_template_fallback = True
+    monkeypatch.setattr(redactor, '_flow', lambda *args: None)
+    monkeypatch.setattr(redactor, '_follow', lambda gray, box, reference=None: box)
+    pixels = np.full((160, 220, 3), 180, np.uint8)
+    redactor.apply(pixels, 0)
+    redactor.apply(pixels, .04)
+    assert redactor.detection_stats['full_rechecks'] == int(unconfirmed)
+    assert redactor.detection_stats['template_fallbacks'] == int(not unconfirmed)
+
+
 def test_forward_backward_inconsistency_cannot_be_accepted_as_motion(monkeypatch):
     redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.gray = texture()

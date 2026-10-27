@@ -105,7 +105,8 @@ class FrameRedactor:
                 if moment - track.seen > 0.5 or face_only and track.kind == "face":
                     continue
                 flow_boxes[old] = self._flow(gray, track.box, track.reference)
-                if (self._plate_template_fallback and flow_boxes[old] is None
+                if (self._plate_template_fallback and not getattr(self.detector, 'has_unconfirmed_plates', False)
+                        and flow_boxes[old] is None
                         and track.kind == "plate" and moment - track.seen <= 0.2):
                     flow_boxes[old] = self._follow(gray, track.box, track.reference)
                     if flow_boxes[old] is not None and self.debug:
@@ -164,6 +165,8 @@ class FrameRedactor:
             if predicted is None:
                 confirmed = self._recheck(pixels, box, kind, gray) if kind else self._recheck(pixels, box)
                 if confirmed is not None:
+                    if self._plate_template_fallback and kind == 'plate':
+                        confirmed = self._smooth(box, confirmed, elapsed)
                     retained.append(confirmed)
                     history.append(_Track(moment, moment, confirmed, kind))
                     continue
@@ -184,6 +187,8 @@ class FrameRedactor:
                 confirmed = self._recheck(pixels, predicted, kind, gray) if kind else self._recheck(pixels, predicted)
                 checked = moment
                 if confirmed is not None:
+                    if self._plate_template_fallback and kind == 'plate':
+                        confirmed = self._smooth(predicted, confirmed, elapsed)
                     predicted, seen = confirmed, moment
             retained.append(predicted)
             history.append(_Track(seen, checked, predicted, kind))
