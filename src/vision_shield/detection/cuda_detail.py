@@ -89,6 +89,7 @@ class Detector(CPUDetector):
         for output in model.graph.output:
             output.type.tensor_type.shape.dim[1].dim_param = output.name + "_anchors"
         self.face_model, self.face_sessions = model.SerializeToString(), {}
+        self.local_face_sessions = {}
         self.plate_model, self.plate_sessions = _batch_plate_model(onnx.load(str(plate_path))), {}
         self.face = ort.InferenceSession(self.face_model, sess_options=options, providers=providers)
         self.plate = ort.InferenceSession(str(plate_path), sess_options=options, providers=providers)
@@ -105,7 +106,10 @@ class Detector(CPUDetector):
         import onnxruntime as ort
 
         key = (height, width)
-        if key not in self.face_sessions:
+        # 320px confirmations have 19 padded aspect ratios; keep them away from the four full-view slots.
+        sessions = self.local_face_sessions if max(key) == 320 else self.face_sessions
+        limit = 19 if max(key) == 320 else 4
+        if key not in sessions:
             options = ort.SessionOptions()
             options.intra_op_num_threads = 1
             options.add_free_dimension_override_by_name("height", height)
@@ -118,12 +122,12 @@ class Detector(CPUDetector):
             if session.get_providers()[0] != "CUDAExecutionProvider":
                 raise RuntimeError("Face CUDA provider was not activated")
             # Fixed shapes let ORT fold metadata work; changing source sizes cannot grow sessions forever.
-            if len(self.face_sessions) == 4:
-                self.face_sessions.pop(next(iter(self.face_sessions)))
-            self.face_sessions[key] = session
+            if len(sessions) == limit:
+                sessions.pop(next(iter(sessions)))
+            sessions[key] = session
         # Keep recurring full-frame sessions hot while local confirmation shapes change.
-        self.face_sessions[key] = self.face_sessions.pop(key)
-        return self.face_sessions[key]
+        sessions[key] = sessions.pop(key)
+        return sessions[key]
 
     def candidates(self, rgb, *, kind=None):
         if isinstance(rgb, torch.Tensor):
@@ -215,11 +219,12 @@ class Detector(CPUDetector):
                                     padded.shape[1], padded.shape[0], self.face_threshold)
         with measure(self, "prepare-detail"):
             padded = cv2.copyMakeBorder(pixels, 0, (-height) % 32, 0, (-width) % 32, cv2.BORDER_CONSTANT)
+            session = self._face_session(*padded.shape[:2]) if max(padded.shape[:2]) == 320 else self.face
             tensor = cv2.dnn.blobFromImage(padded)
         with measure(self, "forward-detail-face"):
-            outputs = self.face.run(None, {self.face.get_inputs()[0].name: tensor})
+            outputs = session.run(None, {session.get_inputs()[0].name: tensor})
         with measure(self, "post-detail"):
-            return decode_faces(dict(zip((o.name for o in self.face.get_outputs()), outputs)),
+            return decode_faces(dict(zip((o.name for o in session.get_outputs()), outputs)),
                                 padded.shape[1], padded.shape[0], self.face_threshold)
 
     def _plate_forward(self, blob):
