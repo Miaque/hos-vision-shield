@@ -7,6 +7,18 @@ import pytest
 from vision_shield.media.streams import StreamBuffer
 
 
+def test_input_wait_timeout_is_distinct_from_eof_and_a_source_timeout_error():
+    from vision_shield.media.streams import INPUT_WAIT_TIMEOUT
+
+    buffer = StreamBuffer(2, 2, 4, threading.Event())
+    assert buffer.take(timeout=.001) is INPUT_WAIT_TIMEOUT
+    buffer.error = TimeoutError('source timed out')
+    with pytest.raises(TimeoutError, match='source timed out'):
+        buffer.take(timeout=0)
+    buffer.error, buffer.eof = None, True
+    assert buffer.take(timeout=0) is None
+
+
 def test_overload_waits_for_capacity_without_losing_frames():
     buffer = StreamBuffer(2, 2, 4, threading.Event())
     for index in range(2):

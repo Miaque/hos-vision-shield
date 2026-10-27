@@ -41,6 +41,113 @@ def test_live_nvenc_returns_each_frame_without_waiting_for_future_input(generate
     assert [frame.pts * frame.time_base for frame in decoded] == expected
 
 
+@pytest.mark.skipif(os.getenv('RUN_GPU_TESTS') != '1', reason='requires actual NVDEC/NVENC')
+@pytest.mark.parametrize('with_audio', [False, True])
+def test_gpu_stream_lookahead_drains_on_input_pause_and_keeps_frame_metadata(generated_media, tmp_path, monkeypatch, with_audio):
+    from types import SimpleNamespace
+    from vision_shield.detection import Detection
+    from vision_shield.media import streams
+    from vision_shield.redaction import FrameRedactor
+
+    # The fixture detector names a fixed box on a moving test pattern; test transport, not motion estimation.
+    monkeypatch.setattr(FrameRedactor, '_follow', lambda self, gray, box, reference=None: box)
+    monkeypatch.setattr(FrameRedactor, '_flow', lambda self, gray, box, reference=None: box)
+
+    class Plate:
+        def detect_regions(self, pixels, **kwargs):
+            assert pixels.is_cuda
+            return [Detection('plate', (32, 32, 96, 64), .9)]
+
+        def detect_faces(self, pixels):
+            return []
+
+    source = generated_media / ('aac.mp4' if with_audio else 'silent.mp4')
+    target = tmp_path / 'live.nut'
+    original_open = av.open
+    first_decoded, published = threading.Event(), threading.Event()
+
+    class Reader:
+        def __init__(self, container):
+            self.container, self.streams = container, container.streams
+
+        def demux(self, **kwargs):
+            paused = False
+            for packet in self.container.demux(**kwargs):
+                if packet.stream.type == 'video':
+                    def decode(packet=packet):
+                        frames = packet.decode()
+                        if frames:
+                            first_decoded.set()
+                        return frames
+                    yield SimpleNamespace(stream=packet.stream, pts=packet.pts, time_base=packet.time_base, decode=decode)
+                else:
+                    yield packet
+                if first_decoded.is_set() and not paused:
+                    paused = True
+                    assert published.wait(3), 'The first processed picture must leave without further input'
+
+        def close(self):
+            self.container.close()
+
+    class Writer:
+        def __init__(self):
+            self.container = original_open(str(target), 'w', format='nut')
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.container.close()
+
+        def __getattr__(self, name):
+            return getattr(self.container, name)
+
+        def mux(self, packet):
+            self.container.mux(packet)
+            if packet.stream.type == 'video':
+                published.set()
+
+    def open_endpoint(url, mode=None, **kwargs):
+        if mode == 'w':
+            return Writer()
+        return Reader(original_open(str(source), hwaccel=kwargs['hwaccel']))
+
+    monkeypatch.setattr(streams.av, 'open', open_endpoint)
+    events = []
+    config = {**Settings(_env_file=None, inference_device='cuda', debug=True).model_dump(),
+              'detection_interval': 3, 'tracking': 'flow', 'redaction_mode': 'solid'}
+    streams.process_stream('rtsp://source/test', 'rtsp://output/test', Plate(), config,
+                           threading.Event(), events.append)
+    metrics = events[-1]['stats']['stream']
+    assert metrics['input_frames'] == metrics['encoded_frames'] == 24
+    assert metrics['unmatched_packets'] == metrics['missing_receive_frames'] == metrics['failed_frames'] == 0
+    assert metrics['pending_encoder_frames'] == metrics['lookahead_frames'] == 0
+    first = metrics['recent_outputs'][0]
+    assert .4 <= first['latency_seconds'] < 2.5
+    assert all(s['received_monotonic'] <= s['decoded_monotonic'] <= s['processing_monotonic'] <= s['encoded_monotonic']
+               for s in metrics['recent_outputs'])
+    with original_open(str(source)) as reader:
+        expected = [f.pts * f.time_base for f in reader.decode(video=0)]
+    with original_open(str(target)) as reader:
+        decoded = list(reader.decode(video=0))
+    clocks = [f.pts * f.time_base for f in decoded]
+    # NUT shifts both tracks forward for AAC encoder priming; frame intervals and A/V offset must agree.
+    offset = clocks[0] - expected[0]
+    assert [t - offset for t in clocks] == expected
+    assert [s['timeline_pts'] for s in metrics['recent_outputs']] == [str(t) for t in expected]
+    assert all((np.abs(f.to_ndarray(format='rgb24')[36:60, 36:92].astype(int) - 64) <= 5).all() for f in decoded)
+    if with_audio:
+        def packets(path, limit=None):
+            with original_open(str(path)) as reader:
+                return [(bytes(p), p.pts*p.time_base) for p in reader.demux(audio=0)
+                        if p.dts is not None and (limit is None or p.pts*p.time_base <= limit)]
+        before, after = packets(source, expected[-1]), packets(target)
+        assert [p[0] for p in before] == [p[0] for p in after]
+        assert all(abs(new[1] - old[1] - offset) < 1/12000 for old, new in zip(before, after))
+    else:
+        assert offset == 0
+
+
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
 @pytest.mark.parametrize('tracking', ['template', 'flow'])
 def test_every_third_gpu_detection_preserves_all_frames_clocks_and_audio(generated_media, tmp_path, tracking):

@@ -14,6 +14,7 @@ import httpx
 from vision_shield.media.video import add_video, check_streams, check_dimensions, masked_frame
 from vision_shield.media.stream_metrics import StreamMetrics, vcl_digest
 from vision_shield.media.attempts import failure_details
+from vision_shield.media.plate_lookahead import PlateLookahead
 from vision_shield.redaction import FrameRedactor
 from vision_shield.detection.timing import measure, snapshot
 if TYPE_CHECKING:
@@ -91,6 +92,9 @@ class LiveAVClock:
         return frame.pts * frame.time_base != source
 
 
+INPUT_WAIT_TIMEOUT = object()
+
+
 class StreamBuffer:
     def __init__(self, frame_limit, audio_seconds, audio_bytes, stop):
         self.frame_limit, self.audio_seconds, self.audio_limit = frame_limit, audio_seconds, audio_bytes
@@ -129,10 +133,14 @@ class StreamBuffer:
             self.audio_size += packet.size
             self.condition.notify()
 
-    def take(self):
+    def take(self, timeout=None):
+        deadline = None if timeout is None else time.monotonic() + timeout
         with self.condition:
             while not self.frames and not self.eof and not self.error and not self.stop.is_set():
-                self.condition.wait(0.2)
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    return INPUT_WAIT_TIMEOUT
+                self.condition.wait(.2 if remaining is None else min(.2, remaining))
             if self.error:
                 raise self.error
             if self.stop.is_set() or not self.frames:
@@ -261,6 +269,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     last_output_report = None
     frame_seconds = encode_seconds = 0.0
     video, last_stats, failed_frames, processing = None, None, 0, False
+    delay = None
     phase, ending = "publish_open", None
 
     def report(force=False):
@@ -271,6 +280,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         with buffer.condition:
             dropped = buffer.dropped
             stream_stats = dict(input_frames=buffer.input_frames, queue_frames=len(buffer.frames),
+                               **(dict(lookahead_frames=len(delay.pending)) if delay else {}),
                                **(dict(input_width=buffer.input_video.width, input_height=buffer.input_video.height)
                                   if buffer.input_video else {}),
                                audio_queue_bytes=buffer.audio_size, failed_frames=failed_frames,
@@ -300,6 +310,65 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             raise
         metrics.written(moment, time.monotonic(), encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256)
 
+    def write_output(sample):
+        nonlocal video, audio, transcode_audio, phase, processing, count, last_output_report, encode_seconds
+        output, packets, received_at, source_moment, moment, repaired, decoded_at, processing_at = sample
+        processing = True
+        output.pts = round((moment - origin) / output.time_base)
+        stage = time.monotonic() if debug else None
+        if video is None:
+            phase = "encoder_initialize"
+            video_options = dict(live=True, device=config.get("inference_device", "cpu"))
+            if config.get("max_bitrate") is not None:
+                video_options["max_bitrate"] = config["max_bitrate"]
+            video = add_video(writer, output, buffer.input_video, **video_options)
+            if buffer.input_audio:
+                transcode_audio = protocol == "rtmp" and buffer.input_audio.codec_context.name != "aac"
+                if transcode_audio:
+                    audio = writer.add_stream("aac", rate=48000)
+                    audio.layout = "mono" if buffer.input_audio.codec_context.channels == 1 else "stereo"
+                else:
+                    audio = writer.add_stream_from_template(buffer.input_audio)
+        if (output.width, output.height) != (video.width, video.height):
+            raise BufferError("Stream dimensions changed")
+        for packet in packets:
+            phase = "audio_process"
+            packet.pts -= round(origin / packet.time_base)
+            packet.dts -= round(origin / packet.time_base)
+            if transcode_audio:
+                for frame in packet.decode():
+                    for encoded in audio.encode(frame):
+                        writer.mux(encoded)
+            else:
+                packet.stream = audio
+                writer.mux(packet)
+        published = False
+        phase = "video_encode"
+        metrics.submit(output, received_at, source_moment, timeline_pts=moment, timestamp_repaired=repaired,
+                       decoded_at=decoded_at, processing_at=processing_at)
+        for packet in video.encode(output):
+            mux_video(packet)
+            published = True
+        if debug:
+            encode_seconds += time.monotonic() - stage
+        # 只有视频包实际写入成功才证明输出；合并到至多每五秒一次。
+        if published and (last_output_report is None or time.monotonic() - last_output_report >= 5):
+            emit({"output": True, "output_monotonic": time.monotonic(), "ready": True})
+            last_output_report = time.monotonic()
+        count += 1
+        processing = False
+
+    def release(operation):
+        nonlocal frame_seconds, phase, processing
+        phase, processing = 'frame_process', True
+        stage = time.monotonic() if debug else None
+        ready = operation()
+        if debug:
+            frame_seconds += time.monotonic() - stage
+        processing = False
+        for output in ready:
+            write_output(output)
+
     try:
         options = {"rtsp_transport": "tcp"}
         if protocol == "rtmp":
@@ -312,7 +381,23 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                      timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"])) as writer:
             video, audio = None, None
             transcode_audio = False
-            while sample := buffer.take():
+            while True:
+                if stop.is_set():
+                    break
+                if delay:
+                    release(delay.expire)
+                phase = 'input_wait'
+                try:
+                    sample = buffer.take(timeout=delay.wait_seconds() if delay else None)
+                except Exception:
+                    if delay:
+                        release(delay.flush)
+                    raise
+                if sample is INPUT_WAIT_TIMEOUT:
+                    report()
+                    continue
+                if sample is None:
+                    break
                 processing_at = time.monotonic() if debug else None
                 frame, packets = sample
                 processing = True
@@ -341,59 +426,32 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     origin = moment
                 stage = time.monotonic() if debug else None
                 phase = "frame_process"
-                if frames:
-                    output = frames.masked(frame, redactor)
-                    output.pts = round((moment - origin) / output.time_base)
+                metadata = (packets, buffer.last_received, source_moment, moment, repaired,
+                            buffer.last_decoded, processing_at)
+                if frames and redactor.tracking == 'flow':
+                    if delay is None:
+                        delay = PlateLookahead(redactor)
+                    pending = frames.masked(frame, redactor, defer=True)
+                    render = pending.render
+                    pending.render = lambda extra, render=render, metadata=metadata: (render(extra), *metadata)
+                    pending.deadline = time.monotonic() + .5
+                    if debug:
+                        frame_seconds += time.monotonic() - stage
+                    release(lambda: delay.push(pending))
                 else:
-                    output = masked_frame(frame, redactor, origin)
-                if debug:
-                    frame_seconds += time.monotonic() - stage
-                    stage = time.monotonic()
-                if video is None:
-                    phase = "encoder_initialize"
-                    video_options = dict(live=True, device=config.get("inference_device", "cpu"))
-                    if config.get("max_bitrate") is not None:
-                        video_options["max_bitrate"] = config["max_bitrate"]
-                    video = add_video(writer, output, buffer.input_video, **video_options)
-                    if buffer.input_audio:
-                        transcode_audio = protocol == "rtmp" and buffer.input_audio.codec_context.name != "aac"
-                        if transcode_audio:
-                            audio = writer.add_stream("aac", rate=48000)
-                            audio.layout = "mono" if buffer.input_audio.codec_context.channels == 1 else "stereo"
-                        else:
-                            audio = writer.add_stream_from_template(buffer.input_audio)
-                if (output.width, output.height) != (video.width, video.height):
-                    raise BufferError("Stream dimensions changed")
-                for packet in packets:
-                    phase = "audio_process"
-                    packet.pts -= round(origin / packet.time_base)
-                    packet.dts -= round(origin / packet.time_base)
-                    if transcode_audio:
-                        for frame in packet.decode():
-                            for encoded in audio.encode(frame):
-                                writer.mux(encoded)
-                    else:
-                        packet.stream = audio
-                        writer.mux(packet)
-                published = False
-                phase = "video_encode"
-                metrics.submit(output, buffer.last_received, source_moment, timeline_pts=moment, timestamp_repaired=repaired,
-                               decoded_at=buffer.last_decoded, processing_at=processing_at)
-                for packet in video.encode(output):
-                    mux_video(packet)
-                    published = True
-                if debug:
-                    encode_seconds += time.monotonic() - stage
-                # 只有视频包实际写入成功才证明输出；合并到至多每五秒一次。
-                if published and (last_output_report is None or time.monotonic() - last_output_report >= 5):
-                    emit({"output": True, "output_monotonic": time.monotonic(), "ready": True})
-                    last_output_report = time.monotonic()
-                count += 1
+                    output = frames.masked(frame, redactor) if frames else masked_frame(frame, redactor, origin)
+                    if debug:
+                        frame_seconds += time.monotonic() - stage
+                    write_output((output, *metadata))
                 processing = False
                 report()
                 if stop.is_set():
                     break
-                phase = "input_wait"
+            if delay:
+                if stop.is_set():
+                    delay.pending.clear()
+                else:
+                    release(delay.flush)
             if video:
                 phase = "encoder_flush"
                 for packet in video.encode():

@@ -8,9 +8,11 @@ from unittest.mock import Mock
 import pytest
 import av
 import torch
+import numpy as np
 
 from vision_shield.config import Settings
 from vision_shield.media import cuda_frames, streams
+from vision_shield.media.plate_lookahead import PendingMask
 
 
 @pytest.mark.parametrize("fault", [None, "decode", "mask", "encode", "mux"])
@@ -51,12 +53,15 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             assert threads["selected"] == 2
             threads["context"] = threading.get_ident()
 
-        def masked(self, frame, redactor):
+        def masked(self, frame, redactor, *, defer=False):
             assert redactor.detection_interval == 3 and redactor.tracking == "flow"
+            assert defer and redactor._plate_template_fallback
             if fault == "mask":
                 raise RuntimeError("mask failed")
             masked.append(frame.pts)
-            return SimpleNamespace(**vars(frame))
+            output = SimpleNamespace(**vars(frame))
+            return PendingMask(float(frame.pts * frame.time_base), np.zeros((48, 64), np.uint8), [], [],
+                               lambda extra: output)
 
     class Writer:
         def add_stream_from_template(self, source):
@@ -138,6 +143,8 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         assert events[-1]["stats"]["processed_frames"] == 3
         if debug:
             assert events[-1]["stats"]["stream"]["encoded_frames"] == 3
+            assert events[-1]['stats']['stream']['lookahead_frames'] == 0
+            assert events[-1]['detection_stats']['lookahead_max_frames'] == 3
             assert (events[-1]['stats']['stream']['input_width'], events[-1]['stats']['stream']['input_height']) == (64, 48)
             assert events[-1]["stats"]["stream"]["missing_receive_frames"] == 0
             assert events[-1]["stats"]["stream"]["timestamp_repairs"] == int(repair)

@@ -3,6 +3,7 @@
 from collections import deque
 from dataclasses import dataclass, field
 from collections.abc import Callable
+import time
 
 import numpy as np
 
@@ -18,6 +19,7 @@ class PendingMask:
     confirm: Callable | None = None
     discover: Callable | None = None
     extra: list = field(default_factory=list)
+    deadline: float | None = None
 
 
 class PlateLookahead:
@@ -28,7 +30,7 @@ class PlateLookahead:
                                        backfill_local_checks=0, lookahead_tail_checks=0)
 
     def push(self, frame):
-        ready = self.flush() if frame.reset else []
+        ready = self.flush() if frame.reset else self.expire()
         if frame.reset:
             self.previous = []
         for box in frame.confirmed:
@@ -59,6 +61,17 @@ class PlateLookahead:
         if self.redactor.debug:
             self.redactor.detection_stats['lookahead_max_frames'] = max(
                 self.redactor.detection_stats['lookahead_max_frames'], len(self.pending))
+        return ready
+
+    def wait_seconds(self):
+        if self.pending and self.pending[0].deadline is not None:
+            return max(0, self.pending[0].deadline - time.monotonic())
+        return None
+
+    def expire(self):
+        ready, now = [], time.monotonic()
+        while self.pending and self.pending[0].deadline is not None and self.pending[0].deadline <= now:
+            ready.append(self._render(self.pending.popleft(), True))
         return ready
 
     def flush(self):

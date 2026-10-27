@@ -125,3 +125,34 @@ def test_complete_future_window_does_not_repeat_full_detection():
     for index in range(1, 14):
         outputs.extend(delay.push(frame(index, index * .04)))
     assert outputs == [(0, [])]
+
+
+def test_live_wall_deadline_releases_without_another_input_and_checks_incomplete_window(monkeypatch):
+    from vision_shield.media import plate_lookahead
+
+    clock = [10.0]
+    monkeypatch.setattr(plate_lookahead.time, 'monotonic', lambda: clock[0])
+    delay = PlateLookahead(redactor())
+    old = frame(0, 0)
+    old.deadline = 10.5
+    old.discover = lambda: [(1, 2, 5, 4)]
+    assert not delay.push(old)
+    assert delay.wait_seconds() == .5
+    clock[0] = 10.49
+    assert not delay.expire()
+    clock[0] = 10.5
+    assert delay.expire() == [(0, [(1, 2, 5, 4)])]
+    assert delay.wait_seconds() is None
+    assert not delay.expire()
+
+
+def test_late_confirmation_does_not_backfill_a_frame_past_its_wall_deadline(monkeypatch):
+    from vision_shield.media import plate_lookahead
+
+    monkeypatch.setattr(plate_lookahead.time, 'monotonic', lambda: 11.0)
+    delay = PlateLookahead(redactor())
+    old = frame(0, 0)
+    old.deadline = 10.5
+    delay.push(old)
+    box = (2, 2, 6, 4)
+    assert delay.push(frame(1, .04, [box], [box])) == [(0, [])]
