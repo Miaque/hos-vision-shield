@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from vision_shield.media.plate_lookahead import PendingMask, PlateLookahead
 from vision_shield.redaction import FrameRedactor
@@ -56,6 +57,21 @@ def test_failed_reverse_match_does_not_invent_an_earlier_mask():
     box = (2, 2, 6, 4)
     delay.push(frame(1, .04, [box], [box]))
     assert delay.flush() == [(0, []), (1, [])]
+
+
+@pytest.mark.parametrize('confirmed', [None, (1, 2, 5, 4)])
+def test_reverse_match_failure_can_use_original_frame_local_confirmation(confirmed):
+    owner = redactor(lambda *args: None)
+    delay = PlateLookahead(owner)
+    old = frame(0, 0)
+    checked = []
+    old.confirm = lambda box: checked.append(box) or confirmed
+    delay.push(old)
+    box = (2, 2, 6, 4)
+    delay.push(frame(1, .04, [box], [box]))
+    assert delay.flush() == [(0, [confirmed] if confirmed else []), (1, [])]
+    assert checked == [box]
+    assert owner.detection_stats['backfill_local_checks'] == 1
 
 
 def test_existing_plate_renewal_does_not_repaint_the_entire_window():

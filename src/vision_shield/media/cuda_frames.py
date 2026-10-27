@@ -131,7 +131,15 @@ class CUDAFrames:
             from vision_shield.media.plate_lookahead import PendingMask
 
             moment = float(frame.pts * frame.time_base)
+            def confirm(box):
+                if getattr(redactor.stage_times, 'record_masks', None):
+                    from vision_shield.detection.host_profile import scope
+
+                    with scope(frame=frame_number, source_seconds=moment):
+                        return redactor._recheck(pixels, box, 'plate', gray)
+                return redactor._recheck(pixels, box, 'plate', gray)
+
             plates = [t.box for t in redactor.history if t.kind == "plate"]
             confirmed = [t.box for t in redactor.history if t.kind == "plate" and t.seen == moment]
-            return PendingMask(moment, gray, plates, confirmed, render, redactor.scene_reset)
+            return PendingMask(moment, gray, plates, confirmed, render, redactor.scene_reset, confirm)
         return render(())

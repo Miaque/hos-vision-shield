@@ -15,6 +15,7 @@ class PendingMask:
     confirmed: list
     render: Callable
     reset: bool = False
+    confirm: Callable | None = None
     extra: list = field(default_factory=list)
 
 
@@ -22,7 +23,7 @@ class PlateLookahead:
     def __init__(self, redactor):
         self.redactor, self.pending, self.previous = redactor, deque(), []
         redactor._plate_template_fallback = True
-        redactor.detection_stats.update(backfilled_plate_masks=0, lookahead_max_frames=0)
+        redactor.detection_stats.update(backfilled_plate_masks=0, lookahead_max_frames=0, backfill_local_checks=0)
 
     def push(self, frame):
         ready = self.flush() if frame.reset else []
@@ -35,9 +36,14 @@ class PlateLookahead:
             for old in reversed(self.pending):
                 if frame.moment - old.moment > .5:
                     break
-                box = self.redactor._follow(old.gray, box, reference)
-                if box is None:
+                recovered = self.redactor._follow(old.gray, box, reference)
+                if recovered is None and old.confirm is not None:
+                    if self.redactor.debug:
+                        self.redactor.detection_stats['backfill_local_checks'] += 1
+                    recovered = old.confirm(box)
+                if recovered is None:
                     break
+                box = recovered
                 old.extra.append(box)
                 reference = old.gray
                 if self.redactor.debug:
