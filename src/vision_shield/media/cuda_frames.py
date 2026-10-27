@@ -110,13 +110,20 @@ class CUDAFrames:
         boxes = redactor.regions(pixels, float(frame.pts * frame.time_base),
                                  thumbnail=thumbnail, gray=gray)
         frame_number = redactor.frame_index
-        def render(extra):
-            recorder = getattr(redactor.stage_times, 'record_masks', None)
-            if defer and recorder:
+        moment = float(frame.pts * frame.time_base)
+        recorder = getattr(redactor.stage_times, 'record_masks', None)
+
+        def at_frame(operation):
+            if recorder:
                 from vision_shield.detection.host_profile import scope
 
-                with scope(frame=frame_number):
-                    recorder(pixels.shape, [*boxes, *extra])
+                with scope(frame=frame_number, source_seconds=moment, origin='lookahead'):
+                    return operation()
+            return operation()
+
+        def render(extra):
+            if defer and recorder:
+                at_frame(lambda: recorder(pixels.shape, [*boxes, *extra]))
             with measure(redactor, "mask-gpu"):
                 output_y, output_uv = masked_planes(y, uv, pixels, [*boxes, *extra], redactor.mode, frame.colorspace, full)
             with measure(redactor, "explicit-sync"):
@@ -130,16 +137,17 @@ class CUDAFrames:
         if defer:
             from vision_shield.media.plate_lookahead import PendingMask
 
-            moment = float(frame.pts * frame.time_base)
             def confirm(box):
-                if getattr(redactor.stage_times, 'record_masks', None):
-                    from vision_shield.detection.host_profile import scope
+                return at_frame(lambda: redactor._recheck(pixels, box, 'plate', gray))
 
-                    with scope(frame=frame_number, source_seconds=moment):
-                        return redactor._recheck(pixels, box, 'plate', gray)
-                return redactor._recheck(pixels, box, 'plate', gray)
+            def discover():
+                from vision_shield.detection.plate_readability import source_view
+
+                with source_view(gray):
+                    return at_frame(lambda: [d.box for d in redactor._detections(pixels, 'plate')])
 
             plates = [t.box for t in redactor.history if t.kind == "plate"]
             confirmed = [t.box for t in redactor.history if t.kind == "plate" and t.seen == moment]
-            return PendingMask(moment, gray, plates, confirmed, render, redactor.scene_reset, confirm)
+            tail = discover if not redactor.joint_detected and getattr(redactor.detector, 'detect_regions', None) else None
+            return PendingMask(moment, gray, plates, confirmed, render, redactor.scene_reset, confirm, tail)
         return render(())

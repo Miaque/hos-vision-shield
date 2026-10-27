@@ -92,3 +92,36 @@ def test_scene_reset_flushes_old_frames_without_backtracking_across_the_cut():
     next_frame.reset = True
     assert delay.push(next_frame) == [(0, [])]
     assert delay.flush() == [(1, [])]
+
+
+def test_incomplete_eof_window_discovers_plates_before_output():
+    owner = redactor()
+    delay = PlateLookahead(owner)
+    old = frame(0, 0)
+    old.discover = lambda: [(1, 2, 5, 4)]
+    delay.push(old)
+    assert delay.flush() == [(0, [(1, 2, 5, 4)])]
+    assert owner.detection_stats['lookahead_tail_checks'] == 1
+
+
+def test_burst_cap_rechecks_a_frame_without_its_full_future_window():
+    owner = redactor()
+    delay = PlateLookahead(owner)
+    old = frame(0, 0)
+    old.discover = lambda: [(1, 2, 5, 4)]
+    delay.push(old)
+    outputs = []
+    for index in range(1, 17):
+        outputs.extend(delay.push(frame(index, index * .001)))
+    assert outputs == [(0, [(1, 2, 5, 4)])]
+
+
+def test_complete_future_window_does_not_repeat_full_detection():
+    delay = PlateLookahead(redactor())
+    old = frame(0, 0)
+    old.discover = lambda: pytest.fail('Unnecessary full detection')
+    delay.push(old)
+    outputs = []
+    for index in range(1, 14):
+        outputs.extend(delay.push(frame(index, index * .04)))
+    assert outputs == [(0, [])]

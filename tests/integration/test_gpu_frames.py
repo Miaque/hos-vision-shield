@@ -84,7 +84,7 @@ def test_gpu_lookahead_paints_prior_frames_after_a_future_plate_confirmation(gen
     class LaterPlate:
         calls = 0
 
-        def detect_regions(self, pixels):
+        def detect_regions(self, pixels, kind=None):
             assert pixels.is_cuda
             self.calls += 1
             # The generated source is 12 FPS: its third joint call is at 0.5 seconds.

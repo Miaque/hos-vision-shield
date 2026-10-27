@@ -136,6 +136,7 @@ class FrameRedactor:
                     if self.debug:
                         self.detection_stats["face_rechecks"] += 1
                     detect = True
+        self.joint_detected = detect and not face_only
         with source_view(gray), measure(self, "track-face-recheck" if face_only else "track-recheck") if recheck or face_only else nullcontext():
             detections = (self._merge_detections(self._detections(pixels, face_only=True) if face_only
                                                else self._detections(pixels)) if detect else [])
