@@ -10,6 +10,52 @@ import pytest
 from vision_shield.config import Settings
 
 
+@pytest.mark.parametrize('output_case', ['stable', 'brief', 'unconfirmed', 'ready_only'])
+async def test_reconnect_backoff_resets_only_after_sustained_confirmed_output(monkeypatch, output_case):
+    from vision_shield.jobs import tasks
+
+    record = dict(id='job', kind='stream', desired_state='run', generation=1, source_ref='rtsp://input')
+    store = SimpleNamespace(update_owned=AsyncMock(return_value=True), finish=AsyncMock(), get=AsyncMock(return_value=record),
+                            mark_output=AsyncMock(return_value=output_case != 'unconfirmed'))
+    publisher = SimpleNamespace(prepare=AsyncMock(return_value='rtsp://output'), close=AsyncMock(return_value=True))
+    monkeypatch.setattr(tasks, 'Publisher', lambda *args: publisher)
+    monkeypatch.setattr(tasks, 'validate_source', AsyncMock(return_value=(httpx.URL(record['source_ref']), '127.0.0.1')))
+    cancel, waits, calls = asyncio.Event(), [], 0
+    settings = Settings(_env_file=None)
+
+    async def run(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 6:
+            if output_case == 'ready_only':
+                await args[3](dict(ready=True))
+            else:
+                first = tasks.time.monotonic()
+                gap = 1 if output_case == 'brief' else settings.heartbeat_seconds
+                for at in (first, first + gap):
+                    await args[3](dict(output=True, ready=True, output_monotonic=at))
+            await args[3](dict(stream_end=dict(reason='source_eof', phase='source_read')))
+            return dict(returncode=0, retryable=True)
+        await args[3](dict(stream_end=dict(reason='source_open_error', phase='source_open')))
+        return dict(returncode=1, retryable=True)
+
+    async def retry_wait(awaitable, timeout):
+        awaitable.close()
+        waits.append(timeout)
+        if len(waits) == 7:
+            cancel.set()
+        raise TimeoutError
+
+    monkeypatch.setattr(tasks, 'run_process', run)
+    monkeypatch.setattr(tasks.asyncio, 'wait_for', retry_wait)
+    await tasks.run_stream(record, store, settings, cancel, 'owner', 1)
+    expected = [1, 2, 4, 8, 16] + ([1, 2] if output_case == 'stable' else [30, 30])
+    assert waits == expected
+    if output_case == 'ready_only':
+        store.mark_output.assert_not_awaited()
+    store.finish.assert_not_awaited()
+
+
 async def test_eof_and_internal_publish_failure_have_distinct_retained_reasons(monkeypatch):
     from vision_shield.jobs import tasks
 

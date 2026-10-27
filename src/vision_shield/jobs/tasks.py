@@ -188,6 +188,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
             await store.update_owned(task_id, owner, generation, stream_attempts=history,
                                      stream_attempts_discarded=discarded)
             ending, phase, finish_error = {}, "source_validate", None
+            first_output = None
             try:
                 original, address = await validate_source(record["source_ref"], settings.source_allowlist, ("rtsp", "rtmp"))
                 phase = "publisher_prepare"
@@ -195,6 +196,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                 await store.update_owned(task_id, owner, generation, state="connecting", ready=False)
 
                 async def event_received(event):
+                    nonlocal retry, first_output
                     if settings.debug:
                         log_model_timing(event, task_id, generation)
                     if event.get("failure_type"):
@@ -216,6 +218,10 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                     else:
                         confirmed = False
                     if event.get("ready") and confirmed:
+                        if first_output is None:
+                            first_output = event["output_monotonic"]
+                        elif event["output_monotonic"] - first_output >= settings.heartbeat_seconds:
+                            retry = 0
                         values.update(state="running", ready=True, error=None)
                     values.update({key: event[key] for key in ("stats", "timings", "video_encoder", "video_decoder", "detection_stats")
                                    if key in event})
