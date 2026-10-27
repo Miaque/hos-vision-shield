@@ -63,8 +63,7 @@ class FrameRedactor:
         self.detection_stats = dict(full_frames=0, skipped_frames=0, local_rechecks=0)
         if tracking == "flow":
             self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0,
-                                        proposal_frames=0, proposal_rechecks=0, face_rechecks=0, template_fallbacks=0,
-                                        blurred_plate_rechecks=0)
+                                        proposal_frames=0, proposal_rechecks=0, face_rechecks=0, template_fallbacks=0)
         # Enable only while bounded lookahead can repair late plate discovery.
         self._plate_template_fallback = False
         self.detector = detector
@@ -364,14 +363,6 @@ class FrameRedactor:
 
     @timed("track-confirm")
     def _recheck(self, pixels, box, kind="", gray=None):
-        plate_work = getattr(self.detector, 'plate_needs_work', None)
-        if self._plate_template_fallback and kind == 'plate' and plate_work is not None:
-            # Enlarging an already blurred source cannot create readable plate information.
-            with source_view(pixels if gray is None else gray):
-                if not plate_work(pixels, box):
-                    if self.debug:
-                        self.detection_stats['blurred_plate_rechecks'] += 1
-                    return None
         if self.debug:
             self.detection_stats["local_rechecks"] += 1
         x1, y1, x2, y2 = box

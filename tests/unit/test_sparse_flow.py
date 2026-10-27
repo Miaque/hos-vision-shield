@@ -140,44 +140,6 @@ def test_unconfirmed_plate_keeps_original_failed_flow_detection(monkeypatch, unc
     assert redactor.detection_stats['template_fallbacks'] == int(not unconfirmed)
 
 
-@pytest.mark.parametrize('kind,lookahead,blurred,expected_calls', [
-    ('plate', True, True, 0), ('plate', True, False, 1),
-    ('plate', False, True, 1), ('face', True, True, 1)])
-def test_only_blurred_original_plate_pixels_can_skip_lookahead_local_models(kind, lookahead, blurred, expected_calls):
-    from types import SimpleNamespace
-    from vision_shield.detection.plate_readability import needs_plate_work
-
-    calls = []
-    detector = SimpleNamespace(plate_needs_work=needs_plate_work,
-        detect_regions=lambda *args, **kwargs: calls.append(kwargs) or [])
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
-    redactor._plate_template_fallback = lookahead
-    gray = np.full((160, 220), 180, np.uint8) if blurred else texture()
-    # The enlarged/color view must not replace the unscaled source evidence.
-    pixels = np.repeat(texture()[:, :, None], 3, axis=2)
-    assert redactor._recheck(pixels, (60, 50, 100, 70), kind, gray) is None
-    assert len(calls) == expected_calls
-    assert redactor.detection_stats['local_rechecks'] == expected_calls
-    if not expected_calls:
-        assert redactor.detection_stats['blurred_plate_rechecks'] == 1
-
-
-def test_plate_local_confirmation_resumes_as_soon_as_original_pixels_gain_detail():
-    from types import SimpleNamespace
-    from vision_shield.detection.plate_readability import needs_plate_work
-
-    detector = SimpleNamespace(plate_needs_work=needs_plate_work,
-        detect_regions=lambda *args, **kwargs: [Detection('plate', (106, 133, 214, 187), .9)])
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
-    redactor._plate_template_fallback = True
-    pixels = np.repeat(texture()[:, :, None], 3, axis=2)
-    box = (60, 50, 100, 70)
-    assert redactor._recheck(pixels, box, 'plate', np.full((160, 220), 180, np.uint8)) is None
-    confirmed = redactor._recheck(pixels, box, 'plate', texture())
-    assert confirmed is not None and redactor._overlap(box, confirmed) > .9
-    assert redactor.detection_stats['local_rechecks'] == 1
-
-
 def test_forward_backward_inconsistency_cannot_be_accepted_as_motion(monkeypatch):
     redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.gray = texture()
@@ -371,3 +333,22 @@ async def test_store_rejects_flow_outside_video_or_stream_interval_three():
     for kind, interval in [('video', 1), ('image', 3), ('stream', 1)]:
         with pytest.raises(ValueError):
             await store.create(kind, 'upload', 'local', detection_interval=interval, tracking='flow')
+
+
+def test_partial_character_shapes_still_require_local_confirmation_when_recovery_gate_is_false():
+    from types import SimpleNamespace
+    from vision_shield.detection.plate_readability import needs_plate_work
+
+    gray = np.full((160, 220), 180, np.uint8)
+    plate = np.full((16, 42), 60, np.uint8)
+    cv2.putText(plate, 'A12', (3, 12), cv2.FONT_HERSHEY_SIMPLEX, .4, 230, 1, cv2.LINE_AA)
+    gray[50:66, 60:102] = cv2.GaussianBlur(plate, (0, 0), .8)
+    box = (60, 50, 102, 66)
+    assert not needs_plate_work(gray, box)
+    calls = []
+    detector = SimpleNamespace(plate_needs_work=needs_plate_work,
+        detect_regions=lambda *args, **kwargs: calls.append(kwargs) or [])
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow')
+    redactor._plate_template_fallback = True
+    redactor._recheck(np.repeat(gray[:, :, None], 3, axis=2), box, 'plate', gray)
+    assert len(calls) == 1, 'A recovery gate is not proof that all character information is absent'
