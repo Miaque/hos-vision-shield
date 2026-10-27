@@ -77,13 +77,43 @@ bash scripts/deploy-server.sh --tag exp-20261023-b-deploy-02
 
 日常更新不先执行 `down`，构建成功后才替换容器。重建期间旧容器继续服务，替换时会短暂中断；正在执行的文件任务不会续跑，流任务会尝试恢复。当前 Dockerfile 已分离依赖层与应用层，构建缓存可用且依赖未变时，源码修改可复用已安装的 PyTorch/CUDA 依赖；不要在日常更新中使用 `--no-cache`。
 
-`compose.yaml` 包含 MediaMTX、API、reconciler 和两个 worker，共五个服务，直接复用现有带密码 Redis。在 `.env.compose` 设置 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`，并将文件权限设为 `600`；四个应用服务统一读取该地址。宿主发布端口须能从 Docker 网络访问。现有 Redis 的持久化及淘汰策略由部署方核对，不修改共享实例配置。
+`compose.yaml` 包含 MediaMTX、API、reconciler、notifier 和两个 worker，并通过 `compose.replay.yaml` 接入独立视频回放容器。应用服务直接复用现有带密码 Redis。在 `.env.compose` 设置 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`，并将文件权限设为 `600`；应用服务统一读取该地址。宿主发布端口须能从 Docker 网络访问。现有 Redis 的持久化及淘汰策略由部署方核对，不修改共享实例配置。
 
 仅 API/RTSP 端口按配置发布；部署地址和端口由 `.env.compose` 的 `BIND_ADDRESS`、`API_PORT`、`RTSP_PORT`、`RTSP_PUBLIC_BASE_URL` 指定，模型及媒体目录由 `MODEL_DIR`、`MEDIA_DIR` 指定。容器内部推流与控制沿用服务名，远程输入还须配置来源允许列表。媒体目录保留在宿主机，切换前按原文件组合执行 `down`，不使用 `down -v`。
 
 镜像构建可以联网安装依赖，`models/` 中的模型必须事先离线提供并只读挂载；quality_yolo 的 YOLO 权重随应用包交付，启动及推理不下载模型。worker 先在有 120 秒总超时的子进程中核验清单/哈希、实际推理及 NMS，成功后才接单并发布心跳；故障后的旧心跳最多有默认 20 秒租约窗口。`RTSP_PUBLISH_BASE_URL` 仅控制容器内部推流，对外仍返回公开播放地址。
 
 GPU 镜像按 [研究记录中的生成命令](specs/002-compose-cpu-gpu/research.md)使用 `deploy/requirements-cu126.txt`，共同依赖沿用根锁版本；根声明变更时重新生成，禁止手工改 pin。CPU 使用根 uv.lock，Windows 安装方式保持不变。初次交付证据与未运行项见 [实施记录](specs/002-compose-cpu-gpu/validation/gates.md)，后续服务器分阶段实测见 [时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)；这些记录不代表完整部署验收已通过。
+
+### 两路录像实时回放
+
+`video-replay` 随上述 Compose 命令及 `deploy-server.sh` 一起部署，单个容器内运行 MediaMTX 和两个 FFmpeg 回放进程，不使用 GPU。两段录像按原时间节奏无限循环，视频及音频直接复制码流；回放源允许匿名读取，只开放 `replay/rfm-01` 和 `replay/rfm-02` 两条路径。
+
+首次部署前，将两段未脱敏的录像放到服务器同一目录，分别命名为 `rfm-01.mp4`、`rfm-02.mp4`，并在 `.env.compose` 设置该绝对目录：
+
+```dotenv
+REPLAY_MEDIA_DIR=/home/meiya/vision-shield-replay/media
+```
+
+本次对应本地 `data/recordings/rfm-live-20261027-150312/rfm-original-preview.mp4` 和 `data/recordings/rfm-live-20261027-150915/rfm-original-preview.mp4`。录像不提交 Git、不打进镜像，只读挂载；未指定目录时使用仓库下的 `data/replay/`。目录缺失会拒绝启动，视频缺失或任一路不可读取会令回放容器的健康检查失败。
+
+实时任务使用以下输入地址，按服务器的 `BIND_ADDRESS` 替换 IP：
+
+```text
+rtsp://192.168.1.104:8555/replay/rfm-01
+rtsp://192.168.1.104:8555/replay/rfm-02
+```
+
+在 `SOURCE_ALLOWLIST` 原列表中保留已有条目并追加服务器 IP `192.168.1.104`，随后按原部署方式重新创建应用容器。测试任务显式使用 `X-Detection-Interval: 3`、`X-Tracking-Mode: flow`，以保持文件复测的调度条件。循环拼接点会发生画面跳变，分析跟踪失败与卡顿时需单独标记。
+
+检查和临时停止回放只针对该服务：
+
+```bash
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml logs --tail 50 video-replay
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml stop video-replay
+```
+
+永久移除时，先执行上述停止命令及同参数的 `rm -f video-replay`，再删除 `compose.yaml` 的回放 `include` 项、`compose.replay.yaml`、`deploy/Dockerfile.replay`、`deploy/mediamtx.replay.yml` 和环境变量 `REPLAY_MEDIA_DIR`。现有 `8554` 媒体服务与检测 worker 不依赖回放容器。
 
 ## 本地 Redis / MediaMTX
 

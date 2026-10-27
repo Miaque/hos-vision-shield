@@ -1,5 +1,8 @@
 name: vision-shield
 
+include:
+  - ./compose.replay.yaml
+
 x-app: &app
   image: vision-shield:cpu
   platform: linux/amd64
