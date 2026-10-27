@@ -10,6 +10,19 @@ def frame(pts):
     return SimpleNamespace(pts=pts, time_base=Fraction(1, 1000))
 
 
+def test_api_preserves_the_lookahead_queue_without_adding_it_to_old_attempts():
+    from vision_shield.api.schemas import StreamStats
+
+    row = StreamMetrics(debug=True).snapshot()
+    row.update(input_frames=0, queue_frames=0, audio_queue_bytes=0, failed_frames=0, protected_frames=0)
+    assert 'lookahead_frames' not in StreamStats.model_validate(row).model_dump()
+    row['lookahead_frames'] = 12
+    assert StreamStats.model_validate(row).model_dump()['lookahead_frames'] == 12
+    row['lookahead_frames'] = -1
+    with pytest.raises(ValueError):
+        StreamStats.model_validate(row)
+
+
 def test_attempt_origin_keeps_model_loading_as_zero_output_windows(monkeypatch):
     import runpy
     from pathlib import Path

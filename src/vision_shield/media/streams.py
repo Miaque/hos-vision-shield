@@ -434,7 +434,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     pending = frames.masked(frame, redactor, defer=True)
                     render = pending.render
                     pending.render = lambda extra, render=render, metadata=metadata: (render(extra), *metadata)
-                    pending.deadline = time.monotonic() + .5
+                    # Leave one input-frame interval plus jitter beyond the half-second media window.
+                    pending.deadline = time.monotonic() + .75
                     if debug:
                         frame_seconds += time.monotonic() - stage
                     release(lambda: delay.push(pending))

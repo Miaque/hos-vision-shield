@@ -86,6 +86,7 @@ class StreamStats(BaseModel):
     missing_receive_frames: int = Field(ge=0)
     pending_encoder_frames: int = Field(ge=0)
     queue_frames: int = Field(ge=0)
+    lookahead_frames: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     audio_queue_bytes: int = Field(ge=0)
     failed_frames: int = Field(ge=0)
     protected_frames: int = Field(ge=0)

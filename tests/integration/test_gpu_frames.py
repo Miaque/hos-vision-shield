@@ -123,7 +123,7 @@ def test_gpu_stream_lookahead_drains_on_input_pause_and_keeps_frame_metadata(gen
     assert metrics['unmatched_packets'] == metrics['missing_receive_frames'] == metrics['failed_frames'] == 0
     assert metrics['pending_encoder_frames'] == metrics['lookahead_frames'] == 0
     first = metrics['recent_outputs'][0]
-    assert .4 <= first['latency_seconds'] < 2.5
+    assert .65 <= first['latency_seconds'] < 2.5
     assert all(s['received_monotonic'] <= s['decoded_monotonic'] <= s['processing_monotonic'] <= s['encoded_monotonic']
                for s in metrics['recent_outputs'])
     with original_open(str(source)) as reader:
