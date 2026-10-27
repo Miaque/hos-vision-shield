@@ -29,14 +29,16 @@ class StreamMetrics:
         self.frames = self.packets = self.unmatched = self.missing_receive = 0
         self.repairs = 0
 
-    def submit(self, frame, received_at, source_pts, *, timeline_pts=None, timestamp_repaired=False):
+    def submit(self, frame, received_at, source_pts, *, timeline_pts=None, timestamp_repaired=False,
+               decoded_at=None, processing_at=None):
         if len(self.pending) >= 512:
             raise BufferError('Encoder backlog exceeded limit')
         moment = frame.pts * frame.time_base
         if moment in self.pending:
             raise BufferError('Duplicate encoder input clock')
         # Production retains encoder backlog/clock guards without collecting frame evidence.
-        self.pending[moment] = ((received_at, str(source_pts), str(source_pts if timeline_pts is None else timeline_pts), timestamp_repaired)
+        self.pending[moment] = ((received_at, str(source_pts), str(source_pts if timeline_pts is None else timeline_pts),
+                                 timestamp_repaired, decoded_at, processing_at)
                                 if self.debug else ())
         self.repairs += timestamp_repaired
 
@@ -50,11 +52,13 @@ class StreamMetrics:
         self.frames += 1
         if not self.debug:
             return
-        received_at, source_pts, timeline_pts, repaired = sample
+        received_at, source_pts, timeline_pts, repaired, decoded_at, processing_at = sample
         self.missing_receive += received_at is None
         self.outputs.append(dict(sequence=self.frames, source_pts=source_pts, timeline_pts=timeline_pts, timestamp_repaired=repaired,
             encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256,
             received_monotonic=received_at, encoded_monotonic=now,
+            **({'decoded_monotonic': decoded_at} if decoded_at is not None else {}),
+            **({'processing_monotonic': processing_at} if processing_at is not None else {}),
             latency_seconds=None if received_at is None else now - received_at))
 
     def snapshot(self):

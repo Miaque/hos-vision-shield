@@ -47,6 +47,24 @@ def test_only_unique_written_frames_count_and_keep_receive_latency():
         received_monotonic=10.0, encoded_monotonic=10.25, latency_seconds=0.25)]
 
 
+def test_phase_clocks_follow_their_frame_through_delayed_encoding_and_api_serialization():
+    from vision_shield.api.schemas import StreamOutputSample
+
+    metrics = StreamMetrics(debug=True)
+    metrics.submit(frame(40), 10.0, Fraction(1), decoded_at=16.0, processing_at=16.125)
+    metrics.submit(frame(80), 10.04, Fraction(2), decoded_at=16.25, processing_at=16.5)
+    metrics.written(Fraction(40, 1000), 16.75)
+    metrics.written(Fraction(80, 1000), 17.0)
+    samples = metrics.snapshot()['recent_outputs']
+    assert [(s['decoded_monotonic'], s['processing_monotonic']) for s in samples] == [(16.0, 16.125), (16.25, 16.5)]
+    assert [s['latency_seconds'] for s in samples] == pytest.approx([6.75, 6.96])
+    assert [StreamOutputSample.model_validate(s).model_dump() for s in samples] == samples
+    metrics.submit(frame(120), 17.0, Fraction(3))
+    metrics.written(Fraction(120, 1000), 17.25)
+    old = metrics.snapshot()['recent_outputs'][-1]
+    assert StreamOutputSample.model_validate(old).model_dump() == old
+
+
 def test_vcl_hash_ignores_annexb_prefixes_parameter_sets_and_padding_but_detects_image_byte_changes():
     first = b'\x00\x00\x00\x01\x67sps\x00\x00\x00\x01\x65image\x00\x00'
     same = b'\x00\x00\x01\x68pps\x00\x00\x01\x65image'

@@ -126,6 +126,7 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(
     assert events[-1]['stream_end']['reason'] == 'source_eof'
     assert events[-1]['stream_end']['attempt_id'] == metrics['attempt_id']
     assert metrics['input_frames'] == metrics['encoded_frames'] == 12
+    assert (metrics['input_width'], metrics['input_height']) == (64, 48)
     assert metrics['unmatched_packets'] == metrics['missing_receive_frames'] == metrics['failed_frames'] == 0
     assert metrics['protected_frames'] == metrics['pending_encoder_frames'] == 0
     assert events[-1]['timings']['source-read'] >= 0.04
@@ -133,6 +134,8 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(
     assert events[-1]['timings']['source-backpressure'] > 0
     assert [sample['sequence'] for sample in metrics['recent_outputs']] == list(range(1, 13))
     assert all(sample['latency_seconds'] >= 0 for sample in metrics['recent_outputs'])
+    assert all(sample['received_monotonic'] <= sample['decoded_monotonic'] <= sample['processing_monotonic'] <= sample['encoded_monotonic']
+               for sample in metrics['recent_outputs'])
     assert opened["format"] == ("flv" if scheme == "rtmp" else "rtsp")
     if input_scheme == "rtmp":
         assert "rtsp_transport" not in opened["source_options"]

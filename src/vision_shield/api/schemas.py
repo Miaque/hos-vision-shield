@@ -65,6 +65,10 @@ class StreamOutputSample(BaseModel):
     encoded_bytes: int | None = Field(default=None, ge=0)
     encoded_vcl_sha256: str | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
     received_monotonic: float | None
+    decoded_monotonic: float | None = Field(default=None, allow_inf_nan=False, exclude_if=lambda value: value is None,
+        description="解码器返回帧对象的单调时刻，不表示 GPU 已同步完成")
+    processing_monotonic: float | None = Field(default=None, allow_inf_nan=False, exclude_if=lambda value: value is None,
+        description="帧从 FIFO 取出后、开始时钟处理与脱敏前的单调时刻")
     encoded_monotonic: float
     latency_seconds: float | None
 
@@ -74,6 +78,8 @@ class StreamStats(BaseModel):
     started_monotonic: float
     sampled_monotonic: float
     input_frames: int = Field(ge=0)
+    input_width: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
+    input_height: int | None = Field(default=None, ge=0, exclude_if=lambda value: value is None)
     encoded_frames: int = Field(ge=0)
     encoded_packets: int = Field(ge=0)
     unmatched_packets: int = Field(ge=0)

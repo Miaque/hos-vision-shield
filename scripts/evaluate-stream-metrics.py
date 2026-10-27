@@ -48,6 +48,7 @@ def summarize(observations):
             raise ValueError('Invalid observation clock')
         seconds = [[] for _ in range(math.floor(end - start))]
         latencies, drifts, timeline_drifts = [], [], []
+        phases = {name: [] for name in ('receive_to_decode', 'decode_to_processing', 'processing_to_output')}
         previous_source, previous_timeline, previous_output, previous_offset = None, None, None, 0
         repairs = raw_anomalies = 0
         for sample in samples:
@@ -76,6 +77,14 @@ def summarize(observations):
                 errors.add('invalid_latency')
             else:
                 latencies.append(latency)
+            decoded, processing = sample.get('decoded_monotonic'), sample.get('processing_monotonic')
+            if decoded is not None or processing is not None:
+                if (any(value is None or not math.isfinite(value) for value in (received, decoded, processing))
+                        or not received <= decoded <= processing <= output):
+                    errors.add('invalid_phase_clock')
+                else:
+                    for name, value in zip(phases, (decoded - received, processing - decoded, output - processing)):
+                        phases[name].append(value)
             index = math.floor(output - start)
             if index < len(seconds):
                 seconds[index].append(sample)
@@ -103,6 +112,8 @@ def summarize(observations):
             processed_frames=attempt['stats']['processed_frames'], dropped_frames=attempt['stats']['dropped_frames'],
             fps_per_second=[len(bucket) for bucket in seconds], ten_second_windows=windows,
             latency_seconds=distribution, source_to_output_drift_seconds=percentiles(drifts),
+            latency_phase_sample_count=len(phases['receive_to_decode']),
+            latency_phase_seconds={name: percentiles(values) for name, values in phases.items()},
             source_to_output_drift_last_seconds=drifts[-1] if drifts else None,
             raw_nonincreasing_timestamps=raw_anomalies,
             timeline_to_output_drift_seconds=percentiles(timeline_drifts),

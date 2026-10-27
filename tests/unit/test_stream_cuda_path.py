@@ -138,10 +138,13 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         assert events[-1]["stats"]["processed_frames"] == 3
         if debug:
             assert events[-1]["stats"]["stream"]["encoded_frames"] == 3
+            assert (events[-1]['stats']['stream']['input_width'], events[-1]['stats']['stream']['input_height']) == (64, 48)
             assert events[-1]["stats"]["stream"]["missing_receive_frames"] == 0
             assert events[-1]["stats"]["stream"]["timestamp_repairs"] == int(repair)
             assert [s['source_pts'] for s in events[-1]['stats']['stream']['recent_outputs']] == [
                 '10', '251/25', '251/25' if repair else '252/25']
+            for sample in events[-1]['stats']['stream']['recent_outputs']:
+                assert sample['received_monotonic'] <= sample['decoded_monotonic'] <= sample['processing_monotonic'] <= sample['encoded_monotonic']
         assert events[-1]["video_decoder"] == "h264_nvdec"
         assert events[-1]["video_encoder"] == "h264_nvenc"
     software_mask.assert_not_called()

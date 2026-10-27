@@ -66,6 +66,15 @@ def test_receive_timestamp_survives_queueing_and_input_count_includes_invalid_cl
     assert buffer.input_frames == 2 and buffer.dropped == 1
 
 
+def test_decode_release_clock_stays_with_each_fifo_frame():
+    buffer = StreamBuffer(2, 2, 4, threading.Event())
+    for pts, received, decoded in [(1, 10.0, 16.0), (2, 10.04, 16.25)]:
+        buffer.frame(SimpleNamespace(pts=pts, time_base=Fraction(1)), received_at=received, decoded_at=decoded)
+    for pts, received, decoded in [(1, 10.0, 16.0), (2, 10.04, 16.25)]:
+        assert buffer.take()[0].pts == pts
+        assert (buffer.last_received, buffer.last_decoded) == (received, decoded)
+
+
 def test_take_uses_fifo_and_preserves_audio_clock():
     buffer = StreamBuffer(2, 2, 100, threading.Event())
     for pts in [1, 2]:

@@ -129,7 +129,8 @@ async def test_direct_publisher_stop_uses_process_exit_confirmation(redis_url, t
                 response = await client.get('/v1/tasks/' + task['id'])
                 assert response.status_code == 200
                 assert response.json()['stats']['stream']['recent_outputs'] == []
-            metrics.submit(SimpleNamespace(pts=0, time_base=Fraction(1, 1000)), 10.0, Fraction(9))
+            metrics.submit(SimpleNamespace(pts=0, time_base=Fraction(1, 1000)), 10.0, Fraction(9),
+                           decoded_at=10.1, processing_at=10.15)
             metrics.written(Fraction(0), 10.25, encoded_bytes=100, encoded_vcl_sha256='a' * 64)
             metrics.submit(SimpleNamespace(pts=40, time_base=Fraction(1, 1000)), 10.04, Fraction(9),
                            timeline_pts=Fraction(226, 25), timestamp_repaired=True)

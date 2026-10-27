@@ -97,12 +97,13 @@ class StreamBuffer:
         self.stop, self.condition = stop, threading.Condition()
         self.frames, self.audio = deque(), deque()
         self.received, self.last_received, self.input_frames = deque(), None, 0
+        self.last_decoded = None
         self.last_source_pts, self.last_timestamp_repaired = None, False
         self.audio_size, self.dropped = 0, 0
         self.eof, self.error, self.input_video, self.input_audio = False, None, None, None
         self.failure = None
 
-    def frame(self, value, received_at=None, *, source_pts=None, timestamp_repaired=False):
+    def frame(self, value, received_at=None, *, source_pts=None, timestamp_repaired=False, decoded_at=None):
         with self.condition:
             self.input_frames += 1
             # Some RTSP sources omit the first PTS; never publish or invent its clock.
@@ -114,7 +115,7 @@ class StreamBuffer:
             if self.stop.is_set():
                 return
             self.frames.append(value)
-            self.received.append((received_at, source_pts, timestamp_repaired))
+            self.received.append((received_at, source_pts, timestamp_repaired, decoded_at))
             self.condition.notify()
 
     def audio_packet(self, packet):
@@ -137,7 +138,7 @@ class StreamBuffer:
             if self.stop.is_set() or not self.frames:
                 return None
             frame = self.frames.popleft()
-            self.last_received, self.last_source_pts, self.last_timestamp_repaired = self.received.popleft()
+            self.last_received, self.last_source_pts, self.last_timestamp_repaired, self.last_decoded = self.received.popleft()
             self.condition.notify()
             if frame.pts is None or frame.time_base is None:
                 raise BufferError("Invalid video clock")
@@ -223,6 +224,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     phase = "source_decode"
                     with measure(redactor, "source-decode"):
                         decoded = packet.decode()
+                    decoded_at = time.monotonic() if debug else None
                     for frame in decoded:
                         check_dimensions(frame.width, frame.height, config)
                         moment = frame.pts * frame.time_base if frame.pts is not None and frame.time_base is not None else None
@@ -231,7 +233,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         repaired = av_clock.video_frame(frame) if av_clock and moment is not None else False
                         phase = "input_buffer"
                         with measure(redactor, "source-backpressure"):
-                            buffer.frame(frame, received_at, source_pts=moment, timestamp_repaired=repaired)
+                            buffer.frame(frame, received_at, source_pts=moment, timestamp_repaired=repaired, decoded_at=decoded_at)
                 elif audio_enabled and packet.stream.type == "audio" and packet.dts is not None:
                     phase = "input_audio_clock"
                     if av_clock:
@@ -269,6 +271,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         with buffer.condition:
             dropped = buffer.dropped
             stream_stats = dict(input_frames=buffer.input_frames, queue_frames=len(buffer.frames),
+                               **(dict(input_width=buffer.input_video.width, input_height=buffer.input_video.height)
+                                  if buffer.input_video else {}),
                                audio_queue_bytes=buffer.audio_size, failed_frames=failed_frames,
                                protected_frames=0, **metrics.snapshot()) if debug else None
         emit({**({"stream_end": ending} if force and ending else {}),
@@ -309,6 +313,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             video, audio = None, None
             transcode_audio = False
             while sample := buffer.take():
+                processing_at = time.monotonic() if debug else None
                 frame, packets = sample
                 processing = True
                 phase = "input_clock"
@@ -372,7 +377,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         writer.mux(packet)
                 published = False
                 phase = "video_encode"
-                metrics.submit(output, buffer.last_received, source_moment, timeline_pts=moment, timestamp_repaired=repaired)
+                metrics.submit(output, buffer.last_received, source_moment, timeline_pts=moment, timestamp_repaired=repaired,
+                               decoded_at=buffer.last_decoded, processing_at=processing_at)
                 for packet in video.encode(output):
                     mux_video(packet)
                     published = True

@@ -59,6 +59,12 @@ API可提前拒绝协议或已知格式错误；需探测后才能发现的错�
 文件任务还可附带`X-Video-Decoder: h264_nvdec`或`h264`，表示实际硬件帧或原软件解码路径；未开始处理及旧任务可省略，不改变请求或JSON。兼容格式的CUDA文件使用NVDEC，其他格式保留原解码方式；选中硬解后失败不重试CPU，详见[诊断说明](../../002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。
 上述诊断响应头仅在 `DEBUG=true` 时返回；默认生产环境不采样，也不返回旧任务的 `stats.stream` 诊断样本。原始来源、绝对磁盘路径、worker标识不进入响应。外部推流未指定playback_url时，返回的播放地址包含publish_url原有的凭据及查询参数；不应将其当作匿名播放地址。没有进度百分比，避免长流或未知时长的伪进度。
 
+`stats.stream.input_width/input_height` 在取得输入视频元数据后记录源尺寸，旧样本可省略。
+逐帧 `recent_outputs` 可包含 `decoded_monotonic`（解码器返回帧对象）及 `processing_monotonic`
+（FIFO 取出后、时钟处理和脱敏前），与包接收、成功 mux 的时刻使用同一单调时钟。
+解码器返回不等于 GPU 已完成同步；这些是主机阶段边界，不能解释为 GPU 算子耗时。
+旧样本缺少新时刻时不补零，原总延迟、帧数、PTS 和默认非 DEBUG 行为保持。
+
 ```json
 {
   "id": "e5176342-68c1-4c5c-a43e-39c5d220cc8a",

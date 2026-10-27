@@ -118,6 +118,31 @@ def test_latency_above_threshold_is_not_rounded_down():
     assert result['latency_thresholds_met'] is False
 
 
+def test_packet_to_output_latency_is_split_without_treating_decode_wait_as_processing():
+    row = observation(count=1)
+    sample = row['task']['stats']['stream']['recent_outputs'][0]
+    sample.update(decoded_monotonic=106.0, processing_monotonic=106.125,
+                  encoded_monotonic=106.75, latency_seconds=6.75)
+    result = evaluate([row])['attempts'][0]
+    assert result['evidence_errors'] == []
+    assert result['latency_phase_sample_count'] == 1
+    assert {k:v['p95'] for k,v in result['latency_phase_seconds'].items()} == {
+        'receive_to_decode': 6.0, 'decode_to_processing': .125, 'processing_to_output': .625}
+    old = evaluate([observation(count=1)])['attempts'][0]
+    assert old['latency_phase_sample_count'] == 0
+    assert all(v['p95'] is None for v in old['latency_phase_seconds'].values())
+
+
+@pytest.mark.parametrize('decoded,processing', [(99, 100), (101, 100), (100, 101), (float('nan'), 100), (100, None)])
+def test_invalid_phase_order_or_incomplete_clocks_do_not_pass(decoded, processing):
+    row = observation(count=1)
+    row['task']['stats']['stream']['recent_outputs'][0].update(decoded_monotonic=decoded, processing_monotonic=processing)
+    result = evaluate([row])['attempts'][0]
+    assert 'invalid_phase_clock' in result['evidence_errors']
+    assert result['latency_phase_sample_count'] == 0
+    assert result['latency_thresholds_met'] is None
+
+
 def test_repaired_timeline_retains_raw_anomalies_without_inflating_frames():
     row = observation()
     stream = row['task']['stats']['stream']
