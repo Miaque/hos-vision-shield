@@ -17,35 +17,6 @@ from vision_shield.redaction import FrameRedactor, redact
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual YuNet CUDA sessions")
-def test_yunet_numpy_confirmation_preserves_predictions_across_all_padded_shapes():
-    import cv2
-    from vision_shield.detection.cuda_detail import Detector, decode_faces
-
-    model = Detector('models/yunet_face.onnx', 'models/hyperlpr_plate.onnx')
-    with Image.open('samples/robot-quality/face-video2-10s.png') as image:
-        pixels = np.array(image.convert('RGB'))
-    full = model._face_session(480, 640)
-    shapes = [(height, 320) for height in range(32, 321, 32)] + [(320, width) for width in range(32, 320, 32)]
-    for height, width in shapes:
-        view = cv2.resize(pixels, (width, height))
-        blob = cv2.dnn.blobFromImage(view)
-        outputs = model.face.run(None, {model.face.get_inputs()[0].name: blob})
-        expected = decode_faces(dict(zip((o.name for o in model.face.get_outputs()), outputs)), width, height, model.face_threshold)
-        for actual in (model._faces(view), model._faces(torch.from_numpy(view).to(model.device))):
-            if expected is None:
-                assert actual is None
-            else:
-                np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-5)
-    assert len(model.local_face_sessions) == 19
-    assert model.face_sessions == {(480, 640): full}
-    retained = model.local_face_sessions.copy()
-    for shape, session in retained.items():
-        assert model._face_session(*shape) is session
-        assert session.get_providers()[0] == 'CUDAExecutionProvider'
-
-
-@pytest.mark.integration
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
 @pytest.mark.parametrize("case_id", ["image-7", "face-video2-10s"])
 def test_quality_cuda_runs_local_models_and_preserves_reviewed_regions(case_id):

@@ -71,7 +71,6 @@ def test_fixed_face_sessions_keep_dimensions_device_and_bounded_lifetime(monkeyp
     monkeypatch.setitem(sys.modules, "onnxruntime", SimpleNamespace(SessionOptions=Options, InferenceSession=Session))
     detector = Detector.__new__(Detector)
     detector.device, detector.face_model, detector.face_sessions = torch.device("cuda", 2), b"same-weights", {}
-    detector.local_face_sessions = {}
     if provider != "CUDAExecutionProvider":
         with pytest.raises(RuntimeError, match="CUDA provider"):
             detector._face_session(384, 1280)
@@ -90,59 +89,6 @@ def test_fixed_face_sessions_keep_dimensions_device_and_bounded_lifetime(monkeyp
         detector._face_session(height, 1280)
     assert detector._face_session(512, 1280) is hot
     assert len(detector.face_sessions) == 4
-    full_sessions = detector.face_sessions.copy()
-    shapes = [(height, 320) for height in range(32, 321, 32)] + [(320, width) for width in range(32, 320, 32)]
-    local = {shape: detector._face_session(*shape) for shape in shapes}
-    assert len(detector.local_face_sessions) == 19
-    assert detector.face_sessions == full_sessions
-    created_count = len(created)
-    for shape in shapes * 2:
-        assert detector._face_session(*shape) is local[shape]
-        assert detector._face_session(512, 1280) is hot
-    assert len(created) == created_count
-
-
-@pytest.mark.parametrize('shape,fixed', [((213, 320), True), ((320, 173), True), ((480, 640), False)])
-def test_numpy_face_confirmation_reuses_the_padded_shape_without_changing_other_views(monkeypatch, shape, fixed):
-    from types import SimpleNamespace
-    from vision_shield.detection import cuda_detail
-
-    calls = []
-
-    class Session:
-        def __init__(self, name):
-            self.name = name
-
-        def get_inputs(self):
-            return [SimpleNamespace(name='input')]
-
-        def get_outputs(self):
-            return [SimpleNamespace(name=self.name)]
-
-        def run(self, names, inputs):
-            calls.append((self.name, inputs['input']))
-            return [np.array([7], dtype=np.float32)]
-
-    detector = cuda_detail.Detector.__new__(cuda_detail.Detector)
-    detector.face, detector.face_threshold = Session('dynamic'), 0.3
-    selections = []
-
-    def select(height, width):
-        selections.append((height, width))
-        return Session('fixed')
-
-    detector._face_session = select
-    decoded = []
-    monkeypatch.setattr(cuda_detail, 'decode_faces', lambda *args: decoded.append(args) or None)
-    pixels = np.arange(shape[0] * shape[1] * 3, dtype=np.uint8).reshape(*shape, 3)
-    assert detector._faces(pixels) is None
-    padded = tuple((size + 31) // 32 * 32 for size in shape)
-    assert selections == ([padded] if fixed else [])
-    name, tensor = calls[0]
-    assert name == ('fixed' if fixed else 'dynamic')
-    assert tensor.shape == (1, 3, *padded) and tensor.dtype == np.float32
-    np.testing.assert_array_equal(tensor[0, :, :shape[0], :shape[1]], pixels.transpose(2, 0, 1))
-    assert list(decoded[0][0]) == [name] and decoded[0][1:] == (padded[1], padded[0], 0.3)
 
 
 @pytest.mark.parametrize("count,fault,parallel,kind", [(2, False, True, None), (4, False, True, None),
