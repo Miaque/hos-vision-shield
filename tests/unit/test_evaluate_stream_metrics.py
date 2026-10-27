@@ -57,6 +57,28 @@ def test_no_rounding_up_a_below_20_fps_window():
     assert result['all_complete_10s_windows_at_least_20_fps'] is False
 
 
+@pytest.mark.parametrize('count,expected', [(149, False), (150, True)])
+def test_g3_15_fps_gate_keeps_exact_boundary_startup_and_evidence_gaps(count, expected):
+    row = observation(count=count)
+    for i, sample in enumerate(row['task']['stats']['stream']['recent_outputs']):
+        sample.update(source_pts=str(i / 15), received_monotonic=100 + i / 15,
+                      encoded_monotonic=100 + i / 15 + .01)
+    result = evaluate([row])['attempts'][0]
+    assert result['ten_second_windows'][0]['fps'] == count / 10
+    assert result['all_complete_10s_windows_at_least_15_fps'] is expected
+    row['task']['stats']['stream']['sampled_monotonic'] = 120
+    for sample in row['task']['stats']['stream']['recent_outputs']:
+        sample['received_monotonic'] += 10
+        sample['encoded_monotonic'] += 10
+    result = evaluate([row])['attempts'][0]
+    assert [w['fps'] for w in result['ten_second_windows']] == [0, count / 10]
+    assert result['all_complete_10s_windows_at_least_15_fps'] is False
+    del row['task']['stats']['stream']['recent_outputs'][1]
+    assert evaluate([row])['attempts'][0]['all_complete_10s_windows_at_least_15_fps'] is None
+    row = observation(count=0, end=9)
+    assert evaluate([row])['attempts'][0]['all_complete_10s_windows_at_least_15_fps'] is None
+
+
 @pytest.mark.parametrize('count,expected', [(249, False), (250, True)])
 def test_rfm_25_fps_gate_keeps_exact_boundary_and_empty_startup(count, expected):
     row = observation(count=count)

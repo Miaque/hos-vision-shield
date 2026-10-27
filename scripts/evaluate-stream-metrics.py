@@ -107,6 +107,8 @@ def summarize(observations):
             raw_nonincreasing_timestamps=raw_anomalies,
             timeline_to_output_drift_seconds=percentiles(timeline_drifts),
             timeline_to_output_drift_last_seconds=timeline_drifts[-1] if timeline_drifts else None,
+            all_complete_10s_windows_at_least_15_fps=(all(w['fps'] >= 15 for w in windows)
+                                                    if windows and not errors else None),
             all_complete_10s_windows_at_least_20_fps=(all(w['fps'] >= 20 for w in windows)
                                                     if windows and not errors else None),
             all_complete_10s_windows_at_least_25_fps=(all(w['fps'] >= 25 for w in windows)
