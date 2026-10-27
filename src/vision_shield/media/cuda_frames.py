@@ -81,7 +81,7 @@ class CUDAFrames:
         self.context = CudaContext(device_id=self.device, primary_ctx=False, current_ctx=True)
         self.color = None
 
-    def masked(self, frame, redactor):
+    def masked(self, frame, redactor, *, defer=False):
         if frame.format.name != "cuda" or frame.sw_format.name != "nv12":
             raise ValueError("Expected NVDEC CUDA NV12 frame")
         if frame.rotation % 90:
@@ -109,12 +109,29 @@ class CUDAFrames:
         # shortcut: template matching still uses CPU gray pixels; move it only after equivalent tracking is verified.
         boxes = redactor.regions(pixels, float(frame.pts * frame.time_base),
                                  thumbnail=thumbnail, gray=gray)
-        with measure(redactor, "mask-gpu"):
-            output_y, output_uv = masked_planes(y, uv, pixels, boxes, redactor.mode, frame.colorspace, full)
-        with measure(redactor, "explicit-sync"):
-            torch.cuda.current_stream(self.device).synchronize()
-        output = av.VideoFrame.from_dlpack((output_y, output_uv), format="nv12", cuda_context=self.context)
-        output.pts, output.time_base = frame.pts, frame.time_base
-        output.color_range = 2 if full else 1
-        output.colorspace, output.color_trc, output.color_primaries = frame.colorspace, frame.color_trc, frame.color_primaries
-        return output
+        frame_number = redactor.frame_index
+        def render(extra):
+            recorder = getattr(redactor.stage_times, 'record_masks', None)
+            if defer and recorder:
+                from vision_shield.detection.host_profile import scope
+
+                with scope(frame=frame_number):
+                    recorder(pixels.shape, [*boxes, *extra])
+            with measure(redactor, "mask-gpu"):
+                output_y, output_uv = masked_planes(y, uv, pixels, [*boxes, *extra], redactor.mode, frame.colorspace, full)
+            with measure(redactor, "explicit-sync"):
+                torch.cuda.current_stream(self.device).synchronize()
+            output = av.VideoFrame.from_dlpack((output_y, output_uv), format="nv12", cuda_context=self.context)
+            output.pts, output.time_base = frame.pts, frame.time_base
+            output.color_range = 2 if full else 1
+            output.colorspace, output.color_trc, output.color_primaries = frame.colorspace, frame.color_trc, frame.color_primaries
+            return output
+
+        if defer:
+            from vision_shield.media.plate_lookahead import PendingMask
+
+            moment = float(frame.pts * frame.time_base)
+            plates = [t.box for t in redactor.history if t.kind == "plate"]
+            confirmed = [t.box for t in redactor.history if t.kind == "plate" and t.seen == moment]
+            return PendingMask(moment, gray, plates, confirmed, render, redactor.scene_reset)
+        return render(())

@@ -64,11 +64,60 @@ def test_every_third_gpu_detection_preserves_all_frames_clocks_and_audio(generat
         assert [f.pts * f.time_base for f in reader.decode(video=0)] == expected
     assert len(expected) == 24
     counts = events[-1]['detection_stats']
+    if tracking == 'flow':
+        assert 0 < counts['lookahead_max_frames'] <= 16
     assert counts['local_rechecks'] == 0 and counts['full_frames'] == detector.calls
     assert counts['skipped_frames'] == len(expected) - detector.calls
     assert detector.calls == 8 + counts.get('full_rechecks', 0)
     assert events[-1]['video_decoder'] == 'h264_nvdec' and events[-1]['video_encoder'] == 'h264_nvenc'
     assert audio_payloads(source) == audio_payloads(target)
+
+
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")
+def test_gpu_lookahead_paints_prior_frames_after_a_future_plate_confirmation(generated_media, tmp_path, monkeypatch):
+    from contextlib import ExitStack
+    from vision_shield.detection import Detection
+    from vision_shield.detection.host_profile import ProfileTimes, instrument
+    from vision_shield.redaction import FrameRedactor
+    from tests.integration.test_media_probe import audio_payloads
+
+    class LaterPlate:
+        calls = 0
+
+        def detect_regions(self, pixels):
+            assert pixels.is_cuda
+            self.calls += 1
+            # The generated source is 12 FPS: its third joint call is at 0.5 seconds.
+            return [Detection('plate', (32, 32, 96, 64), .9)] if self.calls >= 3 else []
+
+        def detect_faces(self, pixels):
+            return []
+
+    monkeypatch.setattr(FrameRedactor, '_follow', lambda self, gray, box, reference=None: box)
+    source, target = generated_media / 'aac.mp4', tmp_path / 'recovered.mp4'
+    events = []
+    config = {**Settings(_env_file=None, inference_device='cuda', debug=True).model_dump(),
+              'detection_interval': 3, 'tracking': 'flow'}
+    collector = ProfileTimes(tmp_path / 'profile')
+    detector = LaterPlate()
+    detector.stage_times = collector
+    with ExitStack() as stack:
+        instrument(stack, collector)
+        process_video(source, target, detector, config, threading.Event(), events.append)
+    collector.close()
+    with av.open(target) as reader:
+        decoded = list(reader.decode(video=0))
+    with av.open(source) as reader:
+        expected = [f.pts * f.time_base for f in reader.decode(video=0)]
+    assert [f.pts * f.time_base for f in decoded] == expected
+    assert audio_payloads(source) == audio_payloads(target)
+    for frame in decoded:
+        pixels = frame.to_ndarray(format='rgb24')
+        assert (np.abs(pixels[36:60, 36:92].astype(int)-64) <= 5).mean() > .99, (
+            str(frame.pts*frame.time_base), events[-1]['detection_stats'])
+    assert events[-1]['detection_stats']['backfilled_plate_masks'] >= 6
+    assert [row[0] for row in collector.masks] == list(range(1, 25))
+    assert collector.masks[0][1] == [[32, 32, 96, 64]]
 
 
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="requires actual NVDEC/NVENC")

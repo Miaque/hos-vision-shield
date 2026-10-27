@@ -67,7 +67,8 @@ def runtime_metadata(detector, config):
         weights['primary_face'] = hashlib.file_digest(handle, 'sha256').hexdigest()
     source = {}
     for name in ('detection.quality', 'detection.plate_readability', 'detection.egoblur', 'detection.cuda_detail', 'detection.cpu',
-                 'detection.host_profile', 'detection.yolo', 'detection.cuda_pixels', 'redaction', 'media.video'):
+                 'detection.host_profile', 'detection.yolo', 'detection.cuda_pixels', 'redaction', 'media.video',
+                 'media.plate_lookahead'):
         with Path(sys.modules['vision_shield.' + name].__file__).open('rb') as handle:
             source[name] = hashlib.file_digest(handle, 'sha256').hexdigest()
     return dict(torch=torch.__version__, cuda=torch.version.cuda, ort=ort.__version__,
@@ -340,7 +341,7 @@ def instrument(stack, collector):
                 result = original(instance, *args, **kwargs)
                 if stage == "quality-detection":
                     collector.record_candidates("accepted", result)
-                if frame:
+                if frame and not getattr(instance, '_plate_template_fallback', False):
                     collector.record_masks(args[0].shape, result)
                 return result
 

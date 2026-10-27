@@ -13,6 +13,7 @@ import numpy as np
 
 from vision_shield.redaction import redact, FrameRedactor
 from vision_shield.detection.timing import snapshot
+from vision_shield.media.plate_lookahead import PlateLookahead
 if TYPE_CHECKING:
     from vision_shield.detection import Detector
 
@@ -119,6 +120,31 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
         writer = stack.enter_context(av.open(target, "w", format="mp4"))
         audio = writer.add_stream_from_template(reader.streams.audio[0]) if reader.streams.audio else None
         video, pending_audio, pending_bytes, previous = None, [], 0, None
+        delay = PlateLookahead(redactor) if frames and redactor.tracking == 'flow' else None
+
+        def write_output(output):
+            nonlocal video, count, encode_seconds
+            stage = time.monotonic() if debug else None
+            if video is None:
+                video = add_video(writer, output, input_video, device=config.get("inference_device", "cpu"))
+                for audio_packet in pending_audio:
+                    writer.mux(audio_packet)
+                pending_audio.clear()
+            if (output.width, output.height) != (video.width, video.height):
+                raise ValueError("Video dimensions changed")
+            for encoded in video.encode(output):
+                writer.mux(encoded)
+            if debug:
+                encode_seconds += time.monotonic() - stage
+            count += 1
+            emit({"video_decoder": "h264_nvdec" if frames else "h264",
+                  "video_encoder": video.codec_context.name,
+                  "stats": {"processed_frames": count, "dropped_frames": 0,
+                            "elapsed_seconds": time.monotonic() - started},
+                  **({"detection_stats": redactor.detection_stats.copy(),
+                  "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
+                                  encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))} if debug else {})})
+
         for packet in reader.demux():
             if stop.is_set():
                 raise InterruptedError("Processing cancelled")
@@ -143,29 +169,21 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
                         first = moment
                     previous = moment
                     stage = time.monotonic() if debug else None
-                    output = frames.masked(frame, redactor) if frames else masked_frame(frame, redactor)
+                    outputs = (delay.push(frames.masked(frame, redactor, defer=True)) if delay else
+                               [frames.masked(frame, redactor) if frames else masked_frame(frame, redactor)])
                     if debug:
                         frame_seconds += time.monotonic() - stage
-                        stage = time.monotonic()
-                    if video is None:
-                        video = add_video(writer, output, input_video, device=config.get("inference_device", "cpu"))
-                        for audio_packet in pending_audio:
-                            writer.mux(audio_packet)
-                        pending_audio.clear()
-                    if (output.width, output.height) != (video.width, video.height):
-                        raise ValueError("Video dimensions changed")
-                    for encoded in video.encode(output):
-                        writer.mux(encoded)
-                    if debug:
-                        encode_seconds += time.monotonic() - stage
-                    count += 1
-                    emit({"video_decoder": "h264_nvdec" if frames else "h264",
-                          "video_encoder": video.codec_context.name,
-                          "stats": {"processed_frames": count, "dropped_frames": 0,
-                                    "elapsed_seconds": time.monotonic() - started},
-                          **({"detection_stats": redactor.detection_stats.copy(),
-                          "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                                          encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))} if debug else {})})
+                    for output in outputs:
+                        write_output(output)
+        if delay:
+            if stop.is_set():
+                raise InterruptedError("Processing cancelled")
+            stage = time.monotonic() if debug else None
+            outputs = delay.flush()
+            if debug:
+                frame_seconds += time.monotonic() - stage
+            for output in outputs:
+                write_output(output)
         if not video or not count:
             raise ValueError("No valid video frames")
         stage = time.monotonic() if debug else None
