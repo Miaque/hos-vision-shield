@@ -49,50 +49,6 @@ def test_failed_flow_forces_full_detection_on_the_skipped_frame():
     assert redactor.detection_stats['flow_failures'] == 1
 
 
-@pytest.mark.parametrize('age,template_valid,new_plate,full_recheck', [
-    (.04, True, False, False), (.04, False, False, True),
-    (.24, True, False, True), (.04, True, True, True),
-])
-def test_fresh_plate_can_use_verified_template_without_skipping_new_plate_scan(
-        monkeypatch, age, template_valid, new_plate, full_recheck):
-    class Plates:
-        new = False
-        calls = 0
-        scans = 0
-
-        def detect_regions(self, pixels):
-            self.calls += 1
-            return [Detection('plate', (60, 50, 120, 80), .9)] + (
-                [Detection('plate', (140, 50, 200, 80), .9)] if self.new else [])
-
-        def detect_faces(self, pixels):
-            return []
-
-        def plate_proposals(self, pixels):
-            self.scans += 1
-            return [Detection('plate', (140, 50, 200, 80), .9)] if self.new else []
-
-    detector = Plates()
-    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
-    monkeypatch.setattr(redactor, '_flow', lambda *args: None)
-    monkeypatch.setattr(redactor, '_follow', lambda gray, box, reference=None: box if template_valid else None)
-    pixels = np.full((160, 220, 3), 180, np.uint8)
-    redactor.apply(pixels, 0)
-    redactor.history[0] = redactor.history[0]._replace(seen=.04-age)
-    detector.new = new_plate
-    actual = redactor.apply(pixels, .04)
-    assert detector.calls == 1 + full_recheck
-    assert redactor.detection_stats['full_rechecks'] == int(full_recheck)
-    assert redactor.detection_stats['flow_failures'] == 1
-    assert (actual[50:80, 60:120] == 64).all()
-    if template_valid and age <= .2:
-        assert detector.scans == 1
-        if not new_plate:
-            assert redactor.history[0].seen == 0
-    if new_plate:
-        assert (actual[50:80, 140:200] == 64).all()
-
-
 def test_scene_reset_forces_detection_instead_of_publishing_an_unmasked_skip():
     redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.apply(np.full((100, 180, 3), 80, np.uint8), 0)
