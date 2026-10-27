@@ -63,7 +63,7 @@ class FrameRedactor:
         self.detection_stats = dict(full_frames=0, skipped_frames=0, local_rechecks=0)
         if tracking == "flow":
             self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0,
-                                        proposal_frames=0, proposal_rechecks=0, face_rechecks=0)
+                                        proposal_frames=0, proposal_rechecks=0, face_rechecks=0, template_fallbacks=0)
         self.detector = detector
         self.debug = debug
         self.stage_times = getattr(detector, "stage_times", None) if debug else None
@@ -102,6 +102,12 @@ class FrameRedactor:
                 if moment - track.seen > 0.5 or face_only and track.kind == "face":
                     continue
                 flow_boxes[old] = self._flow(gray, track.box, track.reference)
+                # Fresh plates can use the existing bidirectional matcher when sparse points fail.
+                if flow_boxes[old] is None and track.kind == "plate" and moment - track.seen <= 0.2:
+                    flow_boxes[old] = self._follow(gray, track.box, track.reference)
+                    if flow_boxes[old] is not None and self.debug:
+                        self.detection_stats["flow_failures"] += 1
+                        self.detection_stats["template_fallbacks"] += 1
                 # Stale plate tracks can lock onto background after the original matcher has failed.
                 if (flow_boxes[old] is not None and track.kind == "plate" and moment - track.seen > 0.2
                         and self._follow(gray, track.box, track.reference) is None):
