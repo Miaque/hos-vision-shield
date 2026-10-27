@@ -84,6 +84,25 @@ def test_detail_model_nodes_execute_on_cuda(monkeypatch, tmp_path):
 
 @pytest.mark.integration
 @pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
+def test_plate_predictions_survive_interleaved_numpy_confirmation_and_cuda_batches():
+    from vision_shield.detection.cpu import Detector as CPUDetector
+    from vision_shield.detection.cuda_detail import Detector
+
+    detector = Detector("models/yunet_face.onnx", "models/hyperlpr_plate.onnx")
+    pixels = np.asarray(Image.open("samples/robot-quality/image-7.jpg").convert("RGB"))
+    blob = CPUDetector._plate_input(None, pixels[:, :, ::-1])[0]
+    inputs = {batch: torch.from_numpy(np.repeat(blob, batch, axis=0)).to(detector.device) for batch in (1, 2)}
+    expected = {batch: detector._plate_forward(tensor).copy() for batch, tensor in inputs.items()}
+    for _ in range(3):
+        confirmation = detector._plate_forward(blob)
+        assert confirmation.shape == (1, 6300, 15) and np.isfinite(confirmation).all()
+        for batch, tensor in inputs.items():
+            np.testing.assert_array_equal(detector._plate_forward(tensor), expected[batch],
+                err_msg="局部 NumPy 复查不能破坏后续 CUDA 全图或合批预测")
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(os.getenv("RUN_GPU_TESTS") != "1", reason="设置 RUN_GPU_TESTS=1 才运行真实 GPU 验证")
 @pytest.mark.parametrize("case_id", ["image-7", "face-video2-10s", "video-04-frame-24", "image-2"])
 def test_yolo_quality_keeps_reviewed_regions_and_all_face_nodes_on_cuda(monkeypatch, tmp_path, case_id):
     import onnxruntime as ort

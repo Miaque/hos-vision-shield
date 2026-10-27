@@ -54,3 +54,40 @@ rfm 的短时速度不能作为双流双文件条件下的有效收益。
 均为已核验的 `8724c29e7d1a8080d50e228719e72e81d1b6ff575163d1bf32975d0e4c7cf5e7`。
 本地回撤实现的 75 项相关回归通过；回撤提交 `6e465ea` 已推送，服务器保持已验证的 `7ba2d5f`，
 没有为记录文档再重启服务。30 分钟连续播放、稳定 25 FPS 及失败候选根因仍未完成。
+
+## 本地 CUDA 混合输入定位（2026-10-27）
+
+本地现有 GTX 1080 / PyTorch 2.14.1+cu126 / ORT 1.20.2 可以运行实际 CUDA。
+本次从 Git 单独加载 `30286c0` 检测器到忽略目录，不恢复主干执行图，不操作服务器任务。
+新的验证条件为隔离真实 CUDA、交错输入和完整文件，不重复旧 CPU mock 或 worker 预检。
+
+三张实际图片的最小复现中，首次固定绑定重放与普通 CUDA 对照逐位一致；
+同一单张 session 插入一次 `gpu_graph_id=-1` 的 NumPy 普通 Run 后，再重放的 94500 个
+预测元素全部变化，最大绝对差约 432.6353，原非正宽高校验抛出 `Invalid plate dimensions`。
+官方接口允许 [通过 -1 禁用本次图执行](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#using-cuda-graphs-preview)，
+但当前模型的混用正确性必须实测，不能由接口可调用推定。已定位可复现调用组合，
+尚未证明 ORT 内部究竟是哪一处内存/执行计划交互造成破坏。
+
+只在隔离原型中将 NumPy blob 转为 `torch.from_numpy(blob).to(self.device)`，
+再使用原固定 GPU 输入/输出绑定和重放；不对同一 session 混用 CPU feeds/CPU outputs 的普通 Run。
+权重、FP32、batch、预处理、阈值、后处理和校验均不变，无 CPU 推理回退。
+120 轮交错校准中，CUDA 结果和 NumPy 复查结果分别与对应普通对照逐位一致，未出现解码异常。
+
+使用同一原始车牌视频（输入 SHA256 `85603d67...80c3e3`）顺序检查旧候选、当前普通路径、修复原型：
+
+- 旧候选完成 511 帧后，第 512 帧在局部复查链路抛出相同错误；失败和部分输出保留。
+- 普通路径与修复原型均完成 1776 帧、零丢帧，实际 NVDEC/NVENC。
+- 每份均有 3552 次 CUDA batch 2、142 次 CUDA batch 1 和 142 次 NumPy 复查；调用数及检测/跟踪计数一致。
+- 1776 帧最终遮罩矩形逐帧完全相同，完整输出 SHA256 均为
+  `b691711f5085f7dcf928a68558b3e5b3d5b5438d688c7957ee6a4d0e41edf07c`。
+- 两份均完整解码；原分辨率、全部有理 PTS、943 个 AAC 包内容及 PTS/DTS/时长与输入一致。
+
+GTX 的主车牌为现有 FP32 路径，不能将本次输出哈希与 Ada FP16 的历史哈希混为同一配置。
+本次是单文件顺序校准，没有三次交错吞吐或 RTX 双流/双文件收益结论，原型未进入主干执行路径。
+
+新增真实 CUDA 回归覆盖 NumPy 局部复查与单张/双张 CUDA 交错；当前普通路径通过，
+替换为旧候选时失败，替换为隔离修复时通过。命令为 `RUN_GPU_TESTS=1` 下执行
+`tests/integration/test_gpu_model_probe.py::test_plate_predictions_survive_interleaved_numpy_confirmation_and_cuda_batches`。
+证据在 `data/validation/route-a-detail-graph-isolation-20261027-*`、
+`route-a-detail-graph-full-20261027-01/` 及同名前缀的采集/核验脚本。
+后续是否投入 RTX 图执行收益实验，按当前两路新测量决定，不以修复故障本身宣称提速。
