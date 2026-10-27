@@ -54,7 +54,7 @@ def runtime_metadata(detector, config):
     import cv2
     import torch
     import onnxruntime as ort
-    from vision_shield.detection import cuda_pixels  # Resolve the actual helper before its first forward.
+    from vision_shield.detection import cuda_pixels, flow_profile  # Resolve diagnostic sources before their first use.
 
     if config['detection_backend'] != 'quality_yolo':
         raise RuntimeError('A diagnostic requires quality_yolo')
@@ -66,7 +66,7 @@ def runtime_metadata(detector, config):
     with detector.primary.face_path.open('rb') as handle:
         weights['primary_face'] = hashlib.file_digest(handle, 'sha256').hexdigest()
     source = {}
-    for name in ('detection.quality', 'detection.plate_readability', 'detection.egoblur', 'detection.cuda_detail', 'detection.cpu',
+    for name in ('detection.quality', 'detection.plate_readability', 'detection.egoblur', 'detection.cuda_detail', 'detection.cpu', 'detection.flow_profile',
                  'detection.host_profile', 'detection.yolo', 'detection.cuda_pixels', 'redaction', 'media.video',
                  'media.plate_lookahead', 'media.streams'):
         with Path(sys.modules['vision_shield.' + name].__file__).open('rb') as handle:
@@ -105,6 +105,7 @@ class ProfileTimes:
         self.measurements = 0
         self.candidates, self.candidate_bytes, self.candidates_truncated = [], 0, False
         self.masks, self.mask_bytes, self.masks_truncated, self.mask_shape = [], 0, False, None
+        self.flow_profile = None
 
     def record_masks(self, shape, boxes):
         height, width = shape[:2]
@@ -144,6 +145,8 @@ class ProfileTimes:
         metadata = {key: value for key, value in CONTEXT.get().items() if key != "local_calls"}
         selected = False
         if name in FORWARDS:
+            if self.flow_profile is not None:
+                self.flow_profile.forward(name)
             with self.lock:
                 self.forward_counts[name] += 1
                 call = self.forward_counts[name]
@@ -196,6 +199,7 @@ class ProfileTimes:
         models = {name: dict(**statistics(self.samples[name]), failures=self.failures[name],
                              calls_per_frame=len(self.samples[name]) / frames if frames else None) for name in FORWARDS}
         return dict(models=models, host_stages={name: statistics(values) for name, values in self.samples.items()},
+                    **({'tracking_failures': self.flow_profile.report()} if self.flow_profile is not None else {}),
                     host_groups=[dict(stage=name, origin=origin, purpose=purpose, view=view, **statistics(values))
                                  for (name, origin, purpose, view), values in sorted(self.groups.items())],
                     views={name: dict(counts) for name, counts in self.views.items()}, device_samples=self.device_samples,
@@ -356,3 +360,7 @@ def instrument(stack, collector):
     method(FrameRedactor, "_detections", "detect-pass")
     method(FrameRedactor, "_recheck", "track-recheck-request", purpose="track-confirm")
     method(FrameRedactor, "_follow", "template-follow")
+    from vision_shield.detection.flow_profile import FlowProfile
+
+    collector.flow_profile = FlowProfile()
+    collector.flow_profile.install(stack)
