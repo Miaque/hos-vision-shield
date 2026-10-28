@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import json
 import logging
 from pathlib import Path
 import sys
@@ -270,9 +271,10 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                 if not ending:
                     ending.update(cancellation or dict(reason="worker_interrupted", phase=phase))
                 await persist_ending()
-                logging.getLogger(__name__).info("task=%s attempt=%s reason=%s phase=%s type=%s errno=%s",
-                    task_id, attempt.get("attempt_id", attempt["run_id"]), attempt.get("reason"),
-                    attempt.get("phase"), attempt.get("error_type"), attempt.get("errno"))
+                # 与 Platform 的 shield_task_id 关联；原因已在媒体边界过滤，不记录来源地址。
+                summary = {"event": "vision_shield_stream_end", "entry_point": "stream_worker", "task_id": task_id,
+                           **attempt, "duration_seconds": round(time.monotonic() - attempt["started_monotonic"], 3)}
+                logging.getLogger(__name__).info("流脱敏连接结束 %s", json.dumps(summary, ensure_ascii=False), extra=summary)
             if finish_error:
                 await store.finish(task_id, owner, generation, "failed", error=finish_error)
                 return

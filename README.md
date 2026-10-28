@@ -173,6 +173,12 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -
 - 外部推流在本次媒体处理确认发布连接、编解码器和读取线程全部关闭，或子进程退出/超时强杀完成后确认停止；空 MediaMTX 会话列表不能证明外部推流已停止。租约过期后，在原发布者关闭确认前保持 `recovering`，不派发替代任务；相同发布者和代次的确认到达后，按停止意图结束任务，或允许新 worker 接管。旧版本任务缺少确认记录时同样保守处理，未开始执行的旧任务仍可正常调度。
 - 外部平台没有远程踢流接口；worker 崩溃或退出确认写入失败时，任务可能持续处于 `recovering`，需在接收平台核实和处理旧发布连接。接收平台需限制同一路径重复发布，不应让多个任务同时使用同一地址。MediaMTX 固定一起部署，`/health/ready` 始终检查 Redis、worker 和 MediaMTX。
 
+每次流连接结束后，worker 在 `INFO` 日志输出 `vision_shield_stream_end` 结构化摘要，携带 `task_id`、`run_id`、`attempt_id`（已有时）、代次、起止时间、持续秒数、`reason`、`phase` 和异常类型。Platform 的 FLV 结束摘要通过 `shield_task_id` 与此处 `task_id` 对应，可判断页面断流前是否出现输入 EOF、打开来源失败、解码失败或推流失败。
+
+FFmpeg 异常额外保留 `ffmpeg_error` 和可用时的 `ffmpeg_log`，每字段最多 1024 字符，移除完整 URL、查询凭据、授权头和换行后才写入日志及诊断记录。源打开期间临时启用 PyAV 的错误回调，完成后恢复原日志级别，不打开持续的逐帧日志。PyAV 默认关闭日志会减少异常细节，依据见[官方日志说明](https://pyav.basswood.io/docs/stable/api/utils.html#logging)。没有底层协议详情时，通用 `InvalidDataError` 仍不能证明是鉴权、网络或媒体格式中的哪一项。
+
+调试环境的 `GET /v1/tasks/{id}/diagnostics` 沿用最近 32 次连接记录，也包含这些安全错误字段；重建 worker 后的新故障才会产生新增证据，既有记录不会补全。该变更不增加回调、MQ 字段或公开任务响应字段，也不修改重连与停止规则。
+
 PATCH返回202表示停止意图已保存；查询到cancelled/stopped才表示资源清理完成。已成功文件不能再取消（409）。流自动重连并保留停止意图，文件worker崩溃则标记worker_lost，不自动续跑。
 
 `GET /v1/tasks` 查询所有文件和流的未结束任务，返回 `{"current": [...], "queued": [...]}`，没有任务时对应空数组：
