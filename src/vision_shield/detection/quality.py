@@ -147,10 +147,11 @@ class Detector:
             self.candidate_timings = {"candidate-primary": primary_seconds, "candidate-detail": detail_seconds}
         # Skipping a weak plate's brief confirmation opportunity can hide it for many frames.
         if kind is None:
-            self.has_unconfirmed_plates = any(
-                candidate.kind == 'plate' and not any(
+            self.unconfirmed_plate_boxes = tuple(
+                candidate.box for candidate in primary if candidate.kind == 'plate' and not any(
                     found.kind == 'plate' and self._overlap(candidate.box, found.box) >= .2 for found in boxes)
-                for candidate in primary)
+            )
+            self.has_unconfirmed_plates = bool(self.unconfirmed_plate_boxes)
         return boxes
 
     @timed("local-confirm")

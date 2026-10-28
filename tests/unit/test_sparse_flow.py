@@ -140,6 +140,123 @@ def test_unconfirmed_plate_keeps_original_failed_flow_detection(monkeypatch, unc
     assert redactor.detection_stats['template_fallbacks'] == int(not unconfirmed)
 
 
+@pytest.mark.parametrize('case', ['associated', 'new', 'nearby', 'uncovered', 'stale_track',
+                                  'stale_snapshot', 'unknown_snapshot', 'template_rejected'])
+@pytest.mark.parametrize('reverse', [False, True])
+def test_pending_plate_recovery_requires_another_fresh_raw_flow_track(monkeypatch, case, reverse):
+    first = (60, 50, 100, 70)
+    other = (180, 50, 210, 70) if case == 'nearby' else (420, 50, 460, 70)
+    candidate = (520, 50, 560, 70) if case == 'new' else other
+
+    class Plates:
+        pending = ()
+        visible = [Detection('plate', first, .9), Detection('plate', other, .9)]
+
+        def detect_regions(self, pixels, *, kind=None):
+            if kind is not None:
+                return []
+            self.unconfirmed_plate_boxes = self.pending
+            self.has_unconfirmed_plates = bool(self.pending)
+            return self.visible
+
+    detector = Plates()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
+    redactor._plate_template_fallback = True
+    failed = False
+
+    def flow(gray, box, reference=None):
+        if failed and box == first:
+            return None
+        return (430, 50, 470, 70) if failed and box == other and case == 'uncovered' else box
+
+    monkeypatch.setattr(redactor, '_flow', flow)
+    monkeypatch.setattr(redactor, '_follow', lambda gray, box, reference=None:
+                        None if failed and box == first and case == 'template_rejected' else box)
+    pixels = np.full((160, 640, 3), 180, np.uint8)
+    step = .06 if case == 'stale_track' else .04
+    for index in range(3):
+        redactor.apply(pixels, step * index)
+    # The second track survives even when the next full pass cannot confirm it again.
+    detector.visible, detector.pending = [Detection('plate', first, .9)], (candidate,)
+    redactor.apply(pixels, step * 3)
+    assert len(redactor.history) == 2 and detector.unconfirmed_plate_boxes == (candidate,)
+    if reverse:
+        redactor.history.reverse()
+    if case in ('stale_snapshot', 'unknown_snapshot'):
+        redactor._last_joint_detection = -.3 if case == 'stale_snapshot' else None
+    failed = True
+    detector.visible = [Detection('plate', first, .9), Detection('plate', other, .9)]
+    if case == 'new':
+        detector.visible.append(Detection('plate', candidate, .9))
+    detector.pending = ()
+    output = redactor.apply(pixels, step * 4)
+    blocked = case not in ('associated', 'template_rejected')
+    rechecked = blocked or case == 'template_rejected'
+    assert redactor.detection_stats['full_rechecks'] == int(rechecked)
+    assert redactor.detection_stats['full_frames'] == 2 + int(rechecked)
+    assert redactor.detection_stats['template_fallbacks'] == int(case == 'associated')
+    assert redactor.detection_stats['template_eligible'] == 1
+    assert redactor.detection_stats['template_blocked'] == int(blocked)
+    assert redactor.detection_stats['template_attempts'] == int(not blocked)
+    assert redactor.detection_stats['template_rejections'] == int(case == 'template_rejected')
+    assert (output[50:70, 60:100] == 64).all()
+    x, y, a, b = candidate
+    assert (output[y:b, x:a] == 64).all()
+
+
+def test_real_bidirectional_template_and_periodic_detection_remain_unchanged(monkeypatch):
+    class Plates:
+        has_unconfirmed_plates = False
+        unconfirmed_plate_boxes = ()
+        box = (60, 50, 100, 70)
+
+        def detect_regions(self, pixels):
+            return [Detection('plate', self.box, .9)]
+
+    detector = Plates()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
+    redactor._plate_template_fallback = True
+    monkeypatch.setattr(redactor, '_flow', lambda *args: None)
+    pixels = np.full((160, 640, 3), 180, np.uint8)
+    patch = np.random.default_rng(71).integers(20, 220, (20, 40, 1), np.uint8)
+    pixels[50:70, 60:100] = patch
+    redactor.apply(pixels, 0)
+    current = np.full_like(pixels, 180)
+    current[53:73, 66:106] = patch
+    output = redactor.apply(current, .04)
+    np.testing.assert_allclose(redactor.history[0].box, (66, 53, 106, 73), atol=0, rtol=0)
+    assert (output[53:73, 66:106] == 64).all()
+    assert redactor.detection_stats['template_fallbacks'] == 1
+    assert redactor.detection_stats['full_rechecks'] == 0
+    detector.box = (66, 53, 106, 73)
+    redactor.apply(current, .08)
+    redactor.apply(current, .12)
+    assert redactor.detection_stats['full_frames'] == 2
+    assert redactor.detection_stats['template_fallbacks'] == 2
+
+
+def test_pending_plate_recovery_keeps_full_detection_failure_visible(monkeypatch):
+    class Plates:
+        has_unconfirmed_plates = True
+        unconfirmed_plate_boxes = ((420, 50, 460, 70),)
+        failed = False
+
+        def detect_regions(self, pixels):
+            if self.failed:
+                raise RuntimeError('plate model unavailable')
+            return [Detection('plate', (60, 50, 100, 70), .9)]
+
+    detector = Plates()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
+    redactor._plate_template_fallback = True
+    monkeypatch.setattr(redactor, '_flow', lambda *args: None)
+    monkeypatch.setattr(redactor, '_follow', lambda *args: None)
+    redactor.apply(np.full((160, 640, 3), 180, np.uint8), 0)
+    detector.failed = True
+    with pytest.raises(RuntimeError, match='plate model unavailable'):
+        redactor.apply(np.full((160, 640, 3), 180, np.uint8), .04)
+
+
 def test_forward_backward_inconsistency_cannot_be_accepted_as_motion(monkeypatch):
     redactor = FrameRedactor(MovingTarget(), detection_interval=3, tracking='flow', debug=True)
     redactor.gray = texture()
