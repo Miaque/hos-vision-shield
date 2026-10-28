@@ -173,7 +173,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     interval = config.get('detection_interval', 3)
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
                                detection_interval=interval,
-                               tracking=config.get('tracking', 'flow' if interval == 3 else 'template'), debug=debug)
+                               tracking=config.get('tracking', 'flow' if interval == 3 else 'template'), debug=debug,
+                               **({'plate_flow_recovery': True} if config.get('plate_flow_recovery') else {}))
     frames = None
     cuda_device = None
     if config.get("inference_device") == "cuda":

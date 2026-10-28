@@ -50,7 +50,8 @@ class _Track(NamedTuple):
 class FrameRedactor:
     """Follow confirmed masks briefly; only actual detections may renew their lifetime."""
 
-    def __init__(self, detector, *, mode="solid", detection_interval=1, tracking="template", debug=False):
+    def __init__(self, detector, *, mode="solid", detection_interval=1, tracking="template", debug=False,
+                 plate_flow_recovery=False):
         if mode not in {"solid", "mosaic"}:
             raise ValueError("Unsupported redaction mode")
         if type(detection_interval) is not int or detection_interval not in (1, 3):
@@ -68,6 +69,9 @@ class FrameRedactor:
                                         template_attempts=0, template_rejections=0)
         # Enable only while bounded lookahead can repair late plate discovery.
         self._plate_template_fallback = False
+        self.plate_flow_recovery = plate_flow_recovery
+        if plate_flow_recovery:
+            self.detection_stats.update(whole_flow_attempts=0, whole_flow_rejections=0, whole_flow_recoveries=0)
         self._last_joint_detection = None
         self.detector = detector
         self.debug = debug
@@ -126,6 +130,13 @@ class FrameRedactor:
                             if flow_boxes[old] is not None:
                                 self.detection_stats["flow_failures"] += 1
                                 self.detection_stats["template_fallbacks"] += 1
+                        if self.plate_flow_recovery and flow_boxes[old] is None:
+                            flow_boxes[old] = self._flow(gray, track.box, track.reference, whole_box=True)
+                            if self.debug:
+                                self.detection_stats['whole_flow_attempts'] += 1
+                                self.detection_stats['whole_flow_rejections'] += flow_boxes[old] is None
+                                self.detection_stats['whole_flow_recoveries'] += flow_boxes[old] is not None
+                                self.detection_stats['flow_failures'] += flow_boxes[old] is not None
                 # Stale plate tracks can lock onto background after the original matcher has failed.
                 if (flow_boxes[old] is not None and track.kind == "plate" and moment - track.seen > 0.2
                         and self._follow(gray, track.box, track.reference) is None):
@@ -329,7 +340,7 @@ class FrameRedactor:
         return False
 
     @timed("track-flow")
-    def _flow(self, gray, box, reference=None):
+    def _flow(self, gray, box, reference=None, *, whole_box=False):
         previous = self.gray if reference is None else reference
         if previous is None:
             return None
@@ -338,6 +349,8 @@ class FrameRedactor:
         left, top = max(0, math.floor(x1)), max(0, math.floor(y1))
         right, bottom = min(width, math.ceil(x2)), min(height, math.ceil(y2))
         inset_x, inset_y = (right - left) // 5, (bottom - top) // 5
+        if whole_box:
+            inset_x, inset_y = 0, 0
         patch = previous[top + inset_y:bottom - inset_y, left + inset_x:right - inset_x]
         if min(patch.shape) < 5:
             return None

@@ -100,7 +100,8 @@ def process_video(source: str | Path, target: str | Path, detector: "Detector", 
     debug = config.get('debug', False)
     frame_seconds = encode_seconds = 0.0
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
-                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"), debug=debug)
+                             detection_interval=config.get("detection_interval", 1), tracking=config.get("tracking", "template"), debug=debug,
+                             **({'plate_flow_recovery': True} if config.get('plate_flow_recovery') else {}))
     with ExitStack() as stack:
         reader = stack.enter_context(av.open(source))
         brand = reader.metadata.get("major_brand", "").lower().strip()
