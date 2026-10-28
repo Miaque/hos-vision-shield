@@ -65,7 +65,9 @@ class FrameRedactor:
             self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0,
                                         proposal_frames=0, proposal_rechecks=0, face_rechecks=0, template_fallbacks=0,
                                         template_eligible=0, template_global_blocked=0, template_blocked=0,
-                                        template_attempts=0, template_rejections=0)
+                                        template_attempts=0, template_rejections=0, plate_roi_attempts=0,
+                                        plate_roi_matches=0, plate_roi_rejections=0, plate_roi_recoveries=0,
+                                        plate_roi_escalations=0)
         # Enable only while bounded lookahead can repair late plate discovery.
         self._plate_template_fallback = False
         self._last_joint_detection = None
@@ -101,6 +103,7 @@ class FrameRedactor:
         if gray is None:
             gray = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
         flow_boxes, recheck, face_only = {}, False, False
+        roi_checks = {}
         if self.tracking == "flow" and not detect:
             face_only = bool(getattr(self.detector, "detect_faces", None))
             recheck = reset
@@ -134,11 +137,32 @@ class FrameRedactor:
                     if self.debug:
                         self.detection_stats["flow_failures"] += 1
                     recheck = True
+            failed = [old for old, predicted in flow_boxes.items() if predicted is None]
+            if (not reset and face_only and self._plate_template_fallback and len(failed) == 1
+                    and getattr(self.detector, 'plate_proposals', None)
+                    and self._last_joint_detection is not None and moment - self._last_joint_detection <= .2):
+                old = failed[0]
+                track = self.history[old]
+                reliable = any(predicted is not None and self.history[index].kind == 'plate'
+                               and moment - self.history[index].seen <= .2
+                               for index, predicted in raw_flow_boxes.items())
+                if (track.kind == 'plate' and moment - track.seen <= .2 and reliable
+                        and self._pending_plates_covered(moment, flow_boxes, recovering=old)):
+                    if self.debug:
+                        self.detection_stats['plate_roi_attempts'] += 1
+                    confirmed = roi_checks[old] = self._recheck(pixels, track.box, 'plate', gray)
+                    if self.debug:
+                        self.detection_stats['plate_roi_matches' if confirmed is not None else 'plate_roi_rejections'] += 1
+                    if confirmed is not None:
+                        flow_boxes[old] = self._smooth(track.box, confirmed, elapsed)
+                        recheck = not self._pending_plates_covered(moment, flow_boxes)
             if not recheck and getattr(self.detector, "plate_proposals", None):
                 with source_view(gray):
                     recheck = self._proposal_recheck(pixels, flow_boxes)
                 if recheck and self.debug:
                     self.detection_stats["proposal_rechecks"] += 1
+            if roi_checks and self.debug:
+                self.detection_stats['plate_roi_escalations' if recheck else 'plate_roi_recoveries'] += 1
             if recheck:
                 face_only = False
                 if self.debug:
@@ -176,10 +200,15 @@ class FrameRedactor:
         for old, (seen, checked, box, kind, reference) in enumerate(self.history):
             if moment - seen > 0.5 or old in matched_old:
                 continue
-            use_flow = self.tracking == "flow" and (not detect or face_only and kind == "plate")
+            if roi_checks.get(old) is not None:
+                seen = checked = moment
+            use_flow = self.tracking == "flow" and (not detect or face_only and kind == "plate"
+                                                     or flow_boxes.get(old) is not None)
             predicted = flow_boxes[old] if use_flow else self._follow(gray, box, reference)
             if predicted is None:
-                confirmed = self._recheck(pixels, box, kind, gray) if kind else self._recheck(pixels, box)
+                # The same frame and ROI cannot gain evidence by running its models twice.
+                confirmed = (roi_checks[old] if old in roi_checks else
+                             self._recheck(pixels, box, kind, gray) if kind else self._recheck(pixels, box))
                 if confirmed is not None:
                     if self._plate_template_fallback and kind == 'plate':
                         confirmed = self._smooth(box, confirmed, elapsed)
@@ -211,7 +240,10 @@ class FrameRedactor:
         self.history = deque(history + [_Track(moment, moment, box, detection.kind)
                                        for box, detection in zip(boxes, detections, strict=True)], maxlen=128)
         self.gray = gray
-        return boxes + retained
+        # A later full-frame match must not discard already verified ROI edges.
+        verified = [flow_boxes[old] for old, confirmed in roi_checks.items()
+                    if confirmed is not None and flow_boxes[old] not in boxes + retained]
+        return boxes + retained + verified
 
     def _detections(self, pixels, kind=None, *, face_only=False):
         started = time.monotonic() if self.debug else None
@@ -327,6 +359,35 @@ class FrameRedactor:
             if not covered:
                 return True
         return False
+
+    def _pending_plates_covered(self, moment, flow_boxes, *, recovering=None):
+        if not getattr(self.detector, 'has_unconfirmed_plates', False):
+            return True
+        candidates = getattr(self.detector, 'unconfirmed_plate_boxes', None)
+        if not candidates:
+            return False
+        for candidate in candidates:
+            covered = False
+            for old, predicted in flow_boxes.items():
+                track = self.history[old]
+                if (track.kind != 'plate' or moment - track.seen > .2
+                        or self._overlap(candidate, track.box) < .2):
+                    continue
+                # Reserve only this associated target for the upcoming model verification.
+                if old == recovering:
+                    covered = True
+                    break
+                if predicted is None:
+                    continue
+                a, b, c, d = candidate
+                left, top, right, bottom = predicted
+                intersection = max(0, min(c, right) - max(a, left)) * max(0, min(d, bottom) - max(b, top))
+                if intersection >= .9 * (c - a) * (d - b):
+                    covered = True
+                    break
+            if not covered:
+                return False
+        return True
 
     @timed("track-flow")
     def _flow(self, gray, box, reference=None):
