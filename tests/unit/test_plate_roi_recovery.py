@@ -112,7 +112,7 @@ def test_full_escalation_keeps_already_confirmed_roi_edges(plate_recovery):
         assert (output[y:b, x:a] == 64).all()
 
 
-def test_full_escalation_keeps_other_raw_flow_when_full_and_template_miss_it(plate_recovery, monkeypatch):
+def test_full_escalation_rechecks_its_own_track_when_full_and_template_miss_it(plate_recovery, monkeypatch):
     state = plate_recovery
     state.detector.proposals = [Detection('plate', NEW, .4)]
     state.detector.visible = [Detection('plate', FIRST, .9), Detection('plate', NEW, .9)]
@@ -124,9 +124,30 @@ def test_full_escalation_keeps_other_raw_flow_when_full_and_template_miss_it(pla
     monkeypatch.setattr(state.redactor, '_follow', reject)
     output = state.redactor.apply(state.pixels, .04)
     assert sum(name == 'full' for name, shape in state.calls) == 1
-    assert state.local == [(FIRST, 'plate')]
-    assert OTHER not in state.follows
+    # Full/template disagreement invalidates raw flow; this target needs its own confirmation.
+    assert state.local == [(FIRST, 'plate'), (OTHER, 'plate')]
+    assert OTHER in state.follows
     assert (output[40:60, 360:400] == 64).all()
+
+
+def test_full_escalation_rejects_displaced_raw_flow_after_template_finds_real_plate(plate_recovery, monkeypatch):
+    state = plate_recovery
+    displaced = (360, 65, 400, 85)
+    state.redactor.history[1] = state.redactor.history[1]._replace(box=displaced)
+    state.detector.proposals = [Detection('plate', NEW, .4)]
+    state.detector.visible = state.detector.visible + [Detection('plate', NEW, .9)]
+
+    def follow(gray, box, reference=None):
+        state.follows.append(box)
+        return None if box == FIRST else OTHER
+
+    monkeypatch.setattr(state.redactor, '_follow', follow)
+    output = state.redactor.apply(state.pixels, .04)
+    assert sum(name == 'full' for name, shape in state.calls) == 1
+    assert state.local == [(FIRST, 'plate')]
+    assert (output[65:85, 360:400] == 180).all()
+    for x, y, a, b in (OTHER, NEW, RECOVERED):
+        assert (output[y:b, x:a] == 64).all()
 
 
 @pytest.mark.parametrize('candidate,covered', [

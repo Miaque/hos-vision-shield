@@ -203,7 +203,7 @@ class FrameRedactor:
             if roi_checks.get(old) is not None:
                 seen = checked = moment
             use_flow = self.tracking == "flow" and (not detect or face_only and kind == "plate"
-                                                     or flow_boxes.get(old) is not None)
+                                                     or roi_checks.get(old) is not None)
             predicted = flow_boxes[old] if use_flow else self._follow(gray, box, reference)
             if predicted is None:
                 # The same frame and ROI cannot gain evidence by running its models twice.
