@@ -63,9 +63,12 @@ class FrameRedactor:
         self.detection_stats = dict(full_frames=0, skipped_frames=0, local_rechecks=0)
         if tracking == "flow":
             self.detection_stats.update(full_rechecks=0, flow_updates=0, flow_failures=0,
-                                        proposal_frames=0, proposal_rechecks=0, face_rechecks=0, template_fallbacks=0)
+                                        proposal_frames=0, proposal_rechecks=0, face_rechecks=0, template_fallbacks=0,
+                                        template_eligible=0, template_global_blocked=0, template_blocked=0,
+                                        template_attempts=0, template_rejections=0)
         # Enable only while bounded lookahead can repair late plate discovery.
         self._plate_template_fallback = False
+        self._last_joint_detection = None
         self.detector = detector
         self.debug = debug
         self.stage_times = getattr(detector, "stage_times", None) if debug else None
@@ -105,13 +108,24 @@ class FrameRedactor:
                 if moment - track.seen > 0.5 or face_only and track.kind == "face":
                     continue
                 flow_boxes[old] = self._flow(gray, track.box, track.reference)
-                if (self._plate_template_fallback and not getattr(self.detector, 'has_unconfirmed_plates', False)
-                        and flow_boxes[old] is None
+            raw_flow_boxes = flow_boxes.copy()
+            for old in flow_boxes:
+                track = self.history[old]
+                if (self._plate_template_fallback and flow_boxes[old] is None
                         and track.kind == "plate" and moment - track.seen <= 0.2):
-                    flow_boxes[old] = self._follow(gray, track.box, track.reference)
-                    if flow_boxes[old] is not None and self.debug:
-                        self.detection_stats["flow_failures"] += 1
-                        self.detection_stats["template_fallbacks"] += 1
+                    blocked = self._plate_template_blocked(track.box, moment, raw_flow_boxes)
+                    if self.debug:
+                        self.detection_stats['template_eligible'] += 1
+                        self.detection_stats['template_global_blocked'] += bool(getattr(self.detector, 'has_unconfirmed_plates', False))
+                        self.detection_stats['template_blocked'] += blocked
+                    if not blocked:
+                        flow_boxes[old] = self._follow(gray, track.box, track.reference)
+                        if self.debug:
+                            self.detection_stats['template_attempts'] += 1
+                            self.detection_stats['template_rejections'] += flow_boxes[old] is None
+                            if flow_boxes[old] is not None:
+                                self.detection_stats["flow_failures"] += 1
+                                self.detection_stats["template_fallbacks"] += 1
                 # Stale plate tracks can lock onto background after the original matcher has failed.
                 if (flow_boxes[old] is not None and track.kind == "plate" and moment - track.seen > 0.2
                         and self._follow(gray, track.box, track.reference) is None):
@@ -141,6 +155,8 @@ class FrameRedactor:
         with source_view(gray), measure(self, "track-face-recheck" if face_only else "track-recheck") if recheck or face_only else nullcontext():
             detections = (self._merge_detections(self._detections(pixels, face_only=True) if face_only
                                                else self._detections(pixels)) if detect else [])
+        if self.joint_detected:
+            self._last_joint_detection = moment
         if self.debug:
             self.detection_stats["full_frames" if detect and not face_only else "skipped_frames"] += 1
         boxes = [detection.box for detection in detections]
@@ -282,6 +298,35 @@ class FrameRedactor:
             return None
         dx, dy = sx + location[0] - left, sy + location[1] - top
         return max(0, x1 + dx), max(0, y1 + dy), min(width, x2 + dx), min(height, y2 + dy)
+
+    def _plate_template_blocked(self, box, moment, flow_boxes):
+        if not getattr(self.detector, 'has_unconfirmed_plates', False):
+            return False
+        candidates = getattr(self.detector, 'unconfirmed_plate_boxes', None)
+        if (not candidates or self._last_joint_detection is None
+                or moment - self._last_joint_detection > .2):
+            return True
+        # Pending candidates anywhere in the template search can be a competing association.
+        x1, y1, x2, y2 = box
+        for candidate in candidates:
+            a, b, c, d = candidate
+            if a < x2 + 96 and c > x1 - 96 and b < y2 + 96 and d > y1 - 96:
+                return True
+            # A new weak target still needs its original global confirmation opportunity.
+            covered = False
+            for old, predicted in flow_boxes.items():
+                track = self.history[old]
+                if (predicted is None or track.kind != 'plate' or moment - track.seen > .2
+                        or self._overlap(candidate, track.box) < .2):
+                    continue
+                left, top, right, bottom = predicted
+                intersection = max(0, min(c, right) - max(a, left)) * max(0, min(d, bottom) - max(b, top))
+                if intersection >= .9 * (c - a) * (d - b):
+                    covered = True
+                    break
+            if not covered:
+                return True
+        return False
 
     @timed("track-flow")
     def _flow(self, gray, box, reference=None):
