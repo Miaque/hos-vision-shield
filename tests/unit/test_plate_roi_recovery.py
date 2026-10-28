@@ -250,3 +250,41 @@ def test_periodic_full_requires_quality_for_unsupported_plate_template_jump(monk
                    for track in redactor.history)
     else:
         assert not any(redactor._overlap(track.box, displaced) >= .2 for track in redactor.history)
+
+
+@pytest.mark.parametrize('original_confirmed', [False, True])
+def test_plate_template_cannot_renew_from_another_fresh_confirmed_plate(monkeypatch, original_confirmed):
+    original, other, jumped = (146, 245, 170, 257), (57, 240, 82, 251), (59, 240, 82, 251)
+    local = []
+
+    class Plates:
+        visible = [Detection('plate', original, .9), Detection('plate', other, .9)]
+
+        def detect_regions(self, pixels):
+            return self.visible
+
+    def recheck(pixels, box, kind='', gray=None):
+        local.append((box, kind))
+        if box == original:
+            return original if original_confirmed else None
+        return jumped
+
+    detector = Plates()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
+    redactor._plate_template_fallback = True
+    monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
+    monkeypatch.setattr(redactor, '_follow', lambda gray, box, reference=None: jumped if box == original else box)
+    monkeypatch.setattr(redactor, '_recheck', recheck)
+    pixels = np.full((480, 640, 3), 180, np.uint8)
+    for moment in (0, .02, .04):
+        redactor.apply(pixels, moment)
+    detector.visible = [Detection('plate', other, .9)]
+    output = redactor.apply(pixels, .08)
+    assert redactor.detection_stats['full_frames'] == 2
+    assert (output[245:257, 146:170] == 64).all()
+    assert (output[240:251, 57:82] == 64).all()
+    assert (original, 'plate') in local
+    original_tracks = [track for track in redactor.history if redactor._overlap(track.box, original) >= .2]
+    assert len(original_tracks) == 1
+    assert original_tracks[0].seen == (.08 if original_confirmed else 0)
+    assert sum(redactor._overlap(track.box, other) >= .2 for track in redactor.history) == 1

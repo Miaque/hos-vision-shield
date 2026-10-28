@@ -205,6 +205,13 @@ class FrameRedactor:
             use_flow = self.tracking == "flow" and (not detect or face_only and kind == "plate"
                                                      or roi_checks.get(old) is not None)
             predicted = flow_boxes[old] if use_flow else self._follow(gray, box, reference)
+            displaced = (predicted is not None and self._plate_template_fallback and kind == 'plate'
+                         and not use_flow and self._overlap(box, predicted) < .2)
+            # Confirming another established plate cannot renew this target's identity.
+            if displaced and any(index != old and track.kind == 'plate' and moment - track.seen <= .2
+                                 and self._overlap(predicted, track.box) >= .2
+                                 for index, track in enumerate(self.history)):
+                predicted = None
             if predicted is None:
                 # The same frame and ROI cannot gain evidence by running its models twice.
                 confirmed = (roi_checks[old] if old in roi_checks else
@@ -229,8 +236,6 @@ class FrameRedactor:
                 boxes[new] = self._smooth(predicted, boxes[new], elapsed)
                 continue
             # A template can return to its source patch yet jump onto unrelated background.
-            displaced = (self._plate_template_fallback and kind == 'plate' and not use_flow
-                         and self._overlap(box, predicted) < .2)
             if displaced or moment - seen > 0.2 and moment - checked >= 0.2:
                 confirmed = self._recheck(pixels, predicted, kind, gray) if kind else self._recheck(pixels, predicted)
                 checked = moment
