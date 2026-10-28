@@ -48,7 +48,7 @@ def process(payload, stop, detector=None, *, on_initialized=None):
         if isinstance(profile_mode, str):
             from vision_shield.detection.host_profile import FORWARDS, ProfileTimes, instrument
 
-            if (profile_mode not in ('host', *FORWARDS) or cfg['inference_device'] != 'cuda'
+            if (profile_mode not in ('host', 'local-face', *FORWARDS) or cfg['inference_device'] != 'cuda'
                     or cfg['detection_backend'] != 'quality_yolo'):
                 raise ValueError('A model profiling requires quality_yolo/CUDA')
             collector = ProfileTimes(directory / 'host-profile',

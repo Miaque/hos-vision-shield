@@ -18,6 +18,7 @@ import sys
 CONTEXT = ContextVar("video_profile_context", default={})
 FORWARDS = tuple(f"forward-{model}-{kind}" for model in ("primary", "detail") for kind in ("face", "plate"))
 MAX_MEASUREMENTS = 250_000
+LOCAL_FACE_SLOW_MS = 500
 
 
 @contextmanager
@@ -44,7 +45,11 @@ def statistics(values):
     def summary(items):
         return dict(calls=len(items), cumulative_ms=sum(items),
                     p50_ms=quantile(items, 0.5) if items else None,
-                    p95_ms=quantile(items, 0.95) if items else None)
+                    p95_ms=quantile(items, 0.95) if items else None,
+                    p99_ms=quantile(items, 0.99) if items else None,
+                    max_ms=max(items) if items else None,
+                    over_500_ms=sum(value > 500 for value in items),
+                    over_1000_ms=sum(value > 1000 for value in items))
 
     return dict(**summary(values), first_ms=values[0] if values else None,
                 steady_after_10_calls=summary(values[10:]))
@@ -105,6 +110,8 @@ class ProfileTimes:
         self.measurements = 0
         self.candidates, self.candidate_bytes, self.candidates_truncated = [], 0, False
         self.masks, self.mask_bytes, self.masks_truncated, self.mask_shape = [], 0, False, None
+        self.local_requests, self.local_sessions, self.local_shapes, self.local_longest = 0, {}, {}, []
+        self.local_last_shape = {}
 
     def record_masks(self, shape, boxes):
         height, width = shape[:2]
@@ -141,49 +148,63 @@ class ProfileTimes:
             if self.measurements >= MAX_MEASUREMENTS:
                 raise RuntimeError("Host diagnostic measurement budget exceeded")
             self.measurements += 1
-        metadata = {key: value for key, value in CONTEXT.get().items() if key != "local_calls"}
-        selected = False
-        if name in FORWARDS:
+        metadata = {key: value for key, value in CONTEXT.get().items() if key not in ("local_calls", "local_details")}
+        selected, call = False, None
+        if name in (*FORWARDS, 'ort-local-face'):
             with self.lock:
                 self.forward_counts[name] += 1
                 call = self.forward_counts[name]
-            selected = name == self.device_stage and call in self.checkpoints
+            selected = (name == self.device_stage and call in self.checkpoints
+                        or name == 'ort-local-face' and self.device_stage == 'local-face'
+                        and len(self.device_samples) < len(self.checkpoints))
         started, failed = self.clock(), False
         try:
-            with self.trace(name, call) if selected else nullcontext():
+            with self.trace(name, call, slow_only=name == 'ort-local-face') if selected else nullcontext():
                 yield
         except BaseException:
             failed = True
             raise
         finally:
             milliseconds = (self.clock() - started) * 1000
+            metadata.update(CONTEXT.get().get('local_details', {}))
             with self.lock:
                 self.samples[name].append(milliseconds)
                 self.seconds[name] += milliseconds / 1000
                 self.groups[(name, metadata.get("origin", "pipeline"), metadata.get("purpose", "pipeline"),
                              metadata.get("view", "none"))].append(milliseconds)
                 self.failures[name] += failed
-                if name in FORWARDS:
+                if name in FORWARDS or metadata.get('local_id'):
                     self.file.write(json.dumps(dict(stage=name, call=call, host_ms=milliseconds,
                                                     failed=failed, device_sampled=selected, **metadata)) + "\n")
+                if name == 'ort-local-face':
+                    self.local_longest.append(dict(host_ms=milliseconds, call=call, **metadata))
+                    self.local_longest.sort(key=lambda row: row['host_ms'], reverse=True)
+                    del self.local_longest[8:]
 
     @contextmanager
-    def trace(self, name, call):
+    def trace(self, name, call, *, slow_only=False):
         from torch.profiler import ProfilerActivity, profile, record_function
         from vision_shield.detection.device_profile import MAX_TRACE_BYTES, summarize
 
         with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as profiler:
             with record_function(name):
                 yield
-        target = self.directory / f"{name}-{call}.json"
+        if slow_only:
+            elapsed = next(event.cpu_time_total for event in profiler.events() if event.name == name) / 1000
+            if elapsed <= LOCAL_FACE_SLOW_MS:
+                return
+        slot = self.checkpoints[len(self.device_samples)] if slow_only else call
+        target = self.directory / f"{'local-face' if slow_only else name}-{slot}.json"
         profiler.export_chrome_trace(str(target))
         if target.stat().st_size > MAX_TRACE_BYTES:
             target.unlink()
             raise RuntimeError("Device trace exceeded 32 MiB budget")
         with patch("vision_shield.detection.device_profile.SCOPE", name):
             summary = summarize(json.loads(target.read_text("utf-8")))
-        self.device_samples.append(dict(stage=name, call=call, trace=target.name,
-                                        context={key: value for key, value in CONTEXT.get().items() if key != "local_calls"},
+        self.device_samples.append(dict(stage=name, call=call, sample=slot, trace=target.name,
+                                        context={key: value for key, value in CONTEXT.get().items()
+                                                 if key not in ('local_calls', 'local_details')}
+                                                | CONTEXT.get().get('local_details', {}),
                                         **summary))
 
     def snapshot(self):
@@ -199,6 +220,7 @@ class ProfileTimes:
                     host_groups=[dict(stage=name, origin=origin, purpose=purpose, view=view, **statistics(values))
                                  for (name, origin, purpose, view), values in sorted(self.groups.items())],
                     views={name: dict(counts) for name, counts in self.views.items()}, device_samples=self.device_samples,
+                    local_faces=dict(timing=statistics(self.samples['ort-local-face']), longest=self.local_longest),
                     candidate_evidence=dict(first_frames=32, byte_limit=64 * 1024,
                                             truncated=self.candidates_truncated, rows=self.candidates),
                     mask_evidence=dict(shape=self.mask_shape, byte_limit=64 * 1024,
@@ -210,6 +232,67 @@ class ProfileTimes:
 
     def close(self):
         self.file.close()
+
+
+def instrument_local_faces(stack, collector):
+    """Observe existing local work only inside the opt-in, isolated diagnostic process."""
+    import cv2
+    import onnxruntime as ort
+    import torch
+
+    def tensor_method(name, stage):
+        original = getattr(torch.Tensor, name)
+
+        @wraps(original)
+        def observed(value, *args, **kwargs):
+            if not CONTEXT.get().get('local_id'):
+                return original(value, *args, **kwargs)
+            if name == 'cpu':
+                CONTEXT.get()['local_details']['readback_source_device'] = str(value.device)
+            with collector.measure(stage):
+                return original(value, *args, **kwargs)
+
+        stack.enter_context(patch.object(torch.Tensor, name, observed))
+
+    tensor_method('cpu', 'local-readback')
+    tensor_method('numpy', 'local-numpy')
+    original_resize = cv2.resize
+
+    def resize(pixels, *args, **kwargs):
+        details = CONTEXT.get().get('local_details')
+        if details is None:
+            return original_resize(pixels, *args, **kwargs)
+        first_resize = 'roi_shape' not in details
+        if first_resize:
+            details['roi_shape'] = list(pixels.shape)
+        with collector.measure('local-resize'):
+            output = original_resize(pixels, *args, **kwargs)
+        if first_resize:
+            details['resized_shape'] = list(output.shape)
+        return output
+
+    stack.enter_context(patch.object(cv2, 'resize', resize))
+    original_run = ort.InferenceSession.run
+
+    def run(session, outputs, feed, *args, **kwargs):
+        context = CONTEXT.get()
+        if not context.get('local_id') or not context.get('local_face'):
+            return original_run(session, outputs, feed, *args, **kwargs)
+        shape = tuple(next(iter(feed.values())).shape)
+        identity = id(session)
+        instance = collector.local_sessions.setdefault(identity, len(collector.local_sessions) + 1)
+        seen = collector.local_shapes.setdefault(identity, set())
+        first = shape not in seen
+        seen.add(shape)
+        previous = collector.local_last_shape.get(identity)
+        collector.local_last_shape[identity] = shape
+        with scope(input_shape=list(shape), session_instance=instance,
+                   provider=session.get_providers()[0], first_local_shape=first,
+                   shape_changed=previous is not None and previous != shape,
+                   input_dtype=str(next(iter(feed.values())).dtype)), collector.measure('ort-local-face'):
+            return original_run(session, outputs, feed, *args, **kwargs)
+
+    stack.enter_context(patch.object(ort.InferenceSession, 'run', run))
 
 
 def instrument_candidates(model, name, collector):
@@ -318,6 +401,8 @@ def instrument(stack, collector):
     from vision_shield.detection import cpu, cuda_detail, quality, yolo
     from vision_shield.redaction import FrameRedactor
 
+    instrument_local_faces(stack, collector)
+
     original_open = av.open
     stack.enter_context(patch.object(av, "open", lambda *args, **kwargs: TimedContainer(original_open(*args, **kwargs), collector)))
     for module in (quality, cpu):
@@ -335,6 +420,14 @@ def instrument(stack, collector):
                 metadata = dict(frame=collector.frames, source_seconds=args[1], origin="discovery", purpose="discovery")
             elif purpose:
                 metadata = dict(purpose=purpose, local_calls={})
+                with collector.lock:
+                    collector.local_requests += 1
+                    request = collector.local_requests
+                target = getattr(args[1], 'box', args[1])
+                metadata.update(local_id=f"{CONTEXT.get().get('frame', 0)}:{request}",
+                                parent_local_id=CONTEXT.get().get('local_id'),
+                                task_id=collector.directory.parent.name,
+                                target_box=list(target), local_details={})
                 if purpose == "track-confirm":
                     metadata["origin"] = purpose
             with scope(**metadata), collector.measure(stage):
@@ -349,6 +442,13 @@ def instrument(stack, collector):
 
     method(yolo.Detector, "__init__", "initialize-primary")
     method(cuda_detail.Detector, "__init__", "initialize-detail")
+    original_faces = cuda_detail.Detector._faces
+
+    def faces(instance, pixels):
+        with scope(local_face=True):
+            return original_faces(instance, pixels)
+
+    stack.enter_context(patch.object(cuda_detail.Detector, '_faces', faces))
     method(quality.Detector, "detect_regions", "quality-detection")
     method(quality.Detector, "_confirmed", "confirm-request", purpose="local-confirm")
     method(quality.Detector, "_recover_face", "recover-request", purpose="local-enlarged")

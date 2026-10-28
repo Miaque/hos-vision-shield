@@ -33,6 +33,8 @@ GPU 的 `3/flow` 文件及实时路径采用最多 0.5 秒媒体时间、16 帧�
 
 调试环境下，主车牌设备诊断仍须显式启用。上传视频时可加 `X-Detection-Profile: 1`，在第64、424、768个合格全图调用采样；`GET /v1/tasks/{id}/diagnostics`读取摘要，添加`?sample=64`等固定索引可下载原始trace。每份最多32 MiB、每任务最多三份，短视频或未进入采样位置返回partial。该模式要求CUDA模型，采样会扰动耗时，其FPS不作为优化验收。
 
+局部人脸长尾诊断可用 `X-Detection-Profile: local-face`：只在独立视频诊断进程追踪实际 NumPy 局部人脸 ORT 调用，保留最先遇到的至多三次超过 500ms 的调用 trace，下载槽仍为 64/424/768；未捕获满三次会明确返回 partial。`host` 仅收集墙钟计时，不打开设备 profiler。两者的调用记录包含帧、复核请求关联号、目标框、ROI/缩放/模型输入尺寸、会话/provider、首次局部 shape、搬运/NumPy/resize/准备/ORT/后处理阶段，摘要报告 P50/P95/P99/max 及 >500ms/>1000ms 次数。请求关联号不是持久轨迹 ID；本项目当前没有该 ID。墙钟搬运计时包含同步，不能代替 trace 中的 GPU 计算、复制、分配与等待。诊断不更改模型、预处理、复核或遮罩决策。
+
 ### 本机 GTX 1080
 
 先执行 `uv sync --frozen --extra cuda`，在 `.env` 设置 `INFERENCE_DEVICE=cuda`，然后运行原有 `scripts/start-application.ps1`。EgoBlur 使用 PyTorch CUDA，YuNet/HyperLPR 使用 ONNX Runtime CUDA，模型输入预处理也在GPU完成。兼容的离线H.264视频采用NVDEC解码、GPU颜色转换/遮罩及NVENC编码；跟踪仍下载灰度图，局部确认按需下载裁剪。解码格式边界及实际编解码器响应头见[诊断说明](specs/002-compose-cpu-gpu/diagnostics.md#任务处理阶段计时)。CUDA 推理不可用时启动失败，不静默降级。要使用 CPU，只需改为 `INFERENCE_DEVICE=cpu` 后重启应用。未设置该字段仍默认 CPU；轻量 `DETECTION_BACKEND=cpu` 不接受 cuda 设备。
