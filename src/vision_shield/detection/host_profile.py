@@ -356,3 +356,7 @@ def instrument(stack, collector):
     method(FrameRedactor, "_detections", "detect-pass")
     method(FrameRedactor, "_recheck", "track-recheck-request", purpose="track-confirm")
     method(FrameRedactor, "_follow", "template-follow")
+
+    from vision_shield.detection.p2_d0b import install
+
+    install(stack, collector)
