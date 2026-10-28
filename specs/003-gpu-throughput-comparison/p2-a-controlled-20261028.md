@@ -1,5 +1,7 @@
 # P2-A 完整框末级 LK 受控实验（2026-10-28）
 
+后续 RTX 整片及三组 normal 文件对照已完成，见 [RTX 文件实验结论](p2-a-rtx-files-20261028.md)；本页保留本地阶段的实验和部署阻断历史。
+
 本轮独立实验分支 `feature/plate-recovery-p2-a`，从正式 P0 `e9ceec4` 创建；不带 D0b 观察器，不采用 P1。
 初始核心候选为 `e8e09bd`，默认关闭 `plate_flow_recovery`；当前尚未部署服务器，也未修改 main、实验 tag 或远程权限。
 
