@@ -85,14 +85,19 @@ async def create_stream(data: StreamInput, request: Request, response: Response,
                         detection_interval: Literal['1', '3'] | None = Header(default=None, alias='X-Detection-Interval',
                             description='实时流默认每三帧全量检测；解码、遮挡和输出仍逐帧执行'),
                         tracking: Literal['template', 'flow'] | None = Header(default=None, alias='X-Tracking-Mode',
-                            description='默认检测间隔 3 配合 flow；显式间隔 1 时默认 template')):
+                            description='默认检测间隔 3 配合 flow；显式间隔 1 时默认 template'),
+                        plate_flow_recovery: Literal['1'] | None = Header(default=None, alias='X-Plate-Flow-Recovery',
+                            include_in_schema=False)):
     key, target = creation_headers(request)
     settings = request.app.state.settings
     interval = int(detection_interval or '3')
     mode = tracking or ('flow' if interval == 3 else 'template')
     if mode == 'flow' and interval != 3:
         raise HTTPException(422, 'invalid_input')
+    if plate_flow_recovery is not None and (mode != 'flow' or interval != 3):
+        raise HTTPException(422, 'invalid_input')
     options = {'detection_interval': interval, 'tracking': mode,
+               **({'plate_flow_recovery': True} if plate_flow_recovery else {}),
                **({'audio_enabled': False} if not data.audio_enabled else {})}
     fingerprint = request_fingerprint(kind="stream", source_kind="rtsp", source_digest=data.url,
                                       redaction_mode=data.redaction_mode, notification_target=target,
@@ -145,6 +150,8 @@ async def file_url(data: FileUrlInput, request: Request, response: Response):
                      "redaction_mode": {"type": "string", "enum": ["solid", "mosaic"], "default": "solid"},
                  }}}}}})
 async def upload(request: Request, response: Response,
+                 plate_flow_recovery: Literal['1'] | None = Header(default=None, alias='X-Plate-Flow-Recovery',
+                     include_in_schema=False),
                  tracking: Literal['template', 'flow'] | None = Header(default=None, alias='X-Tracking-Mode',
                      description='仅离线视频顺序验证：flow 须配合检测间隔 3，跟踪失效立即全图复核'),
                  detection_interval: Literal['1', '3'] | None = Header(default=None, alias='X-Detection-Interval',
@@ -172,6 +179,8 @@ async def upload(request: Request, response: Response,
                     raise HTTPException(422, 'invalid_input')
                 if tracking == 'flow' and detection_interval != '3':
                     raise HTTPException(422, 'invalid_input')
+                if plate_flow_recovery is not None and (kind != 'video' or tracking != 'flow' or detection_interval != '3'):
+                    raise HTTPException(422, 'invalid_input')
                 redaction_mode = form.get("redaction_mode", "solid")
                 if redaction_mode not in ("solid", "mosaic"):
                     raise HTTPException(422, "invalid_input")
@@ -183,6 +192,7 @@ async def upload(request: Request, response: Response,
                     settings.max_image_bytes if kind == "image" else settings.max_video_bytes)
         fingerprint = request_fingerprint(kind=kind, source_kind="upload", source_digest=digest,
             redaction_mode=redaction_mode, notification_target=target_id, profile_detection=profile_mode,
+            **({'plate_flow_recovery': True} if plate_flow_recovery else {}),
             **({'detection_interval': 3} if detection_interval == '3' else {}),
             **({'tracking': 'flow'} if tracking == 'flow' else {}))
         task = await replay(request, key, fingerprint)
@@ -194,6 +204,7 @@ async def upload(request: Request, response: Response,
             task = await request.app.state.store.create(kind, "upload", str(source), task_id,
                 redaction_mode=redaction_mode, idempotency_key=key, fingerprint=fingerprint,
                 notification_target=target_id,
+                **({'plate_flow_recovery': True} if plate_flow_recovery else {}),
                 **({'tracking': tracking} if tracking is not None else {}),
                 **({'detection_interval': int(detection_interval)} if detection_interval is not None else {}),
                 **({'profile_detection': profile_mode} if profile_detection is not None else {}))

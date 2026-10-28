@@ -1,7 +1,9 @@
 """Whole-box LK is a gated last resort; existing successes and discovery win."""
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import cv2
+import httpx
 import numpy as np
 import pytest
 
@@ -91,3 +93,52 @@ def test_whole_box_still_requires_six_initial_points(monkeypatch):
 
     monkeypatch.setattr(cv2, 'calcOpticalFlowPyrLK', unexpected)
     assert redactor._flow(gray, (60, 50, 100, 70), gray, whole_box=True) is None
+
+
+@pytest.mark.parametrize('kind,schedule,value,status', [
+    ('video', 'flow', '1', 202), ('stream', 'flow', '1', 202),
+    ('image', 'flow', '1', 422), ('video', 'template', '1', 422),
+    ('stream', 'template', '1', 422), ('video', 'flow', 'other', 422),
+    ('video', 'flow', None, 202)])
+async def test_candidate_is_explicit_per_task_and_default_stays_p0(tmp_path, monkeypatch, kind, schedule, value, status):
+    from vision_shield.api import routes
+    from vision_shield.config import Settings
+    from vision_shield.main import create_app
+
+    app = create_app(Settings(_env_file=None, media_root=tmp_path))
+    monkeypatch.setattr(routes, 'require_worker', AsyncMock())
+    monkeypatch.setattr(routes, 'validate_source', AsyncMock())
+    record = dict(id='00000000-0000-0000-0000-000000000001', kind=kind, state='queued', desired_state='run',
+        ready=False, created_at='2026-10-28T00:00:00Z', updated_at='2026-10-28T00:00:00Z', error=None,
+        stats=dict(processed_frames=0, dropped_frames=0, elapsed_seconds=0))
+    headers = {'X-Detection-Interval':'3', 'X-Tracking-Mode':schedule}
+    if value is not None:
+        headers['X-Plate-Flow-Recovery'] = value
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        app.state.store.create = AsyncMock(return_value=record)
+        if kind == 'stream':
+            response = await client.post('/v1/stream-tasks', headers=headers, json={'url':'rtsp://camera/live'})
+        else:
+            response = await client.post('/v1/file-tasks/uploads', headers=headers,
+                data={'kind':kind}, files={'file':('input.mp4', b'video', 'video/mp4')})
+        assert response.status_code == status
+        if status == 202:
+            options = app.state.store.create.call_args.kwargs
+            assert options.get('plate_flow_recovery', False) == (value == '1')
+        else:
+            app.state.store.create.assert_not_called()
+
+
+async def test_store_validates_and_preserves_candidate_switch():
+    from vision_shield.jobs.store import TaskStore
+
+    store = TaskStore(AsyncMock())
+    store._change = AsyncMock(side_effect=lambda task_id, operation, record, limit:record)
+    assert 'plate_flow_recovery' not in await store.create('video', 'upload', 'local')
+    record = await store.create('video', 'upload', 'local', detection_interval=3, tracking='flow', plate_flow_recovery=True)
+    assert record['plate_flow_recovery'] is True
+    for kind, interval, tracking, value in [('image', 1, 'template', True), ('video', 1, 'template', True),
+                                           ('video', 3, 'flow', '1')]:
+        with pytest.raises(ValueError, match='recovery'):
+            await store.create(kind, 'upload', 'local', detection_interval=interval, tracking=tracking, plate_flow_recovery=value)

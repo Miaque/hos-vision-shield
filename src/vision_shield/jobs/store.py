@@ -285,7 +285,7 @@ class TaskStore:
 
     async def create(self, kind: str, source_kind: str, source_ref: str, task_id: str | None = None,
                      *, redaction_mode: str = "solid", profile_detection: bool | str = False, detection_interval: int = 1,
-                     tracking: str = "template",
+                     tracking: str = "template", plate_flow_recovery: bool = False,
                      idempotency_key: str | None = None, fingerprint: str | None = None,
                      notification_target: str | None = None, publish_url: str | None = None,
                      playback_url: str | None = None,
@@ -302,6 +302,9 @@ class TaskStore:
             raise ValueError('Unsupported detection interval')
         if tracking not in ('template', 'flow') or tracking == 'flow' and (kind not in ('video', 'stream') or detection_interval != 3):
             raise ValueError('Unsupported tracking mode')
+        if (type(plate_flow_recovery) is not bool or plate_flow_recovery
+                and (kind not in ('video', 'stream') or tracking != 'flow' or detection_interval != 3)):
+            raise ValueError('Unsupported plate flow recovery')
         if publish_url is not None and kind != "stream":
             raise ValueError("A publish URL requires a stream task")
         if playback_url is not None and kind != 'stream':
@@ -327,6 +330,8 @@ class TaskStore:
             task['detection_interval'] = detection_interval
         if kind == 'stream' or tracking != 'template':
             task['tracking'] = tracking
+        if plate_flow_recovery:
+            task['plate_flow_recovery'] = True
         if publish_url is not None:
             task["publish_url"] = publish_url
             task["publisher_owner_id"] = None

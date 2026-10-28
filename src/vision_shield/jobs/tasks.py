@@ -118,6 +118,8 @@ async def execute(task_id, broker, context):
                 payload['config']['detection_interval'] = record['detection_interval']
             if record.get('tracking'):
                 payload['config']['tracking'] = record['tracking']
+            if record.get('plate_flow_recovery'):
+                payload['config']['plate_flow_recovery'] = True
             result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                        payload, cancel, event_received, settings.process_stop_timeout,
                                        **({'session': session} if session is not None else {}))
@@ -235,7 +237,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                                                                "source_url": record["source_ref"],
                                                                "stream_started_monotonic": attempt['started_monotonic']},
                                directory=str(settings.media_root.resolve() / task_id / f"attempt-{generation}"))
-                for key in ('detection_interval', 'tracking', 'max_bitrate', 'audio_enabled'):
+                for key in ('detection_interval', 'tracking', 'max_bitrate', 'audio_enabled', 'plate_flow_recovery'):
                     if key in record:
                         payload['config'][key] = record[key]
                 phase = "child_process"
