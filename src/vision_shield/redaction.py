@@ -228,13 +228,21 @@ class FrameRedactor:
                 matched_new.add(new)
                 boxes[new] = self._smooth(predicted, boxes[new], elapsed)
                 continue
-            if moment - seen > 0.2 and moment - checked >= 0.2:
+            # A template can return to its source patch yet jump onto unrelated background.
+            displaced = (self._plate_template_fallback and kind == 'plate' and not use_flow
+                         and self._overlap(box, predicted) < .2)
+            if displaced or moment - seen > 0.2 and moment - checked >= 0.2:
                 confirmed = self._recheck(pixels, predicted, kind, gray) if kind else self._recheck(pixels, predicted)
                 checked = moment
                 if confirmed is not None:
                     if self._plate_template_fallback and kind == 'plate':
                         confirmed = self._smooth(predicted, confirmed, elapsed)
                     predicted, seen = confirmed, moment
+                elif displaced:
+                    if moment - seen <= .2:
+                        retained.append(box)
+                        history.append(_Track(seen, checked, box, kind, self.gray if reference is None else reference))
+                    continue
             retained.append(predicted)
             history.append(_Track(seen, checked, predicted, kind))
         self.history = deque(history + [_Track(moment, moment, box, detection.kind)

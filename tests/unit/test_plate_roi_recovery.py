@@ -212,3 +212,41 @@ def test_roi_model_failure_cannot_publish_a_partial_frame(plate_recovery):
     state.roi = RuntimeError('plate model unavailable')
     with pytest.raises(RuntimeError, match='plate model unavailable'):
         state.redactor.apply(state.pixels, .04)
+
+
+@pytest.mark.parametrize('moment', [.08, .201])
+@pytest.mark.parametrize('confirmed', [False, True])
+def test_periodic_full_requires_quality_for_unsupported_plate_template_jump(monkeypatch, moment, confirmed):
+    previous, displaced = (630, 230, 640, 242), (572, 326, 582, 338)
+    local = []
+
+    class Plates:
+        visible = True
+
+        def detect_regions(self, pixels):
+            return [Detection('plate', previous, .9)] if self.visible else []
+
+    def recheck(pixels, box, kind='', gray=None):
+        local.append((box, kind))
+        return displaced if confirmed and box == displaced else None
+
+    detector = Plates()
+    redactor = FrameRedactor(detector, detection_interval=3, tracking='flow', debug=True)
+    redactor._plate_template_fallback = True
+    monkeypatch.setattr(redactor, '_flow', lambda gray, box, reference=None: box)
+    monkeypatch.setattr(redactor, '_follow', lambda *args: displaced)
+    monkeypatch.setattr(redactor, '_recheck', recheck)
+    pixels = np.full((480, 640, 3), 180, np.uint8)
+    for index in range(3):
+        redactor.apply(pixels, moment * index / 3)
+    detector.visible = False
+    output = redactor.apply(pixels, moment)
+    assert redactor.detection_stats['full_frames'] == 2
+    assert (displaced, 'plate') in local
+    x, y, a, b = displaced
+    assert (output[y:b, x:a] == (64 if confirmed else 180)).all()
+    if confirmed:
+        assert any(track.seen == moment and redactor._overlap(track.box, displaced) >= .2
+                   for track in redactor.history)
+    else:
+        assert not any(redactor._overlap(track.box, displaced) >= .2 for track in redactor.history)
