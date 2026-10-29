@@ -63,3 +63,19 @@ def test_large_pts_gap_has_bounded_wait_and_stop_prevents_publication():
     assert clock.now == .5
     clock.stopped = True
     assert not pacer.wait(Fraction(101))
+
+
+def test_normal_timer_oversleep_does_not_accumulate_latency():
+    class LateClock(Clock):
+        def wait(self, seconds):
+            self.now += seconds + .001
+            return False
+
+    clock = LateClock()
+    pacer = StreamPacer(clock, clock=clock)
+    released = []
+    for i in range(300):
+        assert pacer.wait(Fraction(i, 15))
+        released.append(clock.now)
+    assert released[-1] - 299 / 15 < .002
+    assert min(b - a for a, b in zip(released, released[1:])) >= 1 / 30 - 1e-9
