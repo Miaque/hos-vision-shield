@@ -47,3 +47,9 @@ P0 B 尚未修改；P1/P2 按用户规定等待 P0 独立验证，P3 及 RTX 30 
 ## 2026-10-29 后续授权
 
 以上是 10 月 28 日交付时的边界。10 月 29 日用户要求合入当前 main（已完成，`d6b1eb5`），随后明确授权部署相关指令及通过 `http://127.0.0.1:18000` 继续服务测试。本轮改为使用现有部署脚本部署本分支，再由业务上传 API 运行隔离文件诊断；不启动临时容器、不执行其他服务器探测命令。部署会重建应用容器并让已有实时任务恢复，诊断文件任务与已有流共享 GPU，须分别报告。
+
+## ORT 节点采样
+
+`local-face` 独立诊断额外建立一份相同模型、会话选项和 CUDA provider 选项的局部动态会话，只开启 ORT 原生 profiling。最多记录前 64 次局部调用，结束后检查 32 MiB 文件预算，按实际 `run` 序号把采样调用关联到 ORT 的 `model_run`，每次最多返回 8 个最慢算子。超过 64 次后出现的 CUDA 样本可能没有节点详情；`host` 和普通处理不启用此机制。
+
+这是算子的主机墙钟时间，包含准备、提交和等待，不能当作纯 GPU 时间。API 既有 trace 仍为 CUDA 事件，节点摘要位于 `device_samples[].ort_top_nodes`。依据 [ORT profiling 文档](https://onnxruntime.ai/docs/performance/tune-performance/profiling-tools.html)，profiling 必须在创建会话前启用，因此诊断会话保持新建；不把额外采样实验的 FPS 当性能收益。

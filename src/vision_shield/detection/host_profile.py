@@ -19,6 +19,7 @@ CONTEXT = ContextVar("video_profile_context", default={})
 FORWARDS = tuple(f"forward-{model}-{kind}" for model in ("primary", "detail") for kind in ("face", "plate"))
 MAX_MEASUREMENTS = 250_000
 LOCAL_FACE_SLOW_MS = 500
+MAX_ORT_CALLS = 64
 
 
 @contextmanager
@@ -55,6 +56,33 @@ def statistics(values):
                 steady_after_10_calls=summary(values[10:]))
 
 
+def attach_ort_nodes(samples, events):
+    runs = sorted((event for event in events if event.get('name') == 'model_run'), key=lambda event: event['ts'])
+    for sample in samples:
+        run = runs[sample['call'] - 1]
+        nodes = [event for event in events if event.get('cat') == 'Node'
+                 and event['name'].endswith('_kernel_time')
+                 and run['ts'] <= event['ts'] < run['ts'] + run['dur']]
+        sample['ort_model_run_ms'] = run['dur'] / 1000
+        sample['ort_top_nodes'] = [dict(name=event['name'][:256], host_ms=event['dur'] / 1000,
+                                       op=event.get('args', {}).get('op_name'),
+                                       provider=event.get('args', {}).get('provider'))
+                                   for event in sorted(nodes, key=lambda event: event['dur'], reverse=True)[:8]]
+
+
+def instrument_ort_nodes(model, collector):
+    """A fresh, otherwise identical local session enables ORT's native node timer."""
+    import onnxruntime as ort
+
+    options = model.face.get_session_options()
+    options.enable_profiling = True
+    options.profile_file_prefix = str(collector.directory / 'ort-local-face')
+    providers = [('CUDAExecutionProvider', model.face.get_provider_options()['CUDAExecutionProvider'])]
+    model.face = ort.InferenceSession(model.face_model, sess_options=options, providers=providers)
+    model.face.disable_fallback()
+    collector.ort_session = model.face
+
+
 def runtime_metadata(detector, config):
     import cv2
     import torch
@@ -84,7 +112,10 @@ def runtime_metadata(detector, config):
                 primary_parameter_devices=[sorted({str(p.device) for p in model.parameters()}) if model is not None else None for model in detector.primary.models],
                 primary_face_providers=detector.primary.providers,
                 primary_face_input_types=sorted({session.get_inputs()[0].type for session in detector.primary.sessions.values()}),
-                detail_providers=detector.detail.providers, torch_threads=torch.get_num_threads(), opencv_threads=cv2.getNumThreads(),
+                detail_providers=detector.detail.providers,
+                detail_face_provider_options=detector.detail.face.get_provider_options(),
+                torch_cudnn_version=torch.backends.cudnn.version(),
+                torch_threads=torch.get_num_threads(), opencv_threads=cv2.getNumThreads(),
                 global_fp32_precision=torch.backends.fp32_precision,
                 matmul_fp32_precision=torch.backends.cuda.matmul.fp32_precision,
                 cudnn_conv_fp32_precision=torch.backends.cudnn.conv.fp32_precision,
@@ -112,6 +143,7 @@ class ProfileTimes:
         self.masks, self.mask_bytes, self.masks_truncated, self.mask_shape = [], 0, False, None
         self.local_requests, self.local_sessions, self.local_shapes, self.local_longest = 0, {}, {}, []
         self.local_last_shape = {}
+        self.ort_session = None
 
     def record_masks(self, shape, boxes):
         height, width = shape[:2]
@@ -214,6 +246,7 @@ class ProfileTimes:
             return {name: seconds for name, seconds in self.seconds.items() if name in STAGES}
 
     def report(self, frames):
+        self.finish_ort()
         models = {name: dict(**statistics(self.samples[name]), failures=self.failures[name],
                              calls_per_frame=len(self.samples[name]) / frames if frames else None) for name in FORWARDS}
         return dict(models=models, host_stages={name: statistics(values) for name, values in self.samples.items()},
@@ -228,10 +261,24 @@ class ProfileTimes:
                     notes=["Host-wall scopes include submission/waits; they are not GPU kernel time.",
                            "Nested/concurrent stages must not be summed into total time.",
                            "Steady means calls after the first 10 per group; new input shapes may still initialize.",
+                           "ORT node timing covers only the first 64 local calls; later CUDA samples may have no node detail.",
                            "Device traces are a separate instrumented run; its FPS is not acceptance throughput."])
 
     def close(self):
-        self.file.close()
+        try:
+            self.finish_ort()
+        finally:
+            self.file.close()
+
+    def finish_ort(self):
+        if self.ort_session is None:
+            return
+        session, self.ort_session = self.ort_session, None
+        target = Path(session.end_profiling())
+        if target.stat().st_size > 32 * 1024**2:
+            target.unlink()
+            raise RuntimeError('ORT trace exceeded 32 MiB budget')
+        attach_ort_nodes(self.device_samples, json.loads(target.read_text('utf-8')))
 
 
 def instrument_local_faces(stack, collector):
@@ -290,7 +337,10 @@ def instrument_local_faces(stack, collector):
                    provider=session.get_providers()[0], first_local_shape=first,
                    shape_changed=previous is not None and previous != shape,
                    input_dtype=str(next(iter(feed.values())).dtype)), collector.measure('ort-local-face'):
-            return original_run(session, outputs, feed, *args, **kwargs)
+            result = original_run(session, outputs, feed, *args, **kwargs)
+        if collector.ort_session is session and collector.forward_counts['ort-local-face'] >= MAX_ORT_CALLS:
+            collector.finish_ort()
+        return result
 
     stack.enter_context(patch.object(ort.InferenceSession, 'run', run))
 

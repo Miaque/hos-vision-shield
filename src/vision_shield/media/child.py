@@ -74,8 +74,10 @@ def process(payload, stop, detector=None, *, on_initialized=None):
             load_seconds = 0.0 if reused else time.monotonic() - loading
             emit({"model_load_seconds": load_seconds, "model_reused": reused})
         if collector:
-            from vision_shield.detection.host_profile import instrument_candidates, runtime_metadata
+            from vision_shield.detection.host_profile import instrument_candidates, instrument_ort_nodes, runtime_metadata
 
+            if profile_mode == 'local-face':
+                instrument_ort_nodes(detector.detail, collector)
             instrument_candidates(detector.primary, 'primary', collector)
             instrument_candidates(detector.detail, 'detail', collector)
             metadata = runtime_metadata(detector, cfg)

@@ -11,6 +11,22 @@ import pytest
 from vision_shield.detection import host_profile as profile
 from vision_shield.detection import Detection
 
+
+def test_ort_nodes_match_the_sampled_real_call_and_bound_the_report():
+    samples = [dict(call=2)]
+    events = [dict(cat='Session', name='model_run', ts=0, dur=100),
+              dict(cat='Session', name='model_run', ts=1000, dur=2000),
+              dict(cat='Node', name='outside_kernel_time', ts=10, dur=90,
+                   args=dict(op_name='Conv', provider='CUDAExecutionProvider'))]
+    events += [dict(cat='Node', name=f'conv{i}_kernel_time', ts=1000 + i * 100, dur=80 + i,
+                    args=dict(op_name='Conv', provider='CUDAExecutionProvider')) for i in range(15)]
+    profile.attach_ort_nodes(samples, events)
+    assert samples[0]['ort_model_run_ms'] == 2
+    nodes = samples[0]['ort_top_nodes']
+    assert len(nodes) == 8 and nodes[0]['name'] == 'conv14_kernel_time'
+    assert nodes[0]['host_ms'] == .094 and nodes[0]['provider'] == 'CUDAExecutionProvider'
+    assert all(row['name'] != 'outside_kernel_time' for row in nodes)
+
 def test_parallel_scopes_keep_frame_view_and_actual_forward_counts(tmp_path):
     collector = profile.ProfileTimes(tmp_path, clock=iter(range(20)).__next__)
     with profile.scope(frame=7, purpose="discovery", view="tile"):
@@ -102,6 +118,7 @@ def test_local_face_observer_keeps_roi_shape_session_and_phase_identity(tmp_path
     import torch
 
     sentinel = [np.ones((1, 1), np.float32)]
+    ended = []
 
     class Session:
         def get_providers(self):
@@ -111,9 +128,17 @@ def test_local_face_observer_keeps_roi_shape_session_and_phase_identity(tmp_path
             assert feed['input'].shape == (1, 3, 32, 64)
             return sentinel
 
+        def end_profiling(self):
+            ended.append(True)
+            target = tmp_path / 'ort.json'
+            target.write_text('[]', 'utf-8')
+            return str(target)
+
     monkeypatch.setattr(ort, 'InferenceSession', Session)
     session = Session()
     collector = profile.ProfileTimes(tmp_path)
+    collector.ort_session = session
+    monkeypatch.setattr(profile, 'MAX_ORT_CALLS', 1, raising=False)
     with ExitStack() as stack:
         profile.instrument_local_faces(stack, collector)
         with profile.scope(frame=17, purpose='local-confirm', local_id='17:1',
@@ -123,6 +148,7 @@ def test_local_face_observer_keeps_roi_shape_session_and_phase_identity(tmp_path
             blob = cv2.dnn.blobFromImage(pixels)
             assert session.run(None, {'input': blob}) is sentinel
             assert session.run(None, {'input': blob}) is sentinel
+    assert ended == [True] and collector.ort_session is None
     collector.close()
     rows = [json.loads(line) for line in (tmp_path / 'calls.jsonl').read_text().splitlines()]
     assert {'local-readback', 'local-numpy', 'local-resize', 'ort-local-face'} <= {r['stage'] for r in rows}
