@@ -148,6 +148,11 @@ async def test_eof_and_internal_publish_failure_have_distinct_retained_reasons(m
     history = next(value['stream_attempts'] for value in reversed(saved) if 'stream_attempts' in value)
     assert len(history) == 2
     assert history[0]['reason'] == 'source_eof' and history[0]['attempt_id'] == 'first'
+    bounds = history[0]['e0_boundaries']
+    assert bounds['source_validation_started'] <= bounds['source_validation_completed']
+    assert bounds['publisher_prepare_started'] <= bounds['publisher_prepare_completed']
+    assert bounds['media_execution_started'] <= bounds['media_execution_completed']
+    assert bounds['retry_wait_started'] <= bounds['retry_wait_completed']
     assert calls == 1
     assert history[1]['phase'] == 'publisher_prepare' and history[1]['error_type'] == 'ReadTimeout'
     assert history[1]['reason'] != 'source_unreachable'

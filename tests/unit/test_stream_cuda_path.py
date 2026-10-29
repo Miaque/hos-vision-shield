@@ -20,7 +20,7 @@ from vision_shield.media.plate_lookahead import PendingMask
 @pytest.mark.parametrize("delayed", [False, True])
 @pytest.mark.parametrize("repair", [False, True])
 @pytest.mark.parametrize('debug', [False, True])
-def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False, with_audio=False, default_schedule=False, pacing=True, slow_first=False):
+def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False, with_audio=False, default_schedule=False, pacing=True, slow_first=False, e0=True, capture=None):
     source_video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
     frames = [SimpleNamespace(width=64, height=48, pts=900000 + 3600 * i, time_base=Fraction(1, 90000))
               for i in range(3)]
@@ -127,7 +127,8 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         return wait(self, moment)
     monkeypatch.setattr(streams.StreamPacer, 'wait', paced_wait)
     config = {**Settings(_env_file=None, debug=debug).model_dump(), "inference_device": "cuda",
-              "detection_interval": 3, "tracking": "flow", "stream_output_pacing": pacing}
+              "detection_interval": 3, "tracking": "flow", "stream_output_pacing": pacing,
+              "stream_e0_diagnostics": e0}
     if default_schedule:
         config.pop('detection_interval')
         config.pop('tracking')
@@ -180,6 +181,8 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     if not debug:
         assert all('stream' not in event.get('stats', {}) and 'timings' not in event for event in events)
     assert stop.is_set()
+    if capture is not None:
+        capture.update(events=events, masked=masked, encoded=encoded)
     if fault != "decode":
         assert closed.is_set()
 

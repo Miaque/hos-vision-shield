@@ -35,6 +35,8 @@ GPU离线任务查询的 `Server-Timing` 额外提供主/补预处理、人脸/�
 
 查询上述实时诊断时，默认内部 RTSP 输出另提供 `receiver`：由 API 进程只读订阅本项目的脱敏视频，记录至多256个完整 RTP 图片的到达单调时间和 VCL 哈希，不解码、不订阅外部来源。API进程最多保留两个接收器，超过20秒没有继续查询时自行退出；`DEBUG=false` 或 `STREAM_DIAGNOSTICS=false` 不启动接收器。worker和接收器同时报告内核boot ID及时间命名空间偏移，只有验证二者相同后才能比较进程间单调时钟；客户端时间仍须独立分析。
 
+E0 观测位于 `live.e0`，受上述 DEBUG/STREAM_DIAGNOSTICS 门禁及 `STREAM_E0_DIAGNOSTICS`（默认true）控制。它记录 worker 解复用、时钟修复、输入FIFO、前视、编码与mux的时钟链；不增加CUDA同步，不改发布规则或媒体队列。所有 Pacer 决策都有累计计数及实际等待分解，逐帧环则报告 `ring_discarded`、`wire_omitted` 和 `discarded`，不可用不完整的环形记录计算总体等待。`conditional_rebase_*` 是保持观测到的就绪时刻和前次实际释放时间不变时，迟到重设额外抬高的等待，不能当作已验证的E1吞吐收益。主线程预算按嵌套区间扣除子区间，异步线程预算另列；它们是主机墙钟，不能当作纯GPU内核时间。mux返回与RTP接收仍分别观测。最终累计摘要随 `stream_end` 保存到连接历史，重连后可在 `attempts[].e0` 读取；历史仍最多32个连接。采集及本地开销验收见 `specs/006-stream-backlog-pacing/experiments/e0_capture.py`、`e0_analyze.py` 和 `benchmark-e0.py`。
+
 GPU 的 `3/flow` 文件及实时路径采用最多 0.5 秒媒体时间、16 帧的车牌前视补遮。实时输入暂停时额外等待队列最多保留约 0.75 秒，再按不完整窗口检查并输出；模型、编码及传输时间另计。DEBUG 任务响应的 `stats.stream.lookahead_frames` 表示前视队列，`queue_frames` 仍表示输入队列，接收至输出时延包含前视等待；旧 attempt 可不含该字段。
 
 实时前视队列完成复核和遮罩后，在编码后、视频包写出前按媒体间隔控制发布节奏，单帧额外等待最多 0.5 秒；慢处理后从当前发布时钟继续，不突发追赶历史帧。`STREAM_OUTPUT_PACING=false` 可关闭节奏控制（Compose 修改后需重新创建应用容器）。文件处理不等待墙钟，不更改帧或音频时间戳；节奏控制仍与处理共用循环，模型再次长时间阻塞时不能保证连续输出，也不把 0.5 秒前视窗口称作总延迟。DEBUG 的 `task-output-pacing` 单独报告发布等待，`task-encode` 扣除这段等待。

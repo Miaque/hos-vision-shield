@@ -163,6 +163,15 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
     publisher = Publisher(store, settings)
     history = list(record.get("stream_attempts", [])) if settings.debug else []
     discarded = record.get("stream_attempts_discarded", 0)
+    e0_enabled = settings.debug and settings.stream_diagnostics and settings.stream_e0_diagnostics
+    worker_clock_identity = None
+    if e0_enabled:
+        from vision_shield.media.rtsp_observer import clock_identity
+        worker_clock_identity = clock_identity()
+
+    def boundary(name):
+        if e0_enabled:
+            attempt.setdefault('e0_boundaries', {})[name] = time.monotonic()
     for previous in history:
         if "ended_at_unix" not in previous:
             previous.update(reason="worker_lost", phase="worker_control", ended_at_unix=time.time())
@@ -195,6 +204,8 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
             if settings.debug:
                 attempt.update(run_id=uuid4().hex, generation=generation, started_at_unix=time.time(),
                                started_monotonic=time.monotonic())
+                if e0_enabled:
+                    attempt['e0_clock_identity'] = worker_clock_identity
                 history.append(attempt)
                 discarded += max(0, len(history) - 32)
                 history = history[-32:]
@@ -203,9 +214,13 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
             ending, phase, finish_error = {}, "source_validate", None
             first_output = None
             try:
+                boundary('source_validation_started')
                 original, address = await validate_source(record["source_ref"], settings.source_allowlist, ("rtsp", "rtmp"))
+                boundary('source_validation_completed')
                 phase = "publisher_prepare"
+                boundary('publisher_prepare_started')
                 publish_url = await publisher.prepare(record, owner, generation)
+                boundary('publisher_prepare_completed')
                 await store.update_owned(task_id, owner, generation, state="connecting", ready=False)
 
                 async def event_received(event):
@@ -227,6 +242,9 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                         values["media_failure"] = dict(type=event["failure_type"], at=event.get("failure_at", []),
                                                        generation=generation, observed_at_unix=time.time())
                     if event.get("output"):
+                        if e0_enabled and 'first_output_received' not in attempt.get('e0_boundaries', {}):
+                            boundary('first_output_received')
+                            attempt['first_output_media_monotonic'] = event['output_monotonic']
                         # 父子进程共享单调时钟，管道积压不能把陈旧输出改成新鲜证明。
                         age_ms = max(0, int((time.monotonic() - event["output_monotonic"]) * 1000))
                         confirmed = await store.mark_output(task_id, owner, generation, age_ms=age_ms)
@@ -252,10 +270,12 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                     if key in record:
                         payload['config'][key] = record[key]
                 phase = "child_process"
+                boundary('media_execution_started')
                 result = await run_process([sys.executable, "-u", "-m", "vision_shield.media.child"],
                                            payload, cancel, event_received, settings.process_stop_timeout,
                                             on_exit=media_closed if record.get("publish_url") else None,
                                             **({'session': session} if session is not None else {}))
+                boundary('media_execution_completed')
                 if not ending:
                     ending.update(reason="child_exit", phase=phase, returncode=result.get("returncode"))
                 ending["returncode"] = result.get("returncode")
@@ -268,7 +288,9 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                     ending.update(cancellation or dict(reason="control_cancelled", phase="worker_control"))
                     break
                 phase = "publisher_close"
+                boundary('publisher_close_started')
                 await publisher.close(record, owner, generation)
+                boundary('publisher_close_completed')
                 if result.get("error") and not result.get("retryable"):
                     finish_error = result["error"]
             except SourceError as error:
@@ -281,6 +303,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                 ending.update(failure_details(error, phase, debug=settings.debug))
                 raise
             finally:
+                boundary('worker_attempt_ending')
                 if not ending:
                     ending.update(cancellation or dict(reason="worker_interrupted", phase=phase))
                 await persist_ending()
@@ -297,7 +320,12 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                                          "source_validate", "source_open", "source_read") else "processing_failed",
                                             "message": "Stream reconnect pending"})
             with contextlib.suppress(TimeoutError):
+                boundary('retry_wait_started')
                 await asyncio.wait_for(cancel.wait(), min(30, 2 ** min(retry, 5)))
+            boundary('retry_wait_completed')
+            if e0_enabled:
+                await store.update_owned(task_id, owner, generation, stream_attempts=history,
+                                         stream_attempts_discarded=discarded)
             retry += 1
     finally:
         await publisher.close(record, owner, generation)

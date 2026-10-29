@@ -108,20 +108,32 @@ class StreamBuffer:
         self.audio_size, self.dropped = 0, 0
         self.eof, self.error, self.input_video, self.input_audio = False, None, None, None
         self.failure = None
+        self.trace, self.trace_ids, self.last_trace_id = None, deque(), None
 
-    def frame(self, value, received_at=None, *, source_pts=None, timestamp_repaired=False, decoded_at=None):
+    def frame(self, value, received_at=None, *, source_pts=None, timestamp_repaired=False, decoded_at=None, trace_id=None):
         with self.condition:
             self.input_frames += 1
             # Some RTSP sources omit the first PTS; never publish or invent its clock.
             if value.pts is None or value.time_base is None:
                 self.dropped += 1
                 return
-            while len(self.frames) == self.frame_limit and not self.stop.is_set():
-                self.condition.wait(0.2)
+            blocked = len(self.frames) == self.frame_limit and not self.stop.is_set()
+            if blocked and self.trace:
+                self.trace.fifo_full(trace_id, len(self.frames))
+            try:
+                while len(self.frames) == self.frame_limit and not self.stop.is_set():
+                    with self.trace.span('wait:source-condition') if self.trace else nullcontext():
+                        self.condition.wait(0.2)
+            finally:
+                if blocked and self.trace:
+                    self.trace.fifo_unblocked(trace_id)
             if self.stop.is_set():
                 return
             self.frames.append(value)
             self.received.append((received_at, source_pts, timestamp_repaired, decoded_at))
+            if self.trace:
+                self.trace_ids.append(trace_id)
+                self.trace.fifo(trace_id, 'enqueued', len(self.frames), self.frame_limit)
             self.condition.notify()
 
     def audio_packet(self, packet):
@@ -142,13 +154,17 @@ class StreamBuffer:
                 remaining = None if deadline is None else deadline - time.monotonic()
                 if remaining is not None and remaining <= 0:
                     return INPUT_WAIT_TIMEOUT
-                self.condition.wait(.2 if remaining is None else min(.2, remaining))
+                with self.trace.span('wait:input-condition') if self.trace else nullcontext():
+                    self.condition.wait(.2 if remaining is None else min(.2, remaining))
             if self.error:
                 raise self.error
             if self.stop.is_set() or not self.frames:
                 return None
             frame = self.frames.popleft()
             self.last_received, self.last_source_pts, self.last_timestamp_repaired, self.last_decoded = self.received.popleft()
+            if self.trace:
+                self.last_trace_id = self.trace_ids.popleft()
+                self.trace.fifo(self.last_trace_id, 'dequeued', len(self.frames), self.frame_limit)
             self.condition.notify()
             if frame.pts is None or frame.time_base is None:
                 raise BufferError("Invalid video clock")
@@ -182,6 +198,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
 
         diagnostics = LiveDiagnostics(detector, dict(config, detection_interval=interval, tracking=redactor.tracking),
                                       metrics.attempt_id)
+    trace = diagnostics.e0 if diagnostics else None
+    buffer.trace = trace
+    if trace:
+        trace.event('media_attempt_enter', worker_attempt_started=config.get('stream_started_monotonic'))
     frames = None
     cuda_device = None
     if config.get("inference_device") == "cuda":
@@ -204,6 +224,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 hardware["hwaccel"] = hwaccel(frames.device)
             # RTSP SDP 已提供编码参数；按声音开关协商音轨，避免长时间探测造成音频突发。
             phase = "source_open"
+            if trace:
+                trace.event('source_open_started')
             options = {"rtsp_transport": "tcp", "analyzeduration": "100000", "probesize": "32768",
                        "allowed_media_types": "video+audio" if audio_enabled else "video"}
             if httpx.URL(source).scheme == "rtmp":
@@ -225,12 +247,19 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 source_reader = av.open(source, options=options,
                                         timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
             phase = "source_validate"
+            if trace:
+                trace.event('source_open_completed')
             video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"),
                                   audio_enabled=audio_enabled)
             with buffer.condition:
                 buffer.input_video = video
                 buffer.input_audio = source_reader.streams.audio[0] if audio_enabled and source_reader.streams.audio else None
             av_clock = LiveAVClock(video, buffer.input_audio) if buffer.input_audio else None
+            if trace:
+                trace.event('source_validated', video_time_base=str(getattr(video, 'time_base', None)),
+                    video_average_rate=str(getattr(video, 'average_rate', None)),
+                    audio_time_base=str(getattr(buffer.input_audio, 'time_base', None)),
+                    audio_sample_rate=getattr(getattr(buffer.input_audio, 'codec_context', None), 'sample_rate', None))
             received = {}
             # 静音任务只读取视频，不让音频时钟和缓冲阻止视频时间戳修复。
             packets = iter(source_reader.demux() if audio_enabled else source_reader.demux(video=0))
@@ -240,10 +269,17 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     with measure(redactor, "source-read"):
                         packet = next(packets)
                 except StopIteration:
+                    if trace:
+                        trace.event('demux_eof')
                     break
                 if stop.is_set():
                     break
                 if packet.stream.type == "video":
+                    packet_clock = trace.media_clock(packet) if trace else None
+                    if trace:
+                        trace.video_packet(packet_clock)
+                    if trace and getattr(packet, 'size', None) == 0:
+                        trace.event('decoder_drain_packet')
                     if debug and packet.pts is not None and packet.time_base is not None:
                         received.setdefault(packet.pts * packet.time_base, time.monotonic())
                         if len(received) > 256:
@@ -256,18 +292,33 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         check_dimensions(frame.width, frame.height, config)
                         moment = frame.pts * frame.time_base if frame.pts is not None and frame.time_base is not None else None
                         received_at = received.pop(moment, None)
+                        trace_id = trace.frame_start(frame, received_at, decoded_at=decoded_at,
+                                                     packet_clock=packet_clock) if trace else None
                         phase = "input_clock"
-                        repaired = av_clock.video_frame(frame) if av_clock and moment is not None else False
+                        try:
+                            repaired = av_clock.video_frame(frame) if av_clock and moment is not None else False
+                        finally:
+                            if trace:
+                                trace.video_clock(trace_id, 'input_clock', frame)
                         phase = "input_buffer"
                         with measure(redactor, "source-backpressure"):
-                            buffer.frame(frame, received_at, source_pts=moment, timestamp_repaired=repaired, decoded_at=decoded_at)
+                            buffer.frame(frame, received_at, source_pts=moment, timestamp_repaired=repaired,
+                                         decoded_at=decoded_at, trace_id=trace_id)
                 elif audio_enabled and packet.stream.type == "audio" and packet.dts is not None:
+                    raw_audio_clock = trace.media_clock(packet) if trace else None
                     phase = "input_audio_clock"
-                    if av_clock:
-                        av_clock.audio_packet(packet)
+                    try:
+                        if av_clock:
+                            av_clock.audio_packet(packet)
+                    finally:
+                        if trace:
+                            trace.audio_clock(raw_audio_clock, trace.media_clock(packet))
                     phase = "input_audio_buffer"
                     buffer.audio_packet(packet)
         except Exception as error:
+            if trace:
+                trace.event('source_error', phase=phase, error_type=type(error).__name__,
+                            errno=getattr(error, 'errno', None))
             with buffer.condition:
                 buffer.error = error
                 buffer.failure = failure_details(error, phase, debug=debug)
@@ -275,10 +326,14 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             with buffer.condition:
                 buffer.eof = True
                 buffer.condition.notify()
+            if trace:
+                trace.event('reader_eof_set')
             # Output stream templates still refer to this container during mux setup.
             writer_done.wait()
             if source_reader:
                 source_reader.close()
+            if trace:
+                trace.event('source_closed')
 
     reader = threading.Thread(target=read_source, daemon=True)
     reader.start()
@@ -290,6 +345,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     video, last_stats, failed_frames, processing = None, None, 0, False
     delay = None
     pacer = StreamPacer(stop)
+    pacer.observer = trace.pacing if trace else None
     phase, ending = "publish_open", None
 
     def report(force=False):
@@ -332,6 +388,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         encoded_vcl_sha256 = vcl_digest(bytes(packet)) if debug else None
         submitted = metrics.pending.get(moment) if diagnostics else None
         packet_source_pts = submitted[1] if submitted else None
+        if trace:
+            trace.packet_clock = trace.media_clock(packet)
+            if moment in trace.encoder:
+                trace.encoder[moment]['encoded_vcl_sha256'] = encoded_vcl_sha256
         if delay and config.get('stream_output_pacing', True) and moment is not None:
             phase = 'output_pacing'
             waiting = time.monotonic() if debug else None
@@ -342,6 +402,9 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             if not allowed:
                 return False
         try:
+            if trace:
+                trace.update_frame(trace.encoder.get(moment, {}).get('frame_id'),
+                                   mux_started_monotonic=time.monotonic(), encoded_vcl_sha256=encoded_vcl_sha256)
             with diagnostics.operation('video-mux', packet_source_pts) if diagnostics else nullcontext():
                 writer.mux(packet)
         except Exception as error:
@@ -349,12 +412,25 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             processing = False
             ending = failure_details(error, "publish_write", debug=debug)
             raise
-        metrics.written(moment, time.monotonic() if debug else None, encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256)
+        written_at = time.monotonic() if debug else None
+        metrics.written(moment, written_at, encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256)
+        if trace:
+            first = trace.first_output is None
+            trace.written(moment, written_at)
+            if first and trace.first_output is not None:
+                trace.event('first_video_mux_completed', mux_monotonic=written_at)
         return True
+
+    def mux_audio(packet, source_moment, normalized_input=None):
+        record = trace.audio_publish(normalized_input, trace.media_clock(packet), origin, transcode_audio) if trace else None
+        with diagnostics.operation('audio-mux', source_moment) if diagnostics else nullcontext():
+            writer.mux(packet)
+        if trace:
+            trace.audio_accepted(record)
 
     def write_output(sample):
         nonlocal video, audio, transcode_audio, phase, processing, count, last_output_report, encode_seconds
-        output, packets, received_at, source_moment, moment, repaired, decoded_at, processing_at = sample
+        output, packets, received_at, source_moment, moment, repaired, decoded_at, processing_at, trace_id = sample
         processing = True
         output.pts = round((moment - origin) / output.time_base)
         stage = time.monotonic() if debug else None
@@ -374,25 +450,31 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     audio = writer.add_stream_from_template(buffer.input_audio)
         if (output.width, output.height) != (video.width, video.height):
             raise BufferError("Stream dimensions changed")
-        for packet in packets:
-            phase = "audio_process"
-            packet.pts -= round(origin / packet.time_base)
-            packet.dts -= round(origin / packet.time_base)
-            if transcode_audio:
-                for frame in packet.decode():
-                    for encoded in audio.encode(frame):
-                        with diagnostics.operation('audio-mux', source_moment) if diagnostics else nullcontext():
-                            writer.mux(encoded)
-            else:
-                packet.stream = audio
-                with diagnostics.operation('audio-mux', source_moment) if diagnostics else nullcontext():
-                    writer.mux(packet)
+        with trace.span('op:audio-process') if trace else nullcontext():
+            for packet in packets:
+                phase = "audio_process"
+                normalized_audio_clock = trace.media_clock(packet) if trace else None
+                packet.pts -= round(origin / packet.time_base)
+                packet.dts -= round(origin / packet.time_base)
+                if transcode_audio:
+                    for frame in packet.decode():
+                        for encoded in audio.encode(frame):
+                            mux_audio(encoded, source_moment, normalized_audio_clock)
+                else:
+                    packet.stream = audio
+                    mux_audio(packet, source_moment, normalized_audio_clock)
         published = False
         phase = "video_encode"
         metrics.submit(output, received_at, source_moment, timeline_pts=moment, timestamp_repaired=repaired,
                        decoded_at=decoded_at, processing_at=processing_at)
+        if trace:
+            trace.encode_context(output.pts * output.time_base, trace_id,
+                                 encoder_frame_clock=trace.media_clock(output), origin=str(origin))
+            trace.update_frame(trace_id, encode_started_monotonic=time.monotonic())
         with diagnostics.operation('video-encode', source_moment) if diagnostics else nullcontext():
             encoded = video.encode(output)
+        if trace:
+            trace.update_frame(trace_id, encode_completed_monotonic=time.monotonic())
         for packet in encoded:
             published = mux_video(packet) or published
         if debug:
@@ -417,6 +499,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             write_output(output)
 
     try:
+        if trace:
+            trace.event('publish_open_started')
         options = {"rtsp_transport": "tcp", "max_interleave_delta": "100000"}
         if protocol == "rtmp":
             original = httpx.URL(config.get("publish_url") or target)
@@ -427,8 +511,13 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         if diagnostics:
             diagnostics.runtime['output_mux_options'] = {key:value for key,value in options.items()
                 if key in ('rtsp_transport', 'max_interleave_delta', 'flush_packets')}
+            if trace:
+                from vision_shield.media.stream_e0 import runtime_fingerprint
+                trace.runtime_fingerprint = runtime_fingerprint(diagnostics.runtime)
         with av.open(target, "w", format="flv" if protocol == "rtmp" else "rtsp", options=options,
                      timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"])) as writer:
+            if trace:
+                trace.event('publish_open_completed')
             video, audio = None, None
             transcode_audio = False
             while True:
@@ -438,10 +527,11 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     release(delay.expire)
                 phase = 'input_wait'
                 try:
-                    sample = buffer.take(timeout=delay.wait_seconds() if delay else None)
+                    with trace.span('op:input-wait') if trace else nullcontext():
+                        sample = buffer.take(timeout=delay.wait_seconds() if delay else None)
                 except Exception:
                     if delay:
-                        release(delay.flush, 'lookahead-flush')
+                        release(lambda: delay.flush(reason='input-error'), 'lookahead-flush')
                     raise
                 if sample is INPUT_WAIT_TIMEOUT:
                     report()
@@ -474,22 +564,36 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 previous = moment
                 if origin is None:
                     origin = moment
+                trace_id = buffer.last_trace_id
+                if trace:
+                    trace.video_clock(trace_id, 'normalized_clock', frame)
+                    trace.update_frame(trace_id, processing_started_monotonic=processing_at,
+                                       timestamp_repaired=repaired, origin=str(origin))
                 stage = time.monotonic() if debug else None
                 phase = "frame_process"
                 metadata = (packets, buffer.last_received, source_moment, moment, repaired,
-                            buffer.last_decoded, processing_at)
+                            buffer.last_decoded, processing_at, trace_id)
                 if frames and redactor.tracking == 'flow':
                     if delay is None:
                         delay = PlateLookahead(redactor)
+                        delay.trace = trace
                     with diagnostics.operation('process', source_moment) if diagnostics else nullcontext():
                         pending = frames.masked(frame, redactor, defer=True)
+                    if trace:
+                        trace.update_frame(trace_id, process_completed_monotonic=time.monotonic())
                     render = pending.render
                     def traced_render(extra, render=render, metadata=metadata,
                                       frame_sequence=diagnostics.frame_sequence if diagnostics else None):
+                        if trace:
+                            trace.update_frame(metadata[-1], render_started_monotonic=time.monotonic())
                         with (diagnostics.operation('render', metadata[2], frame_sequence=frame_sequence)
                               if diagnostics else nullcontext()):
-                            return (render(extra), *metadata)
+                            output = render(extra)
+                        if trace:
+                            trace.update_frame(metadata[-1], render_completed_monotonic=time.monotonic())
+                        return (output, *metadata)
                     pending.render = traced_render
+                    pending.trace_id = trace_id
                     # Leave one input-frame interval plus jitter beyond the half-second media window.
                     pending.deadline = time.monotonic() + .75
                     if debug:
@@ -498,27 +602,45 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 else:
                     with diagnostics.operation('process', source_moment) if diagnostics else nullcontext():
                         output = frames.masked(frame, redactor) if frames else masked_frame(frame, redactor, origin)
+                    if trace:
+                        completed_at = time.monotonic()
+                        trace.update_frame(trace_id, process_completed_monotonic=completed_at,
+                                           render_completed_monotonic=completed_at)
                     if debug:
                         frame_seconds += time.monotonic() - stage
                     write_output((output, *metadata))
                 processing = False
-                report()
+                with trace.span('op:report') if trace else nullcontext():
+                    report()
                 if stop.is_set():
                     break
             if delay:
                 if stop.is_set():
+                    if trace:
+                        for pending in delay.pending:
+                            trace.update_frame(pending.trace_id, release_reason='stop-without-render')
                     delay.pending.clear()
                 else:
-                    release(delay.flush, 'lookahead-flush')
+                    release(lambda: delay.flush(reason='eof'), 'lookahead-flush')
             if video:
                 phase = "encoder_flush"
-                for packet in video.encode():
+                if trace:
+                    trace.event('encoder_flush_started')
+                with trace.span('op:encoder-flush') if trace else nullcontext():
+                    final_packets = video.encode()
+                for packet in final_packets:
                     mux_video(packet)
+                if trace:
+                    trace.event('encoder_flush_completed')
             if transcode_audio:
                 phase = "audio_flush"
                 for packet in audio.encode():
-                    writer.mux(packet)
+                    mux_audio(packet, None)
             phase = "publish_close"
+            if trace:
+                trace.event('publish_close_started')
+        if trace:
+            trace.event('publish_close_completed')
     except Exception as error:
         failed_frames += int(processing)
         if ending is None:
@@ -527,11 +649,18 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     finally:
         if ending is None:
             ending = dict(reason="stop_requested" if stop.is_set() else "source_eof", phase="source_read")
+        if trace:
+            trace.event('media_ending', reason=ending['reason'], phase=ending['phase'])
         if debug:
             ending.update(attempt_id=metrics.attempt_id, ended_monotonic=time.monotonic())
         stop.set()
         writer_done.set()
-        reader.join(timeout=config["rtsp_read_timeout"] + 1)
+        with trace.span('op:reader-join') if trace else nullcontext():
+            reader.join(timeout=config["rtsp_read_timeout"] + 1)
+        if trace:
+            trace.event('reader_join_completed', alive=reader.is_alive())
+            trace.finish()
+            ending['e0'] = trace.summary()
         report(force=True)
         if diagnostics:
             diagnostics.close()

@@ -17,7 +17,8 @@ from vision_shield.media import streams
 @pytest.mark.parametrize("audio_codec", ["aac", "pcm_alaw", "pcm_mulaw"])
 @pytest.mark.parametrize("fault", ["none", "video_repeat", "video_reset", "audio_repeat", "audio_reset", "both_reset"])
 def test_live_audio_clock_recovery_preserves_audio_and_sync(
-    tmp_path, monkeypatch, protocol, audio_codec, fault, *, coarse_clock=False, source_bframes=0, debug=True,
+    tmp_path, monkeypatch, protocol, audio_codec, fault, *, coarse_clock=False, source_bframes=0,
+    debug=True, e0=True, capture=None,
 ):
     """反复重复 PTS、单轨与双轨回退后，独立画面及 AAC 内容仍保持同一时间线。"""
     source, target = tmp_path / "source.nut", tmp_path / "output.nut"
@@ -107,7 +108,7 @@ def test_live_audio_clock_recovery_preserves_audio_and_sync(
 
     events = []
     config = Settings(_env_file=None, debug=debug).model_dump()
-    config.update(inference_device="cpu", audio_enabled=True)
+    config.update(inference_device="cpu", audio_enabled=True, stream_e0_diagnostics=e0)
     streams.process_stream("rtmp://camera/input", f"{protocol}://output/live", Detector(), config,
                            threading.Event(), events.append)
     assert events[-1]["stats"]["processed_frames"] == count
@@ -148,6 +149,8 @@ def test_live_audio_clock_recovery_preserves_audio_and_sync(
         wave = np.concatenate([frame.to_ndarray().reshape(-1) for frame in decoded])[48000:96000]
         assert np.sqrt(np.mean(wave ** 2)) > .01
         assert abs(np.argmax(np.abs(np.fft.rfft(wave))) - 440) <= 2
+    if capture is not None:
+        capture.update(target=target, events=events)
 
 
 def test_unknown_audio_interval_still_fails_closed():

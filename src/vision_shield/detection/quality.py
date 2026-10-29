@@ -67,7 +67,8 @@ class Detector:
         try:
             detail, detail_seconds = _timed_candidates(self.detail, pixels)
         finally:
-            primary, primary_seconds = pending.result()
+            with measure(self, 'wait-primary'):
+                primary, primary_seconds = pending.result()
         self._proposal_candidates = (rgb, primary, primary_seconds, detail, detail_seconds)
         return [detection for detection in detail if detection.kind == "plate"]
 
@@ -93,7 +94,8 @@ class Detector:
             try:
                 detail, detail_seconds = _timed_candidates(self.detail, pixels, kind=kind)
             finally:
-                primary, primary_seconds = pending.result()
+                with measure(self, 'wait-primary'):
+                    primary, primary_seconds = pending.result()
         else:
             primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind, full_frame=full_frame)
             detail, detail_seconds = _timed_candidates(self.detail, rgb, kind=kind)

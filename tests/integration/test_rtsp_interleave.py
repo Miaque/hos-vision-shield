@@ -44,7 +44,7 @@ def interleave_source(tmp_path_factory):
     return path
 
 
-def run_output(source, scenario, monkeypatch, *, default_interleave=False):
+def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=None):
     original_open = av.open
     stop = threading.Event()
     audio_input, wire_clocks, events = [], [], []
@@ -126,6 +126,8 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False):
 
     monkeypatch.setattr(streams.av,'open',open_endpoint)
     config = Settings(_env_file=None,debug=True,stream_diagnostics=False).model_dump()
+    if e0 is not None:
+        config.update(stream_diagnostics=True, stream_e0_diagnostics=e0)
     config.update(inference_device='cpu',detection_interval=1,tracking='template')
     with RTSPCapture() as capture:
         streams.process_stream('rtsp://fixture/input',capture.url,Detector(),config,stop,emit)
@@ -213,3 +215,30 @@ def test_rtsp_output_reconnects_with_fresh_clocks(interleave_source,monkeypatch)
             capture,_,_,events,_ = run_output(interleave_source,'continuous',patch)
         assert len(capture.pictures()) == 100
         assert events[-1]['stream_end']['reason'] == 'source_eof'
+
+
+@pytest.mark.parametrize('scenario', ['continuous', 'reset'])
+def test_e0_keeps_actual_rtsp_video_aac_and_rtcp_mapping(interleave_source, monkeypatch, scenario):
+    from vision_shield.detection import host_profile
+    outputs = []
+    for enabled in (False, True):
+        with monkeypatch.context() as scoped:
+            # This peer tests actual media I/O; no GPU/model runtime exists in its CPU fixture.
+            scoped.setattr(host_profile, 'runtime_metadata', lambda *args: {'source_sha256': {}})
+            capture, _, clocks, events, _ = run_output(interleave_source, scenario, scoped, e0=enabled)
+        video, audio = capture.pictures(), capture.audio()
+        assert len(video) == 100
+        assert len(audio) == sum(row['track']=='audio' for row in clocks)-1
+        relative = []
+        for kind, received, rate in [('video', video, 90000), ('audio', audio, 8000)]:
+            packets = [row for row in clocks if row['track'] == kind]
+            offset = (received[0]['timestamp']-round(packets[0]['pts']*rate)) % 2**32
+            assert all((r['timestamp']-round(p['pts']*rate)) % 2**32 == offset for r, p in zip(received, packets))
+            relative.append([(row['pts'], row['dts'], row['payload']) for row in packets])
+        video_zero = capture.clock_time(0, video[0]['timestamp'], 90000)-float(relative[0][0][0])
+        audio_zero = capture.clock_time(2, audio[0]['timestamp'], 8000)-float(relative[1][0][0])
+        assert abs(video_zero-audio_zero) < .002
+        outputs.append(relative)
+        if enabled:
+            assert events[-1]['stream_end']['e0']['clock_totals']['audio_mux_packets'] > 0
+    assert outputs[0] == outputs[1]

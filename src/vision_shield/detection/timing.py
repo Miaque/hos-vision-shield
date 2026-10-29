@@ -14,6 +14,7 @@ STAGES = (
     "color-convert", "gray-copy", "mask-gpu",
     "source-read", "source-decode", "source-backpressure", "session-primary-face", "session-detail-face",
     "plate-work-check",
+    "wait-primary",
 )
 
 
@@ -22,18 +23,20 @@ class StageTimes:
         self.seconds = dict.fromkeys(STAGES, 0.0)
         self.lock = Lock()
         self.observer = None
+        self.span_observer = None
 
     @contextmanager
     def measure(self, name):
-        started = perf_counter()
-        try:
-            yield
-        finally:
-            elapsed = perf_counter() - started
-            with self.lock:
-                self.seconds[name] += elapsed
-            if self.observer is not None:
-                self.observer(name, elapsed)
+        with self.span_observer('stage:' + name) if self.span_observer else nullcontext():
+            started = perf_counter()
+            try:
+                yield
+            finally:
+                elapsed = perf_counter() - started
+                with self.lock:
+                    self.seconds[name] += elapsed
+                if self.observer is not None:
+                    self.observer(name, elapsed)
 
     def snapshot(self):
         with self.lock:
