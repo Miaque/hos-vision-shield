@@ -1,0 +1,239 @@
+{
+  "runtime": {
+    "torch": "2.14.1+cu126",
+    "cuda": "12.6",
+    "ort": "1.20.2",
+    "gpu": "NVIDIA GeForce GTX 970",
+    "gpu_uuid": "726c4caf-ea22-7c08-f074-8533c9189644",
+    "capability": [
+      5,
+      2
+    ],
+    "primary_parameter_dtypes": [
+      null,
+      [
+        "torch.float32"
+      ]
+    ],
+    "primary_parameter_devices": [
+      null,
+      [
+        "cuda:0"
+      ]
+    ],
+    "primary_face_providers": [
+      "CUDAExecutionProvider"
+    ],
+    "primary_face_input_types": [
+      "tensor(float)"
+    ],
+    "detail_providers": [
+      "CUDAExecutionProvider",
+      "CUDAExecutionProvider"
+    ],
+    "detail_face_provider_options": {
+      "CUDAExecutionProvider": {
+        "device_id": "0",
+        "has_user_compute_stream": "0",
+        "cudnn_conv1d_pad_to_nc1d": "0",
+        "user_compute_stream": "0",
+        "gpu_external_alloc": "0",
+        "gpu_mem_limit": "18446744073709551615",
+        "enable_cuda_graph": "0",
+        "gpu_external_free": "0",
+        "gpu_external_empty_cache": "0",
+        "arena_extend_strategy": "kNextPowerOfTwo",
+        "cudnn_conv_algo_search": "HEURISTIC",
+        "do_copy_in_default_stream": "1",
+        "cudnn_conv_use_max_workspace": "1",
+        "tunable_op_enable": "0",
+        "tunable_op_tuning_enable": "0",
+        "tunable_op_max_tuning_duration_ms": "0",
+        "enable_skip_layer_norm_strict_mode": "0",
+        "prefer_nhwc": "0",
+        "use_ep_level_unified_stream": "0",
+        "use_tf32": "0",
+        "sdpa_kernel": "0",
+        "fuse_conv_bias": "0"
+      },
+      "CPUExecutionProvider": {}
+    },
+    "torch_cudnn_version": 91002,
+    "torch_threads": 4,
+    "opencv_threads": 2,
+    "global_fp32_precision": "none",
+    "matmul_fp32_precision": "none",
+    "cudnn_conv_fp32_precision": "tf32",
+    "config": {
+      "detection_backend": "quality_yolo",
+      "inference_device": "cuda",
+      "detection_max_side": 1280,
+      "detection_box_padding": 0.15,
+      "redaction_mode": "solid",
+      "detection_interval": 3,
+      "tracking": "flow"
+    },
+    "weights_sha256": {
+      "egoblur_plate_model_path": "d0be72e015e30f0123a9194419bbb2fdcb6916faf81096e3fa2b50bcd1a85ade",
+      "face_model_path": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "plate_model_path": "2a985dc63a5cc947ec36d18503d6fc0fd54525b9dba17f2fe29a71e86b44456d",
+      "primary_face": "2e7af8694e93862be6a81c13b197ef766e8ab7e10af230bc19bc94d045dedb2b"
+    },
+    "source_sha256": {
+      "detection.quality": "60d1c9ac47a7856919e151ae283d6d6df3aa8416210e4655dc5e4d568b9c717c",
+      "detection.plate_readability": "04ba6b208389e26e380715bed2c45a4869e5908ff8dd38e85ce4b2dfd7ee68c4",
+      "detection.egoblur": "1dbc7674eb0616624d53b687f1e172769f79a7f722d34e1a2ba4d33021ceceb0",
+      "detection.cuda_detail": "1a88fae6196873822845775de41c4c7bb6c7e4a2e81882ec30f9bf6ce429d2a7",
+      "detection.cpu": "54615a487f66af29264c222f2979bf8402c75a1d22da9275598313d6bf344b5a",
+      "detection.host_profile": "a560c16ca15d68024b40fcf055339d83084b3b11f3f68b8895159cae0cc11c5d",
+      "detection.yolo": "a7252e8e869ae5bccd0a818909c3250e72a007a2e271ae09a7d7281f5bd48a4b",
+      "detection.cuda_pixels": "0a02f6840c9a6dfdf388f026ebde721005b691d106c04a29a679e2c38a7ede04",
+      "redaction": "7e6b8084b9f727782dd5a4720d1b0e908c38c434ede09e5507b49bc87fee2452",
+      "media.video": "435ff5283ade5d9c7f2839f1610df3a2c38ee3667be643faf1f0ccc1b259c797",
+      "media.plate_lookahead": "4f605cb6e8d0fed633106865004ecba8579b20eb2f19d76b0150dffec670ece8",
+      "media.streams": "e0de3469b585bc63772740ebcd0ec50b599494fad828bca3a50bec6ec316e6db"
+    }
+  },
+  "async_tasks": {
+    "jobs": 4837,
+    "queue_dispatch_seconds": 1.1871054000275763,
+    "worker_seconds": 348.8093326000526,
+    "failed_jobs": 0,
+    "wait_calls": 4837,
+    "wait_seconds": 264.64223329992274,
+    "queue_dispatch_inside_wait_seconds": 0.0,
+    "worker_inside_wait_seconds": 264.3307378000027,
+    "after_worker_inside_wait_seconds": 0.3114954999200563,
+    "bytes": 53934909,
+    "source_sha256": "6de1f81d765dd8275b6fdc5d0f645cb56098f4f861911a6bfc64b35ef78b6e92",
+    "main_exclusive_seconds": {
+      "initialize-primary": 1.4177009999984875,
+      "initialize-detail": 0.19383170000037353,
+      "demux-read": 0.10575400004563562,
+      "decode-host": 1.1930988999956753,
+      "explicit-sync": 2.71657370005596,
+      "color-convert": 1.741662299980817,
+      "gray-copy": 2.2452145999577624,
+      "prepare-detail": 5.540032699915173,
+      "forward-detail-plate": 56.82386759990368,
+      "output-copy": 0.9811025999297271,
+      "post-detail": 2.2029797999621223,
+      "candidate-detail": 3.2927874001888995,
+      "wait-primary": 264.6501336000183,
+      "plate-work-check": 0.756144400105768,
+      "local-readback": 0.7974435999876732,
+      "local-numpy": 0.061177300067356555,
+      "local-resize": 0.6516066999247414,
+      "local-confirm": 0.965852400089716,
+      "confirm-request": 0.20144400001845497,
+      "input-copy": 0.32613180002408626,
+      "prepare-primary": 0.09855799998695147,
+      "forward-primary-plate": 93.91992050004046,
+      "post-primary": 1.5237390999536728,
+      "candidate-primary": 0.3862448999843764,
+      "quality-detection": 1.2349998998506635,
+      "detect-pass": 0.16845289999582747,
+      "frame-regions": 0.7932802999894193,
+      "track-flow": 0.9496752000759443,
+      "track-update": 4.987583099959011,
+      "template-follow": 0.1797189000335493,
+      "track-recheck": 0.04690109996954561,
+      "track-confirm": 0.10400560001471604,
+      "track-recheck-request": 0.02214740000454185,
+      "track-probe": 0.30333180000525317,
+      "track-face-recheck": 0.04015329996946093,
+      "session-primary-face": 0.22265619999780029,
+      "forward-primary-face": 0.29264880000118865,
+      "recover-request": 7.019999975454994e-05,
+      "mask-gpu": 0.5761590000074648,
+      "encoder-initialize": 0.00021399999968707561,
+      "mux-host": 0.1318028999867238,
+      "encode-host": 0.9038154000154464,
+      "container-close": 0.0008106000004772795
+    },
+    "main_exclusive_thread_cpu_seconds": {
+      "initialize-primary": 1.359375,
+      "initialize-detail": 0.203125,
+      "demux-read": 0.0625,
+      "decode-host": 0.375,
+      "explicit-sync": 2.171875,
+      "color-convert": 1.703125,
+      "gray-copy": 2.109375,
+      "prepare-detail": 3.375,
+      "forward-detail-plate": 37.71875,
+      "output-copy": 1.0,
+      "post-detail": 2.046875,
+      "candidate-detail": 3.28125,
+      "wait-primary": 0.328125,
+      "plate-work-check": 0.515625,
+      "local-readback": 0.71875,
+      "local-numpy": 0.046875,
+      "local-resize": 0.6875,
+      "local-confirm": 0.828125,
+      "confirm-request": 0.265625,
+      "input-copy": 0.3125,
+      "prepare-primary": 0.109375,
+      "forward-primary-plate": 92.609375,
+      "post-primary": 1.6875,
+      "candidate-primary": 0.359375,
+      "quality-detection": 1.28125,
+      "detect-pass": 0.109375,
+      "frame-regions": 0.734375,
+      "track-flow": 0.953125,
+      "track-update": 5.265625,
+      "template-follow": 0.15625,
+      "track-recheck": 0.015625,
+      "track-confirm": 0.046875,
+      "track-recheck-request": 0.015625,
+      "track-probe": 0.5,
+      "track-face-recheck": 0.015625,
+      "session-primary-face": 0.234375,
+      "forward-primary-face": 0.265625,
+      "recover-request": 0.0,
+      "mask-gpu": 0.546875,
+      "encoder-initialize": 0.0,
+      "mux-host": 0.125,
+      "encode-host": 0.765625,
+      "container-close": 0.0
+    },
+    "worker_exclusive_seconds": {
+      "11348": {
+        "explicit-sync": 1.2501265999962925,
+        "session-primary-face": 0.14217209999333136,
+        "prepare-primary": 2.475415700009762,
+        "forward-primary-face": 29.91666179994354,
+        "output-copy": 0.644219499972678,
+        "post-primary": 3.3637323001021286,
+        "forward-primary-plate": 278.75653680004325,
+        "candidate-primary": 2.599166099997092,
+        "local-readback": 0.06784099998003512
+      },
+      "34188": {
+        "session-detail-face": 0.044956199984881096,
+        "prepare-detail": 1.3260923999587249,
+        "explicit-sync": 0.7131992000431637,
+        "forward-detail-face": 23.140929199986203,
+        "output-copy": 0.2980566999376606,
+        "post-detail": 1.611037600059717
+      }
+    },
+    "phase_boundaries": "host wall and per-thread CPU; forward wall includes GPU/implicit synchronization",
+    "limits": {
+      "bytes": 67108864,
+      "jobs": 25000
+    },
+    "clock": {
+      "name": "perf_counter",
+      "implementation": "QueryPerformanceCounter()",
+      "monotonic": true,
+      "adjustable": false,
+      "resolution": 1e-07
+    },
+    "notes": [
+      "Queue/dispatch includes executor enqueue, thread startup and OS dispatch; not pure queue residence",
+      "worker_return precedes Future state publication; done callback may run after result returns",
+      "Wait intersections partition one main wait; do not add concurrent model durations",
+      "Per-thread CPU is active host CPU; wall minus CPU is not pure GPU time"
+    ]
+  }
+}

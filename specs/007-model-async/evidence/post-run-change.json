@@ -1,0 +1,6 @@
+{
+  "measured_source_sha256": "6de1f81d765dd8275b6fdc5d0f645cb56098f4f861911a6bfc64b35ef78b6e92",
+  "final_source_sha256": "e2efe1667c46393a143646d6795dd4d4221aad92c52fe7546b7c396f66099cbd",
+  "focused_tests": "7 passed",
+  "patch": "--- measured\n+++ final\n@@ -79,6 +79,10 @@\n \n     def report(self):\n         with self.lock:\n+            # Future callbacks log exceptions instead of propagating them to result().\n+            # A budget failure there must still prevent a successful partial report.\n+            if self.bytes > self.limit:\n+                raise RuntimeError('Async diagnostic byte budget exceeded')\n             if not self.closed:\n                 self.file.flush()\n             return dict(jobs=len(self.jobs), **dict(self.counts), bytes=self.bytes,\n"
+}

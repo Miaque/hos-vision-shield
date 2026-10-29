@@ -150,9 +150,9 @@ async def upload(request: Request, response: Response,
                  detection_interval: Literal['1', '3'] | None = Header(default=None, alias='X-Detection-Interval',
                      description='仅离线视频顺序验证：全图检测间隔，省略时保持逐帧；解码、跟踪、遮罩和编码仍逐帧执行'),
                  profile_detection: Literal['1', 'host', 'forward-primary-face', 'forward-primary-plate',
-                                            'forward-detail-face', 'forward-detail-plate', 'local-face'] | None = Header(
+                                            'forward-detail-face', 'forward-detail-plate', 'local-face', 'async-host'] | None = Header(
                      default=None, alias='X-Detection-Profile',
-                     description='仅视频：1沿用主车牌全图CUDA采样；host记录调用分布；local-face仅保留慢局部人脸CUDA采样；forward-*按真实前向序号采样。诊断FPS不作吞吐验收')):
+                     description='仅视频：1沿用主车牌全图CUDA采样；host记录调用分布；async-host另记模型任务与future关键路径；local-face仅保留慢局部人脸CUDA采样；forward-*按真实前向序号采样。诊断FPS不作吞吐验收')):
     key, target_id = creation_headers(request)
     settings = request.app.state.settings
     if profile_detection is not None and not settings.debug:
@@ -283,7 +283,8 @@ async def get_task(task_id: UUID, request: Request, response: Response):
 
 @router.get('/tasks/{task_id}/diagnostics')
 async def detection_diagnostics(task_id: UUID, request: Request,
-                                sample: int | None = Query(default=None, json_schema_extra={'enum': list(CHECKPOINTS)})):
+                                sample: int | None = Query(default=None, json_schema_extra={'enum': list(CHECKPOINTS)}),
+                                artifact: Literal['async-tasks'] | None = Query(default=None)):
     if not request.app.state.settings.debug:
         raise HTTPException(404, 'diagnostics_disabled')
     if sample is not None and sample not in CHECKPOINTS:
@@ -291,6 +292,17 @@ async def detection_diagnostics(task_id: UUID, request: Request,
     task = await request.app.state.store.get(str(task_id))
     if task is None:
         raise HTTPException(404, 'task_not_found')
+    if artifact is not None:
+        if sample is not None:
+            raise HTTPException(422, 'invalid_input')
+        if (task.get('device_profile') or {}).get('mode') != 'async-host':
+            raise HTTPException(409, 'diagnostics_not_ready')
+        root = request.app.state.settings.media_root.resolve()
+        target = await asyncio.to_thread((root / str(task_id) / f"attempt-{task['generation']}" /
+                                         'host-profile/async-tasks.jsonl').resolve)
+        if not target.is_relative_to(root / str(task_id)) or not await asyncio.to_thread(target.is_file):
+            raise HTTPException(409, 'diagnostics_not_ready')
+        return FileResponse(target, media_type='application/x-ndjson', filename='async-tasks.jsonl')
     if task.get('kind') == 'stream' and sample is None and (task.get('media_failure') or task.get('stream_attempts')):
         result = {'mode': 'stream'}
         if task.get('media_failure'):

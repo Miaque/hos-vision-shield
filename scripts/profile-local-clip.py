@@ -18,7 +18,7 @@ def main():
     parser.add_argument('video', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--models', type=Path, required=True)
-    parser.add_argument('--mode', choices=('host', 'local-face'), required=True)
+    parser.add_argument('--mode', choices=('host', 'async-host', 'local-face'), required=True)
     args = parser.parse_args()
     settings = Settings(_env_file=None, detection_backend='quality_yolo', inference_device='cuda',
         face_model_path=args.models / 'yunet_face.onnx', plate_model_path=args.models / 'hyperlpr_plate.onnx',

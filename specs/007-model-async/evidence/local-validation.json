@@ -1,0 +1,79 @@
+{
+  "source_sha256": "846204eb03f4cd0aeec78f22e1fa1ca4bf0ab2bb2fd866c9012bc32f956fb42a",
+  "output_sha256": "bd50825345c97475ea2c53698e5c26d694e072c26b0f3caaa996635f4a5124d2",
+  "frames": 2208,
+  "audio_packets": 694,
+  "video_pts_and_audio_payload_equal": true,
+  "complete_output_bytes_equal": true,
+  "detection_stats": {
+    "full_frames": 1333,
+    "skipped_frames": 875,
+    "local_rechecks": 314,
+    "full_rechecks": 597,
+    "flow_updates": 728,
+    "flow_failures": 2156,
+    "proposal_frames": 908,
+    "proposal_rechecks": 33,
+    "face_rechecks": 875,
+    "template_fallbacks": 607,
+    "template_eligible": 1982,
+    "template_global_blocked": 1423,
+    "template_blocked": 1342,
+    "template_attempts": 640,
+    "template_rejections": 33,
+    "backfilled_plate_masks": 107,
+    "lookahead_max_frames": 16,
+    "backfill_local_checks": 12,
+    "lookahead_tail_checks": 107
+  },
+  "modes": [
+    {
+      "mode": "normal",
+      "exit_code": 0,
+      "total_wall_seconds": 454.0779999999995,
+      "gpu": "NVIDIA GeForce GTX 970",
+      "capability": [
+        5,
+        2
+      ],
+      "source_sha256": "846204eb03f4cd0aeec78f22e1fa1ca4bf0ab2bb2fd866c9012bc32f956fb42a",
+      "largest_event_bytes": 1875,
+      "note": "E0 stream probes are inactive in process_video; this file run cannot measure their on/off cost",
+      "frames": 2208,
+      "audio_packets": 694,
+      "integrity": true,
+      "output_sha256": "bd50825345c97475ea2c53698e5c26d694e072c26b0f3caaa996635f4a5124d2",
+      "media_elapsed_seconds": 449.8909999999996,
+      "video_decoder": "h264_nvdec",
+      "video_encoder": "h264_nvenc"
+    },
+    {
+      "mode": "async-host",
+      "exit_code": 0,
+      "total_wall_seconds": 460.90600000000086,
+      "gpu": "NVIDIA GeForce GTX 970",
+      "capability": [
+        5,
+        2
+      ],
+      "source_sha256": "846204eb03f4cd0aeec78f22e1fa1ca4bf0ab2bb2fd866c9012bc32f956fb42a",
+      "largest_event_bytes": 221189,
+      "note": "E0 stream probes are inactive in process_video; this file run cannot measure their on/off cost",
+      "frames": 2208,
+      "audio_packets": 694,
+      "integrity": true,
+      "output_sha256": "bd50825345c97475ea2c53698e5c26d694e072c26b0f3caaa996635f4a5124d2",
+      "media_elapsed_seconds": 455.5789999999997,
+      "video_decoder": "h264_nvdec",
+      "video_encoder": "h264_nvenc"
+    }
+  ],
+  "total_wall_difference_percent": 1.503706411674055,
+  "limits": [
+    "One full-file pair, not a statistically isolated observer effect",
+    "E0 StreamProbe is inactive in process_video; no E0 on/off measurement",
+    "The earlier async-full-a was intentionally aborted; overlapped an E1 GPU test and is excluded",
+    "After the full-file run, only an async report byte-budget fail-closed guard was added; focused regression passed",
+    "No actual RTX, real-time backlog, player, or new visual-quality ground truth acceptance"
+  ]
+}

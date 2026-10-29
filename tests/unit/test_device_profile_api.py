@@ -22,6 +22,7 @@ def test_profile_header_and_sample_choices_are_described_in_openapi():
                                                ('video', 'forward-detail-face', 202),
                                                ('video', 'forward-detail-plate', 202),
                                                ('video', 'local-face', 202), ('image', 'local-face', 422),
+                                               ('video', 'async-host', 202), ('image', 'async-host', 422),
                                                ('image', '1', 422), ('image', 'host', 422),
                                                ('video', '0', 422), ('video', 'yes', 422)])
 async def test_only_explicit_video_profile_request_reaches_worker(tmp_path, monkeypatch, kind, header, status):
@@ -82,6 +83,8 @@ async def test_profile_request_is_private_store_metadata_and_video_only():
     assert host['profile_detection'] == 'host'
     local_face = await store.create('video', 'upload', 'local', profile_detection='local-face')
     assert local_face['profile_detection'] == 'local-face'
+    async_host = await store.create('video', 'upload', 'local', profile_detection='async-host')
+    assert async_host['profile_detection'] == 'async-host'
     with pytest.raises(ValueError):
         await store.create('image', 'upload', 'local', profile_detection=True)
     with pytest.raises(ValueError):
@@ -126,7 +129,7 @@ async def test_named_model_trace_uses_validated_task_relative_path(tmp_path, mod
 
 
 @pytest.mark.parametrize('mode', ['1', 'host', 'local-face', 'forward-primary-face',
-                                 'forward-primary-plate', 'forward-detail-face', 'forward-detail-plate'])
+                                 'forward-primary-plate', 'forward-detail-face', 'forward-detail-plate', 'async-host'])
 async def test_production_disables_diagnostics_and_profile_requests_before_io(tmp_path, mode):
     app = create_app(Settings(_env_file=None, media_root=tmp_path))
     async with app.router.lifespan_context(app), httpx.AsyncClient(
@@ -137,8 +140,38 @@ async def test_production_disables_diagnostics_and_profile_requests_before_io(tm
         app.state.redis.time = AsyncMock(side_effect=AssertionError('No resource reads in production'))
         for path in ('/v1/diagnostics/resources', '/v1/tasks/00000000-0000-0000-0000-000000000001/diagnostics'):
             assert (await client.get(path)).status_code == 404
+        assert (await client.get('/v1/tasks/00000000-0000-0000-0000-000000000001/diagnostics?artifact=async-tasks')).status_code == 404
         response = await client.post('/v1/file-tasks/uploads', headers={'X-Detection-Profile': mode},
                                      data={'kind': 'video'}, files={'file': ('input.mp4', b'video', 'video/mp4')})
         assert response.status_code == 422 and response.json()['error']['code'] == 'diagnostics_disabled'
         app.state.store.create.assert_not_called()
         assert list(tmp_path.iterdir()) == []
+
+
+async def test_async_task_artifact_requires_matching_mode_and_owned_directory(tmp_path, monkeypatch):
+    from pathlib import Path
+    app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
+    task_id = '00000000-0000-0000-0000-000000000001'
+    directory = tmp_path / task_id / 'attempt-1/host-profile'
+    directory.mkdir(parents=True)
+    artifact = directory/'async-tasks.jsonl'
+    artifact.write_text('{"event":"submit"}\n', encoding='utf-8')
+    record = dict(generation=1, device_profile=dict(mode='async-host'))
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url='http://test'
+    ) as client:
+        app.state.store.get = AsyncMock(return_value=record)
+        url = f'/v1/tasks/{task_id}/diagnostics?artifact=async-tasks'
+        response = await client.get(url)
+        assert response.status_code == 200 and response.content == artifact.read_bytes()
+        assert response.headers['content-type'].startswith('application/x-ndjson')
+        assert (await client.get(url+'&sample=64')).status_code == 422
+        record['device_profile']['mode'] = 'host'
+        assert (await client.get(url)).status_code == 409
+        record['device_profile']['mode'] = 'async-host'
+        outside = tmp_path/'private.jsonl'
+        outside.write_text('private', encoding='utf-8')
+        resolve = Path.resolve
+        monkeypatch.setattr(Path, 'resolve', lambda p, *a, **kw: outside if p.name=='async-tasks.jsonl' else resolve(p, *a, **kw))
+        response = await client.get(url)
+        assert response.status_code == 409 and 'private' not in response.text

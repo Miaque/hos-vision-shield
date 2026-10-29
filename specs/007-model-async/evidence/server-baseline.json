@@ -1,0 +1,172 @@
+{
+  "captured_unix": 1793285666.087898,
+  "ref": "21bd631d5a3d02de052974b57f73428560944804",
+  "matched_source_modules": 20,
+  "state": "running",
+  "ready": true,
+  "runtime": {
+    "gpu": "NVIDIA RTX 6000 Ada Generation",
+    "output_mux_options": {
+      "max_interleave_delta": "100000",
+      "rtsp_transport": "tcp"
+    },
+    "clock_identity": {
+      "namespace_offsets": "monotonic           0         0\nboottime            0         0",
+      "boot_id": "35fb6945-03f7-48fa-b594-336ead489e3b"
+    },
+    "av_library_versions": {
+      "libavfilter": [
+        12,
+        1,
+        102
+      ],
+      "libavdevice": [
+        63,
+        1,
+        102
+      ],
+      "libswresample": [
+        7,
+        1,
+        102
+      ],
+      "libavutil": [
+        61,
+        1,
+        102
+      ],
+      "libavformat": [
+        63,
+        1,
+        102
+      ],
+      "libswscale": [
+        10,
+        1,
+        102
+      ],
+      "libavcodec": [
+        63,
+        1,
+        102
+      ]
+    },
+    "source_sha256": {
+      "detection.cuda_pixels": "8e071f1188046c03a1ab35c847139484776dffc97c80095df60a6fd057a63352",
+      "media.rtsp_observer": "06110647d11369d2ff435ef59e7e1f33738c6b1a6fe1d2bd01004e1ff8ff865a",
+      "detection.timing": "bffec24c01b92c604e28e483242fb27b67bcebcd64699006097ca19b730c393c",
+      "media.plate_lookahead": "fba2b36eada504419863822815c87485589ce02875fc82e5876122cd47350c1f",
+      "detection.cuda_detail": "6d08570c75c79fb266ff285ef6f53682c1bc806658cfa0c8d0eda0c2abe34040",
+      "detection.quality": "1489bad85be293b050e65779576378ee5d41d9108065d8acd22173c58245f22a",
+      "detection.yolo": "a7252e8e869ae5bccd0a818909c3250e72a007a2e271ae09a7d7281f5bd48a4b",
+      "jobs.tasks": "10b2e3eb3454b934398adc91ff566253b1fefb6ba4ee93c13143581075efef5b",
+      "redaction": "8bf1d0921a136bdcb2d48dc92e714edb7aded27ae10a1a0fe1d85648584f4e38",
+      "detection.cpu": "8b2a4ee01b0ec532e81e9a4d0ee00a2db79847979b960db455dd1601337a7d9f",
+      "media.streams": "fcea888e5c0daec5926d42f4679aaa64bb5c0c69f811d41643e9d5a2a253ed23",
+      "media.live_diagnostics": "262814a5c178debf09881a4ce7c3513aaec611274f86e549066c406dc8541591",
+      "media.cuda_frames": "6a2de76fa29f3c5d5c98df8f8d8b03157c40564b08628a2b349950ad8d095df0",
+      "media.stream_e0": "365c8488677f6493b445111feb83b3957204fae478ec2a7325b8f61c3be8bcaf",
+      "media.stream_pacing": "dfa48be4e510896d8c2f48cf2e9baa712c0f7e63279aae91e2f07cbc0179aec5",
+      "media.video": "8fefb4d7a61fbd9c7c2f3338000feeea90c7b1da3697455455c4b5a0765aebb4",
+      "config": "3aabe4772898d5777a897bddeac963ef5be26ff55a5a2e3c333ef19a086ad57f",
+      "detection.egoblur": "1dbc7674eb0616624d53b687f1e172769f79a7f722d34e1a2ba4d33021ceceb0",
+      "detection.host_profile": "2ef56c3d0f8547dd6774910623462a6cfa69c44aeae5c95de3bebfe33b7da728",
+      "detection.plate_readability": "04ba6b208389e26e380715bed2c45a4869e5908ff8dd38e85ce4b2dfd7ee68c4"
+    },
+    "primary_face_providers": [
+      "CUDAExecutionProvider"
+    ],
+    "gpu_uuid": "1ed1e2c7-b5a4-36be-4c3e-3e2ff4a1d760",
+    "detail_face_provider_options": {
+      "CUDAExecutionProvider": {
+        "use_tf32": "0",
+        "tunable_op_tuning_enable": "0",
+        "do_copy_in_default_stream": "1",
+        "cudnn_conv_algo_search": "DEFAULT",
+        "cudnn_conv_use_max_workspace": "1",
+        "prefer_nhwc": "0",
+        "gpu_mem_limit": "18446744073709551615",
+        "use_ep_level_unified_stream": "0",
+        "fuse_conv_bias": "0",
+        "gpu_external_alloc": "0",
+        "sdpa_kernel": "0",
+        "tunable_op_enable": "0",
+        "user_compute_stream": "0",
+        "enable_cuda_graph": "0",
+        "enable_skip_layer_norm_strict_mode": "0",
+        "gpu_external_free": "0",
+        "device_id": "0",
+        "gpu_external_empty_cache": "0",
+        "has_user_compute_stream": "0",
+        "tunable_op_max_tuning_duration_ms": "0",
+        "arena_extend_strategy": "kNextPowerOfTwo",
+        "cudnn_conv1d_pad_to_nc1d": "0"
+      },
+      "CPUExecutionProvider": {}
+    },
+    "effective_config": {
+      "max_bitrate": null,
+      "debug": true,
+      "rtsp_read_timeout": 10,
+      "redaction_mode": "solid",
+      "audio_buffer_seconds": 16,
+      "stream_output_pacing": true,
+      "audio_enabled": true,
+      "stream_diagnostics": true,
+      "frame_buffer_size": 2,
+      "rtsp_connect_timeout": 10,
+      "stream_e0_diagnostics": true,
+      "audio_buffer_bytes": 4194304,
+      "tracking": "flow",
+      "detection_interval": 3
+    },
+    "detail_providers": [
+      "CUDAExecutionProvider",
+      "CUDAExecutionProvider"
+    ],
+    "matmul_fp32_precision": "none",
+    "primary_face_input_types": [
+      "tensor(float)"
+    ],
+    "cuda": "12.6",
+    "ort": "1.20.2",
+    "torch_cudnn_version": 91002,
+    "av_version": "19.0.1",
+    "global_fp32_precision": "none",
+    "opencv_threads": 2,
+    "primary_parameter_devices": [
+      null,
+      [
+        "cuda:0"
+      ]
+    ],
+    "config": {
+      "detection_max_side": 1280,
+      "detection_backend": "quality_yolo",
+      "inference_device": "cuda",
+      "redaction_mode": "solid",
+      "detection_interval": 3,
+      "tracking": "flow",
+      "detection_box_padding": 0.15
+    },
+    "primary_parameter_dtypes": [
+      null,
+      [
+        "torch.float16"
+      ]
+    ],
+    "cudnn_conv_fp32_precision": "tf32",
+    "torch": "2.14.1+cu126",
+    "torch_threads": 4,
+    "capability": [
+      8,
+      9
+    ],
+    "weights_sha256": {
+      "egoblur_plate_model_path": "d0be72e015e30f0123a9194419bbb2fdcb6916faf81096e3fa2b50bcd1a85ade",
+      "face_model_path": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "plate_model_path": "2a985dc63a5cc947ec36d18503d6fc0fd54525b9dba17f2fe29a71e86b44456d",
+      "primary_face": "2e7af8694e93862be6a81c13b197ef766e8ab7e10af230bc19bc94d045dedb2b"
+    }
+  }
+}

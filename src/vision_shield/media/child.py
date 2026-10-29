@@ -49,11 +49,12 @@ def process(payload, stop, detector=None, *, on_initialized=None):
         if isinstance(profile_mode, str):
             from vision_shield.detection.host_profile import FORWARDS, ProfileTimes, instrument
 
-            if (profile_mode not in ('host', 'local-face', *FORWARDS) or cfg['inference_device'] != 'cuda'
+            if (profile_mode not in ('host', 'async-host', 'local-face', *FORWARDS) or cfg['inference_device'] != 'cuda'
                     or cfg['detection_backend'] != 'quality_yolo'):
                 raise ValueError('A model profiling requires quality_yolo/CUDA')
             collector = ProfileTimes(directory / 'host-profile',
-                                     device_stage=None if profile_mode == 'host' else profile_mode)
+                                     device_stage=None if profile_mode in ('host', 'async-host') else profile_mode,
+                                     async_tasks=profile_mode == 'async-host')
             observers.callback(collector.close)
             instrument(observers, collector)
         loading = time.monotonic() if debug else None
@@ -76,11 +77,15 @@ def process(payload, stop, detector=None, *, on_initialized=None):
             emit({"model_load_seconds": load_seconds, "model_reused": reused})
         if collector:
             from vision_shield.detection.host_profile import instrument_candidates, instrument_ort_nodes, runtime_metadata
+            from unittest.mock import patch
 
             if profile_mode == 'local-face':
                 instrument_ort_nodes(detector.detail, collector)
-            instrument_candidates(detector.primary, 'primary', collector)
-            instrument_candidates(detector.detail, 'detail', collector)
+            # Resident workers already constructed their StageTimes and model pools before this request.
+            for owner in (detector, detector.primary, detector.detail):
+                observers.enter_context(patch.object(owner, 'stage_times', collector, create=True))
+            instrument_candidates(detector.primary, 'primary', collector, stack=observers)
+            instrument_candidates(detector.detail, 'detail', collector, stack=observers)
             metadata = runtime_metadata(detector, cfg)
         started = time.monotonic()
         if stop.is_set():

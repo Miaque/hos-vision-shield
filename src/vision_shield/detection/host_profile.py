@@ -128,7 +128,7 @@ def runtime_metadata(detector, config):
 
 
 class ProfileTimes:
-    def __init__(self, directory, *, clock=perf_counter, device_stage=None, checkpoints=(64, 424, 768)):
+    def __init__(self, directory, *, clock=perf_counter, device_stage=None, checkpoints=(64, 424, 768), async_tasks=False):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.file = (self.directory / "calls.jsonl").open("x", encoding="utf-8")
@@ -146,6 +146,10 @@ class ProfileTimes:
         self.local_last_shape = {}
         self.ort_session = None
         self.ort_runs = []
+        self.async_tasks = None
+        if async_tasks:
+            from vision_shield.detection.async_profile import AsyncProfile
+            self.async_tasks = AsyncProfile(self.directory)
 
     def record_masks(self, shape, boxes):
         height, width = shape[:2]
@@ -193,7 +197,8 @@ class ProfileTimes:
                         and len(self.device_samples) < len(self.checkpoints))
         started, failed = self.clock(), False
         try:
-            with self.trace(name, call, slow_only=name == 'ort-local-face') if selected else nullcontext():
+            with (self.async_tasks.span(name) if self.async_tasks else nullcontext()), \
+                    self.trace(name, call, slow_only=name == 'ort-local-face') if selected else nullcontext():
                 yield
         except BaseException:
             failed = True
@@ -252,6 +257,7 @@ class ProfileTimes:
         models = {name: dict(**statistics(self.samples[name]), failures=self.failures[name],
                              calls_per_frame=len(self.samples[name]) / frames if frames else None) for name in FORWARDS}
         return dict(models=models, host_stages={name: statistics(values) for name, values in self.samples.items()},
+                    **({'async_tasks': self.async_tasks.report()} if self.async_tasks else {}),
                     host_groups=[dict(stage=name, origin=origin, purpose=purpose, view=view, **statistics(values))
                                  for (name, origin, purpose, view), values in sorted(self.groups.items())],
                     views={name: dict(counts) for name, counts in self.views.items()}, device_samples=self.device_samples,
@@ -271,6 +277,8 @@ class ProfileTimes:
         try:
             self.finish_ort()
         finally:
+            if self.async_tasks:
+                self.async_tasks.close()
             self.file.close()
 
     def finish_ort(self):
@@ -348,8 +356,10 @@ def instrument_local_faces(stack, collector):
     stack.enter_context(patch.object(ort.InferenceSession, 'run', run))
 
 
-def instrument_candidates(model, name, collector):
+def instrument_candidates(model, name, collector, *, stack=None):
     original = model.candidates
+    if collector.async_tasks:
+        collector.async_tasks.models[id(model)] = name
 
     @wraps(original)
     def candidates(pixels, *args, **kwargs):
@@ -364,14 +374,21 @@ def instrument_candidates(model, name, collector):
         regions = list(original_views(*pixels.shape[:2][::-1], model.tile_side)) if batched_views else None
         mixed = {"source_region": None, "tile_index": None} if batched_views else {}
         # Collection leaves the final tile scope active; a batch cannot inherit that tile's identity.
+        correlation = dict(model_call_id=collector.async_tasks.new_id()) if collector.async_tasks else {}
         with scope(model_group=name, source_shape=list(pixels.shape), mirror=mirror,
+                   candidate_kind=kwargs.get('kind'), full_frame=kwargs.get('full_frame'), **correlation,
                    view="mixed" if batched_views else "global", batched_candidate_regions=regions, **mixed):
+            if collector.async_tasks:
+                collector.async_tasks.event('model_call')
             with collector.measure(f"candidate-{name}"):
                 result = original(pixels, *args, **kwargs)
             collector.record_candidates(name, result)
             return result
 
-    model.candidates = candidates
+    if stack is None:
+        model.candidates = candidates
+    else:
+        stack.enter_context(patch.object(model, 'candidates', candidates))
     if hasattr(model, "_views"):
         original_views = model._views
 
@@ -385,7 +402,10 @@ def instrument_candidates(model, name, collector):
                            source_region=None if mixed else list(box)):
                     yield box
 
-        model._views = views
+        if stack is None:
+            model._views = views
+        else:
+            stack.enter_context(patch.object(model, '_views', views))
 
 
 class TimedPacket:
@@ -460,6 +480,9 @@ def instrument(stack, collector):
     stack.enter_context(patch.object(av, "open", lambda *args, **kwargs: TimedContainer(original_open(*args, **kwargs), collector)))
     for module in (quality, cpu):
         stack.enter_context(patch.object(module, "ThreadPoolExecutor", ContextPool))
+    if collector.async_tasks:
+        from vision_shield.detection.async_profile import instrument as instrument_tasks
+        instrument_tasks(stack, collector.async_tasks)
     stack.enter_context(patch.object(quality, "StageTimes", lambda: collector))
 
     def method(owner, name, stage, *, purpose=None, frame=False):

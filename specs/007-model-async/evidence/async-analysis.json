@@ -1,0 +1,1207 @@
+{
+  "trace_sha256": "d653eaff1b033f68203f631cac48b7ea2a3c7f239867d4e6e31e50bc5392c6a7",
+  "frames": 2208,
+  "events": 184891,
+  "primary_jobs": 2629,
+  "primary_task_queue_dispatch_seconds": 0.7463628000095923,
+  "primary_task_worker_seconds": 319.6475528000119,
+  "main_primary_wait_calls": 2629,
+  "main_primary_wait_seconds": 264.5231014999408,
+  "main_primary_wait_partition_seconds": {
+    "queue_dispatch": 0.0,
+    "publication_wakeup": 0.22237419994053198,
+    "candidate-primary": 0.5026357999522588,
+    "explicit-sync": 0.0010567999961494934,
+    "prepare-primary": 0.008251199993537739,
+    "session-primary-face": 0.0,
+    "forward-primary-face": 0.029586999995444785,
+    "output-copy": 0.48355450002782163,
+    "post-primary": 2.95565940004235,
+    "forward-primary-plate": 260.14180570000644,
+    "worker_uninstrumented": 0.11033590000624827,
+    "local-readback": 0.06784099998003512
+  },
+  "main_primary_wait_groups": {
+    "(None, False, 'discovery')": {
+      "calls": 1300,
+      "seconds": 221.29406649994962
+    },
+    "('plate', False, 'track-confirm')": {
+      "calls": 314,
+      "seconds": 29.174478800032375
+    },
+    "('face', True, 'discovery')": {
+      "calls": 908,
+      "seconds": 0.03425489996334363
+    },
+    "('plate', False, None)": {
+      "calls": 107,
+      "seconds": 14.02030129999548
+    }
+  },
+  "primary_overlap_with_main_seconds": {
+    "quality-detection": 0.1528121999981522,
+    "candidate-detail": 1.9311072002437868,
+    "explicit-sync": 2.1677317999947263,
+    "prepare-detail": 4.430945399892153,
+    "forward-detail-plate": 45.515114599926164,
+    "output-copy": 0.11587969996799075,
+    "post-detail": 1.019875099947967,
+    "track-probe": 0.004592200009938097
+  },
+  "main_exclusive_ms_per_frame": {
+    "initialize-primary": 0.6420747282601845,
+    "initialize-detail": 0.08778609601466192,
+    "demux-read": 0.04789583335400164,
+    "decode-host": 0.5403527626792007,
+    "explicit-sync": 1.230332291692011,
+    "color-convert": 0.7887963315130512,
+    "gray-copy": 1.0168544383866678,
+    "frame-regions": 0.3592754981836138,
+    "detect-pass": 0.07629207427347258,
+    "quality-detection": 0.5593296647874382,
+    "candidate-detail": 1.4912986413899,
+    "prepare-detail": 2.5090727807586832,
+    "forward-detail-plate": 25.735447282565072,
+    "output-copy": 0.44433994562034745,
+    "post-detail": 0.9977263586784975,
+    "wait-primary": 119.85966195653005,
+    "plate-work-check": 0.3424567029464529,
+    "confirm-request": 0.09123369566053215,
+    "local-confirm": 0.43743315221454526,
+    "local-readback": 0.3611610507190549,
+    "local-numpy": 0.02770711053775206,
+    "local-resize": 0.29511173003837926,
+    "candidate-primary": 0.1749297554277067,
+    "prepare-primary": 0.044636775356409183,
+    "input-copy": 0.14770461957612602,
+    "forward-primary-plate": 42.536195878641514,
+    "post-primary": 0.6900992300514822,
+    "track-flow": 0.4301065217735255,
+    "template-follow": 0.0813944293630205,
+    "track-update": 2.258869157590132,
+    "track-recheck": 0.021241440203598555,
+    "track-recheck-request": 0.010030525364375839,
+    "track-confirm": 0.04710398551391125,
+    "track-probe": 0.1373785326110748,
+    "track-face-recheck": 0.018185371362980495,
+    "recover-request": 3.1793478149705585e-05,
+    "session-primary-face": 0.10084067028885882,
+    "forward-primary-face": 0.13254021739184269,
+    "mask-gpu": 0.2609415760903373,
+    "encoder-initialize": 9.692028971334946e-05,
+    "mux-host": 0.05969334238529157,
+    "encode-host": 0.40933668478960433,
+    "container-close": 0.0003671195654335505
+  },
+  "model_call_distribution": {
+    "('primary', None, 'discovery', (480, 640, 3), False)": 1300,
+    "('detail', None, 'discovery', (480, 640, 3), False)": 2208,
+    "('detail', 'plate', 'local-confirm', (320, 320, 3), False)": 1373,
+    "('primary', 'plate', 'local-confirm', (320, 320, 3), False)": 705,
+    "('detail', 'plate', 'track-confirm', (320, 320, 3), False)": 241,
+    "('primary', 'plate', 'track-confirm', (320, 320, 3), False)": 241,
+    "('detail', 'plate', 'local-confirm', (320, 267, 3), False)": 7,
+    "('primary', 'face', 'discovery', (480, 640, 3), False)": 908,
+    "('detail', 'plate', 'local-confirm', (320, 234, 3), False)": 9,
+    "('detail', 'plate', 'local-confirm', (320, 238, 3), False)": 17,
+    "('primary', 'plate', 'local-confirm', (320, 244, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 231, 3), False)": 5,
+    "('primary', 'face', 'local-enlarged', (640, 640, 3), False)": 1,
+    "('primary', 'face', 'local-confirm', (320, 320, 3), False)": 4,
+    "('detail', 'plate', 'local-confirm', (320, 241, 3), False)": 7,
+    "('primary', 'plate', 'local-confirm', (320, 228, 3), False)": 4,
+    "('primary', 'plate', 'local-confirm', (320, 234, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 267, 3), False)": 3,
+    "('detail', 'plate', 'track-confirm', (317, 320, 3), False)": 12,
+    "('primary', 'plate', 'track-confirm', (317, 320, 3), False)": 12,
+    "('detail', 'plate', 'track-confirm', (320, 249, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 249, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 205, 3), False)": 6,
+    "('detail', 'plate', 'local-confirm', (320, 304, 3), False)": 4,
+    "('primary', 'plate', 'local-confirm', (320, 313, 3), False)": 2,
+    "('detail', 'plate', 'track-confirm', (320, 219, 3), False)": 5,
+    "('primary', 'plate', 'track-confirm', (320, 219, 3), False)": 5,
+    "('detail', 'plate', 'local-confirm', (320, 318, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 317, 3), False)": 6,
+    "('detail', 'plate', 'track-confirm', (320, 317, 3), False)": 11,
+    "('primary', 'plate', 'track-confirm', (320, 317, 3), False)": 11,
+    "('detail', 'plate', 'local-confirm', (320, 308, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 172, 3), False)": 10,
+    "('detail', 'plate', 'local-confirm', (320, 175, 3), False)": 15,
+    "('detail', 'plate', 'local-confirm', (320, 214, 3), False)": 4,
+    "('primary', 'plate', 'local-confirm', (320, 214, 3), False)": 2,
+    "('detail', 'plate', 'local-confirm', (320, 178, 3), False)": 16,
+    "('detail', 'plate', 'local-confirm', (320, 191, 3), False)": 11,
+    "('primary', 'plate', 'discovery', (480, 640, 3), False)": 33,
+    "('detail', 'plate', 'local-confirm', (320, 221, 3), False)": 6,
+    "('detail', 'plate', 'local-confirm', (320, 224, 3), False)": 6,
+    "('detail', 'plate', 'local-confirm', (320, 247, 3), False)": 5,
+    "('detail', 'plate', 'local-confirm', (320, 294, 3), False)": 4,
+    "('detail', 'plate', None, (480, 640, 3), False)": 107,
+    "('primary', 'plate', None, (480, 640, 3), False)": 107,
+    "('detail', 'plate', 'local-confirm', (320, 201, 3), False)": 7,
+    "('primary', 'plate', 'local-confirm', (320, 319, 3), False)": 3,
+    "('primary', 'plate', 'local-confirm', (320, 206, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 231, 3), False)": 5,
+    "('detail', 'plate', 'local-confirm', (320, 251, 3), False)": 5,
+    "('detail', 'plate', 'local-confirm', (318, 320, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 185, 3), False)": 18,
+    "('detail', 'plate', 'local-confirm', (320, 199, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 198, 3), False)": 5,
+    "('primary', 'plate', 'local-confirm', (320, 193, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 287, 3), False)": 9,
+    "('detail', 'plate', 'local-confirm', (320, 208, 3), False)": 11,
+    "('primary', 'plate', 'local-confirm', (320, 208, 3), False)": 2,
+    "('detail', 'plate', 'local-confirm', (320, 297, 3), False)": 4,
+    "('detail', 'plate', 'local-confirm', (320, 244, 3), False)": 5,
+    "('detail', 'plate', 'local-confirm', (320, 313, 3), False)": 6,
+    "('detail', 'plate', 'local-confirm', (320, 257, 3), False)": 3,
+    "('detail', 'plate', 'local-confirm', (320, 284, 3), False)": 4,
+    "('detail', 'plate', 'local-confirm', (320, 271, 3), False)": 2,
+    "('detail', 'plate', 'track-confirm', (320, 274, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 274, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 290, 3), False)": 4,
+    "('detail', 'plate', 'track-confirm', (320, 294, 3), False)": 2,
+    "('primary', 'plate', 'track-confirm', (320, 294, 3), False)": 2,
+    "('primary', 'face', 'local-confirm', (320, 208, 3), False)": 1,
+    "('primary', 'face', 'local-confirm', (320, 201, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 310, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 297, 3), False)": 3,
+    "('detail', 'plate', 'local-confirm', (320, 274, 3), False)": 5,
+    "('primary', 'plate', 'local-confirm', (320, 277, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 274, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 261, 3), False)": 6,
+    "('detail', 'plate', 'local-confirm', (320, 254, 3), False)": 3,
+    "('detail', 'plate', 'local-confirm', (320, 228, 3), False)": 7,
+    "('detail', 'plate', 'local-confirm', (320, 195, 3), False)": 6,
+    "('primary', 'plate', 'local-confirm', (320, 195, 3), False)": 3,
+    "('primary', 'plate', 'local-confirm', (320, 191, 3), False)": 8,
+    "('detail', 'plate', 'local-confirm', (320, 188, 3), False)": 12,
+    "('detail', 'plate', 'local-confirm', (320, 181, 3), False)": 12,
+    "('primary', 'plate', 'local-confirm', (320, 188, 3), False)": 4,
+    "('detail', 'plate', 'track-confirm', (320, 185, 3), False)": 2,
+    "('primary', 'plate', 'track-confirm', (320, 185, 3), False)": 2,
+    "('detail', 'plate', 'local-confirm', (320, 187, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 172, 3), False)": 4,
+    "('primary', 'plate', 'track-confirm', (320, 172, 3), False)": 4,
+    "('detail', 'plate', 'local-confirm', (320, 264, 3), False)": 3,
+    "('detail', 'plate', 'local-confirm', (320, 300, 3), False)": 4,
+    "('detail', 'plate', 'local-confirm', (320, 307, 3), False)": 4,
+    "('primary', 'plate', 'local-confirm', (320, 300, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 310, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 178, 3), False)": 5,
+    "('primary', 'plate', 'local-confirm', (320, 181, 3), False)": 8,
+    "('primary', 'plate', 'local-confirm', (188, 320, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (187, 320, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 201, 3), False)": 5,
+    "('detail', 'plate', 'local-confirm', (320, 168, 3), False)": 3,
+    "('detail', 'plate', 'local-confirm', (320, 198, 3), False)": 5,
+    "('primary', 'plate', 'local-confirm', (320, 303, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 297, 3), False)": 2,
+    "('primary', 'plate', 'track-confirm', (320, 297, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 268, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 270, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 266, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 265, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 262, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 261, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 263, 3), False)": 3,
+    "('primary', 'plate', 'local-confirm', (320, 222, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 221, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 220, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (244, 320, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 217, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 216, 3), False)": 3,
+    "('primary', 'plate', 'local-confirm', (320, 218, 3), False)": 3,
+    "('primary', 'plate', 'local-confirm', (320, 213, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 211, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 210, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 212, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 202, 3), False)": 2,
+    "('primary', 'plate', 'local-confirm', (320, 185, 3), False)": 5,
+    "('detail', 'plate', 'track-confirm', (320, 267, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 267, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 181, 3), False)": 2,
+    "('primary', 'plate', 'track-confirm', (320, 181, 3), False)": 2,
+    "('detail', 'plate', 'local-confirm', (320, 212, 3), False)": 2,
+    "('detail', 'plate', 'track-confirm', (320, 191, 3), False)": 4,
+    "('primary', 'plate', 'track-confirm', (320, 191, 3), False)": 4,
+    "('detail', 'plate', 'local-confirm', (320, 213, 3), False)": 2,
+    "('detail', 'plate', 'local-confirm', (320, 218, 3), False)": 6,
+    "('detail', 'plate', 'track-confirm', (320, 208, 3), False)": 2,
+    "('primary', 'plate', 'track-confirm', (320, 208, 3), False)": 2,
+    "('detail', 'plate', 'local-confirm', (320, 256, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 211, 3), False)": 2,
+    "('detail', 'plate', 'track-confirm', (320, 221, 3), False)": 2,
+    "('primary', 'plate', 'track-confirm', (320, 221, 3), False)": 2,
+    "('detail', 'plate', 'track-confirm', (320, 211, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 211, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 286, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 195, 3), False)": 3,
+    "('primary', 'plate', 'track-confirm', (320, 195, 3), False)": 3,
+    "('detail', 'plate', 'track-confirm', (320, 257, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 257, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 277, 3), False)": 3,
+    "('detail', 'plate', 'local-confirm', (320, 280, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 277, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 277, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 165, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 175, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 175, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (320, 216, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 231, 3), False)": 2,
+    "('primary', 'plate', 'track-confirm', (320, 231, 3), False)": 2,
+    "('detail', 'plate', 'track-confirm', (320, 198, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 198, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 307, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 307, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 284, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 284, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 271, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 271, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 251, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 251, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 201, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 201, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 178, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 178, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 205, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 295, 3), False)": 1,
+    "('primary', 'plate', 'track-confirm', (320, 295, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 290, 3), False)": 1,
+    "('detail', 'plate', 'track-confirm', (320, 213, 3), False)": 5,
+    "('primary', 'plate', 'track-confirm', (320, 213, 3), False)": 5,
+    "('detail', 'plate', 'local-confirm', (320, 222, 3), False)": 1,
+    "('primary', 'face', 'local-confirm', (285, 320, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 309, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 245, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 189, 3), False)": 1,
+    "('detail', 'plate', 'local-confirm', (307, 320, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 289, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 292, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 294, 3), False)": 6,
+    "('primary', 'plate', 'local-confirm', (320, 295, 3), False)": 3,
+    "('primary', 'plate', 'local-confirm', (320, 299, 3), False)": 1,
+    "('primary', 'plate', 'local-confirm', (320, 317, 3), False)": 1,
+    "('primary', 'face', 'local-confirm', (195, 320, 3), False)": 1
+  },
+  "plate_forward": {
+    "('forward-detail-plate', 'discovery', (480, 640, 3), False)": {
+      "calls": 2208,
+      "host_seconds": 36.9625109999306,
+      "thread_cpu_seconds": 19.078125
+    },
+    "('forward-primary-plate', 'discovery', (480, 640, 3), False)": {
+      "calls": 1333,
+      "host_seconds": 231.2040952000243,
+      "thread_cpu_seconds": 224.296875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 320, 3), False)": {
+      "calls": 1373,
+      "host_seconds": 7.990423800009012,
+      "thread_cpu_seconds": 7.234375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 320, 3), False)": {
+      "calls": 705,
+      "host_seconds": 76.34497050002392,
+      "thread_cpu_seconds": 75.140625
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 320, 3), False)": {
+      "calls": 241,
+      "host_seconds": 4.207306199987215,
+      "thread_cpu_seconds": 4.140625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 320, 3), False)": {
+      "calls": 241,
+      "host_seconds": 27.02486210000825,
+      "thread_cpu_seconds": 23.84375
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 267, 3), False)": {
+      "calls": 7,
+      "host_seconds": 0.04065409999930125,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 234, 3), False)": {
+      "calls": 9,
+      "host_seconds": 0.046143399998982204,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 238, 3), False)": {
+      "calls": 17,
+      "host_seconds": 0.10671029999502935,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 244, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.1775223000004189,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 231, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.4271816000018589,
+      "thread_cpu_seconds": 0.421875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 241, 3), False)": {
+      "calls": 7,
+      "host_seconds": 0.04429740000159654,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 228, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.3486875999988115,
+      "thread_cpu_seconds": 0.34375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 234, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09055830000033893,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 267, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.3042245999986335,
+      "thread_cpu_seconds": 0.296875
+    },
+    "('forward-detail-plate', 'track-confirm', (317, 320, 3), False)": {
+      "calls": 12,
+      "host_seconds": 0.2118276999990485,
+      "thread_cpu_seconds": 0.21875
+    },
+    "('forward-primary-plate', 'track-confirm', (317, 320, 3), False)": {
+      "calls": 12,
+      "host_seconds": 1.3455443999991985,
+      "thread_cpu_seconds": 1.09375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 249, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.012002300001768162,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 249, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09771089999958349,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 205, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.028876199998194352,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 304, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.023608099998455145,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 313, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.21717750000061642,
+      "thread_cpu_seconds": 0.21875
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 219, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.07704450000346696,
+      "thread_cpu_seconds": 0.0625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 219, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.46628510000118695,
+      "thread_cpu_seconds": 0.4375
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 318, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.005972399998427136,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 317, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.03130340000097931,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 317, 3), False)": {
+      "calls": 11,
+      "host_seconds": 0.19426650000241352,
+      "thread_cpu_seconds": 0.171875
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 317, 3), False)": {
+      "calls": 11,
+      "host_seconds": 1.2373129999996308,
+      "thread_cpu_seconds": 1.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 308, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.007615700000314973,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 172, 3), False)": {
+      "calls": 10,
+      "host_seconds": 0.053965400002198294,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 175, 3), False)": {
+      "calls": 15,
+      "host_seconds": 0.08253399999921385,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 214, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.022331399999529822,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 214, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.18733659999998054,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 178, 3), False)": {
+      "calls": 16,
+      "host_seconds": 0.09223739999833924,
+      "thread_cpu_seconds": 0.0625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 191, 3), False)": {
+      "calls": 11,
+      "host_seconds": 0.05860460000076273,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 221, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.03434209999977611,
+      "thread_cpu_seconds": 0.0625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 224, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.027746100000513252,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 247, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.02743959999497747,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 294, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.021122999998624437,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', None, (480, 640, 3), False)": {
+      "calls": 107,
+      "host_seconds": 4.709370399994441,
+      "thread_cpu_seconds": 4.609375
+    },
+    "('forward-primary-plate', None, (480, 640, 3), False)": {
+      "calls": 107,
+      "host_seconds": 18.84575000001314,
+      "thread_cpu_seconds": 14.484375
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 201, 3), False)": {
+      "calls": 7,
+      "host_seconds": 0.042859699999098666,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 319, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.3108654000006936,
+      "thread_cpu_seconds": 0.3125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 206, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08547700000053737,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 231, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.035091199999442324,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 251, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.02981730000101379,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'local-confirm', (318, 320, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.007164800001191907,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 185, 3), False)": {
+      "calls": 18,
+      "host_seconds": 0.11245299999791314,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 199, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.006144199998743716,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 198, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.44398500000170316,
+      "thread_cpu_seconds": 0.453125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 193, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08631220000097528,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 287, 3), False)": {
+      "calls": 9,
+      "host_seconds": 0.05238489999646845,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 208, 3), False)": {
+      "calls": 11,
+      "host_seconds": 0.06340299999828858,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 208, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.17834749999929045,
+      "thread_cpu_seconds": 0.15625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 297, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.02241859999958251,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 244, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.026368299999376177,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 313, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.03803749999860884,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 257, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.01439119999849936,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 284, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.018775900001855916,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 271, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.011863899999298155,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 274, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.010669299999790383,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 274, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10667590000048222,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 290, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.029390300000159186,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 294, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.03586819999873114,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 294, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.22140070000205014,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 310, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10747060000176134,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 297, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.31351360000007844,
+      "thread_cpu_seconds": 0.328125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 274, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.02492319999873871,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 277, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09745159999874886,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 274, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09920830000010028,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 261, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.0328202999990026,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 254, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.02040830000078131,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 228, 3), False)": {
+      "calls": 7,
+      "host_seconds": 0.038361800003258395,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 195, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.035507200000211014,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 195, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.27536460000192164,
+      "thread_cpu_seconds": 0.265625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 191, 3), False)": {
+      "calls": 8,
+      "host_seconds": 0.6576742000015656,
+      "thread_cpu_seconds": 0.65625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 188, 3), False)": {
+      "calls": 12,
+      "host_seconds": 0.06604069999957574,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 181, 3), False)": {
+      "calls": 12,
+      "host_seconds": 0.06947029999719234,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 188, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.33694219999961206,
+      "thread_cpu_seconds": 0.359375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 185, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.02458440000009432,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 185, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.1782216999999946,
+      "thread_cpu_seconds": 0.171875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 187, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.007925500000055763,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 172, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.05760740000005171,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 172, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.3395671999987826,
+      "thread_cpu_seconds": 0.296875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 264, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.015384099999209866,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 300, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.022092500003054738,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 307, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.02939920000244456,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 300, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10848000000078173,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 310, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.010801899999933084,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 178, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.4095307999996294,
+      "thread_cpu_seconds": 0.40625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 181, 3), False)": {
+      "calls": 8,
+      "host_seconds": 0.6518309000002773,
+      "thread_cpu_seconds": 0.609375
+    },
+    "('forward-primary-plate', 'local-confirm', (188, 320, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08672200000000885,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-primary-plate', 'local-confirm', (187, 320, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08380799999940791,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 201, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.44869919999837293,
+      "thread_cpu_seconds": 0.4375
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 168, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.014789299997573835,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 198, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.02602859999751672,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 303, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10409839999920223,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 297, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.03241929999967397,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 297, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.22715389999939362,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 268, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09428939999997965,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 270, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09757030000037048,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 266, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09796869999991031,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 265, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09576969999943685,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 262, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09380079999937152,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 261, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.19296830000166665,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 263, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.2859501000002638,
+      "thread_cpu_seconds": 0.28125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 222, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.17430090000016207,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 221, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.1756387999994331,
+      "thread_cpu_seconds": 0.15625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 220, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08654390000083367,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-primary-plate', 'local-confirm', (244, 320, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08926760000031209,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 217, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.17759509999996226,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 216, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.2654306999993423,
+      "thread_cpu_seconds": 0.28125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 218, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.2602963000008458,
+      "thread_cpu_seconds": 0.25
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 213, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.1746182000006229,
+      "thread_cpu_seconds": 0.171875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 211, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.17413410000153817,
+      "thread_cpu_seconds": 0.171875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 210, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.17760319999979401,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 212, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.17709490000197547,
+      "thread_cpu_seconds": 0.1875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 202, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.17377219999980298,
+      "thread_cpu_seconds": 0.171875
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 185, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.4064194000002317,
+      "thread_cpu_seconds": 0.40625
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 267, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.017126700000517303,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 267, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10290229999918665,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 181, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.027684900000167545,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 181, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.17368030000034196,
+      "thread_cpu_seconds": 0.15625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 212, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.010459200000696,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 191, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.04994810000061989,
+      "thread_cpu_seconds": 0.0625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 191, 3), False)": {
+      "calls": 4,
+      "host_seconds": 0.34928249999939,
+      "thread_cpu_seconds": 0.3125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 213, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.01119509999989532,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 218, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.036095499997827574,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 208, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.03513810000004014,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 208, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.19389619999856222,
+      "thread_cpu_seconds": 0.171875
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 256, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.004511699999056873,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 211, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.009877500000584405,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 221, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.029753699998764205,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 221, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.19055789999947592,
+      "thread_cpu_seconds": 0.171875
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 211, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.019944300000133808,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 211, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09338559999923746,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 286, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.004186999998637475,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 195, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.04162640000322426,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 195, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.2820300000003044,
+      "thread_cpu_seconds": 0.25
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 257, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.016995099998894148,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 257, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09735050000017509,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 277, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.015529499998592655,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 280, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.0064990999999281485,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 277, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.021314200001143035,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 277, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09921480000048177,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 165, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.004827000000659609,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 175, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.013556800000515068,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 175, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08315690000017639,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 216, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.006980500000281609,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 231, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.030934500000512344,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 231, 3), False)": {
+      "calls": 2,
+      "host_seconds": 0.18210069999986445,
+      "thread_cpu_seconds": 0.15625
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 198, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.015646399999241112,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 198, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09177230000022973,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 307, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.013234000000011292,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 307, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.1106619000001956,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 284, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.016095400000267546,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 284, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10251760000028298,
+      "thread_cpu_seconds": 0.078125
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 271, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.016201399999772548,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 271, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.1035384000006161,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 251, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.014558100001522689,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 251, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09387790000073437,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 201, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.016742100000556093,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 201, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09694630000012694,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 178, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.01157950000015262,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 178, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08821680000073684,
+      "thread_cpu_seconds": 0.0625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 205, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.09300530000109575,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 295, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.01791899999989255,
+      "thread_cpu_seconds": 0.03125
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 295, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.11164169999938167,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 290, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.1086198000011791,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-detail-plate', 'track-confirm', (320, 213, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.06894670000110636,
+      "thread_cpu_seconds": 0.046875
+    },
+    "('forward-primary-plate', 'track-confirm', (320, 213, 3), False)": {
+      "calls": 5,
+      "host_seconds": 0.46019410000189964,
+      "thread_cpu_seconds": 0.40625
+    },
+    "('forward-detail-plate', 'local-confirm', (320, 222, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.007713999999396037,
+      "thread_cpu_seconds": 0.015625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 309, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.1054707999992388,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 245, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08285549999891373,
+      "thread_cpu_seconds": 0.09375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 189, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.08185870000124851,
+      "thread_cpu_seconds": 0.0625
+    },
+    "('forward-detail-plate', 'local-confirm', (307, 320, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.005123800001456402,
+      "thread_cpu_seconds": 0.0
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 289, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10303139999996347,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 292, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10215680000146676,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 294, 3), False)": {
+      "calls": 6,
+      "host_seconds": 0.6185417999968195,
+      "thread_cpu_seconds": 0.625
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 295, 3), False)": {
+      "calls": 3,
+      "host_seconds": 0.3157851000014489,
+      "thread_cpu_seconds": 0.3125
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 299, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10503320000134408,
+      "thread_cpu_seconds": 0.109375
+    },
+    "('forward-primary-plate', 'local-confirm', (320, 317, 3), False)": {
+      "calls": 1,
+      "host_seconds": 0.10412099999848579,
+      "thread_cpu_seconds": 0.09375
+    }
+  },
+  "limits": [
+    "Host forward includes device work and implicit synchronization; no pure GPU attribution",
+    "Model worker time overlaps main stages and must not be added to main wall",
+    "Queue includes observer submission overhead and OS dispatch",
+    "Complete-file timing is not live backlog or player verification"
+  ]
+}

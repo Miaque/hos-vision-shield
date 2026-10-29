@@ -1,0 +1,86 @@
+{
+  "runs": [
+    {
+      "enabled": false,
+      "frames": 1000,
+      "measurement": "timing",
+      "wall_seconds": 0.2479354000006424,
+      "cpu_seconds": 0.265625,
+      "retained_bytes": null,
+      "peak_bytes": null,
+      "async_bytes": 0
+    },
+    {
+      "enabled": true,
+      "frames": 1000,
+      "measurement": "timing",
+      "wall_seconds": 1.1302410999996937,
+      "cpu_seconds": 1.046875,
+      "retained_bytes": null,
+      "peak_bytes": null,
+      "async_bytes": 8360455
+    },
+    {
+      "enabled": true,
+      "frames": 1000,
+      "measurement": "timing",
+      "wall_seconds": 1.0750672000012855,
+      "cpu_seconds": 1.109375,
+      "retained_bytes": null,
+      "peak_bytes": null,
+      "async_bytes": 8361531
+    },
+    {
+      "enabled": false,
+      "frames": 1000,
+      "measurement": "timing",
+      "wall_seconds": 0.25718529999903694,
+      "cpu_seconds": 0.28125,
+      "retained_bytes": null,
+      "peak_bytes": null,
+      "async_bytes": 0
+    },
+    {
+      "enabled": false,
+      "frames": 1000,
+      "measurement": "timing",
+      "wall_seconds": 0.26964650000081747,
+      "cpu_seconds": 0.265625,
+      "retained_bytes": null,
+      "peak_bytes": null,
+      "async_bytes": 0
+    },
+    {
+      "enabled": true,
+      "frames": 1000,
+      "measurement": "timing",
+      "wall_seconds": 1.1068496999996569,
+      "cpu_seconds": 1.015625,
+      "retained_bytes": null,
+      "peak_bytes": null,
+      "async_bytes": 8361622
+    },
+    {
+      "enabled": false,
+      "frames": 1000,
+      "measurement": "memory",
+      "wall_seconds": 1.2189740000012534,
+      "cpu_seconds": 1.1875,
+      "retained_bytes": 1116063,
+      "peak_bytes": 1121535,
+      "async_bytes": 0
+    },
+    {
+      "enabled": true,
+      "frames": 1000,
+      "measurement": "memory",
+      "wall_seconds": 5.379511499999353,
+      "cpu_seconds": 5.34375,
+      "retained_bytes": 1541884,
+      "peak_bytes": 1561479,
+      "async_bytes": 8320034
+    }
+  ],
+  "median_cpu_increment_ms_per_fixture_frame": 0.78125,
+  "note": "24 nested stages and one model future per fixture frame; memory and timing are separate runs; excludes E0/GPU/Redis/HTTP"
+}
