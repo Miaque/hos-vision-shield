@@ -21,6 +21,7 @@ class StageTimes:
     def __init__(self):
         self.seconds = dict.fromkeys(STAGES, 0.0)
         self.lock = Lock()
+        self.observer = None
 
     @contextmanager
     def measure(self, name):
@@ -28,8 +29,11 @@ class StageTimes:
         try:
             yield
         finally:
+            elapsed = perf_counter() - started
             with self.lock:
-                self.seconds[name] += perf_counter() - started
+                self.seconds[name] += elapsed
+            if self.observer is not None:
+                self.observer(name, elapsed)
 
     def snapshot(self):
         with self.lock:

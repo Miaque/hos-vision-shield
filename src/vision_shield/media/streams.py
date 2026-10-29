@@ -6,6 +6,7 @@ from math import floor
 import threading
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from typing import TYPE_CHECKING
 
 import av
@@ -175,6 +176,12 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     redactor = FrameRedactor(detector, mode=config.get("redaction_mode", "solid"),
                                detection_interval=interval,
                                tracking=config.get('tracking', 'flow' if interval == 3 else 'template'), debug=debug)
+    diagnostics = None
+    if debug and config.get('stream_diagnostics', True):
+        from vision_shield.media.live_diagnostics import LiveDiagnostics
+
+        diagnostics = LiveDiagnostics(detector, dict(config, detection_interval=interval, tracking=redactor.tracking),
+                                      metrics.attempt_id)
     frames = None
     cuda_device = None
     if config.get("inference_device") == "cuda":
@@ -298,6 +305,14 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                                   if buffer.input_video else {}),
                                audio_queue_bytes=buffer.audio_size, failed_frames=failed_frames,
                                protected_frames=0, **metrics.snapshot()) if debug else None
+        if diagnostics:
+            live = diagnostics.snapshot()
+            with buffer.condition:
+                oldest = buffer.received[0][0] if buffer.received else None
+            live['oldest_input_age_seconds'] = None if oldest is None else max(0, now - oldest)
+            live['oldest_lookahead_wait_seconds'] = (max(0, now - (delay.pending[0].deadline - .75))
+                if delay and delay.pending and delay.pending[0].deadline is not None else None)
+            emit({'device_profile': live})
         emit({**({"stream_end": ending} if force and ending else {}),
               **({"video_decoder": "h264_nvdec" if frames else "h264",
                   "video_encoder": video.codec_context.name} if video else {}),
@@ -315,16 +330,20 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         moment = packet.pts * packet.time_base if packet.pts is not None and packet.time_base is not None else None
         encoded_bytes = packet.size if debug else None
         encoded_vcl_sha256 = vcl_digest(bytes(packet)) if debug else None
+        submitted = metrics.pending.get(moment) if diagnostics else None
+        packet_source_pts = submitted[1] if submitted else None
         if delay and config.get('stream_output_pacing', True) and moment is not None:
             phase = 'output_pacing'
             waiting = time.monotonic() if debug else None
-            allowed = pacer.wait(moment)
+            with diagnostics.operation('output-pacing', packet_source_pts) if diagnostics else nullcontext():
+                allowed = pacer.wait(moment)
             if debug:
                 pacing_seconds += time.monotonic() - waiting
             if not allowed:
                 return False
         try:
-            writer.mux(packet)
+            with diagnostics.operation('video-mux', packet_source_pts) if diagnostics else nullcontext():
+                writer.mux(packet)
         except Exception as error:
             failed_frames += 1
             processing = False
@@ -362,15 +381,19 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             if transcode_audio:
                 for frame in packet.decode():
                     for encoded in audio.encode(frame):
-                        writer.mux(encoded)
+                        with diagnostics.operation('audio-mux', source_moment) if diagnostics else nullcontext():
+                            writer.mux(encoded)
             else:
                 packet.stream = audio
-                writer.mux(packet)
+                with diagnostics.operation('audio-mux', source_moment) if diagnostics else nullcontext():
+                    writer.mux(packet)
         published = False
         phase = "video_encode"
         metrics.submit(output, received_at, source_moment, timeline_pts=moment, timestamp_repaired=repaired,
                        decoded_at=decoded_at, processing_at=processing_at)
-        for packet in video.encode(output):
+        with diagnostics.operation('video-encode', source_moment) if diagnostics else nullcontext():
+            encoded = video.encode(output)
+        for packet in encoded:
             published = mux_video(packet) or published
         if debug:
             encode_seconds += time.monotonic() - stage - (pacing_seconds - pacing_before)
@@ -381,11 +404,12 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         count += 1
         processing = False
 
-    def release(operation):
+    def release(operation, kind='lookahead-expire', source_pts=None):
         nonlocal frame_seconds, phase, processing
         phase, processing = 'frame_process', True
         stage = time.monotonic() if debug else None
-        ready = operation()
+        with diagnostics.operation(kind, source_pts) if diagnostics else nullcontext():
+            ready = operation()
         if debug:
             frame_seconds += time.monotonic() - stage
         processing = False
@@ -414,7 +438,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                     sample = buffer.take(timeout=delay.wait_seconds() if delay else None)
                 except Exception:
                     if delay:
-                        release(delay.flush)
+                        release(delay.flush, 'lookahead-flush')
                     raise
                 if sample is INPUT_WAIT_TIMEOUT:
                     report()
@@ -454,16 +478,23 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 if frames and redactor.tracking == 'flow':
                     if delay is None:
                         delay = PlateLookahead(redactor)
-                    pending = frames.masked(frame, redactor, defer=True)
+                    with diagnostics.operation('process', source_moment) if diagnostics else nullcontext():
+                        pending = frames.masked(frame, redactor, defer=True)
                     render = pending.render
-                    pending.render = lambda extra, render=render, metadata=metadata: (render(extra), *metadata)
+                    def traced_render(extra, render=render, metadata=metadata,
+                                      frame_sequence=diagnostics.frame_sequence if diagnostics else None):
+                        with (diagnostics.operation('render', metadata[2], frame_sequence=frame_sequence)
+                              if diagnostics else nullcontext()):
+                            return (render(extra), *metadata)
+                    pending.render = traced_render
                     # Leave one input-frame interval plus jitter beyond the half-second media window.
                     pending.deadline = time.monotonic() + .75
                     if debug:
                         frame_seconds += time.monotonic() - stage
-                    release(lambda: delay.push(pending))
+                    release(lambda: delay.push(pending), 'lookahead-push', source_moment)
                 else:
-                    output = frames.masked(frame, redactor) if frames else masked_frame(frame, redactor, origin)
+                    with diagnostics.operation('process', source_moment) if diagnostics else nullcontext():
+                        output = frames.masked(frame, redactor) if frames else masked_frame(frame, redactor, origin)
                     if debug:
                         frame_seconds += time.monotonic() - stage
                     write_output((output, *metadata))
@@ -475,7 +506,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 if stop.is_set():
                     delay.pending.clear()
                 else:
-                    release(delay.flush)
+                    release(delay.flush, 'lookahead-flush')
             if video:
                 phase = "encoder_flush"
                 for packet in video.encode():
@@ -499,5 +530,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         writer_done.set()
         reader.join(timeout=config["rtsp_read_timeout"] + 1)
         report(force=True)
+        if diagnostics:
+            diagnostics.close()
         if reader.is_alive():
             raise StreamCleanupError("Source reader did not stop")

@@ -297,6 +297,8 @@ async def detection_diagnostics(task_id: UUID, request: Request,
             result['last_failure'] = task['media_failure']
         if task.get('stream_attempts'):
             result.update(attempts=task['stream_attempts'], attempts_discarded=task.get('stream_attempts_discarded', 0))
+        if (task.get('device_profile') or {}).get('mode') == 'live':
+            result['live'] = task['device_profile']
         return result
     if task.get('device_profile') is None:
         raise HTTPException(409, 'diagnostics_not_ready')
