@@ -1,0 +1,46 @@
+{
+  "captured_unix": 1793288239.6913397,
+  "scope": "Only the two file tasks created by this experiment",
+  "files": [
+    {
+      "id": "1c400794-f335-4d34-988d-0338f0f6a7db",
+      "kind": "video",
+      "state": "succeeded",
+      "desired_state": "run",
+      "stats": {
+        "processed_frames": 2208,
+        "dropped_frames": 0,
+        "elapsed_seconds": 100.68537588324
+      },
+      "action": "Already terminal; no mutation"
+    },
+    {
+      "id": "09eee6b5-826e-4ff1-bbb0-d800c3354db0",
+      "kind": "video",
+      "state": "succeeded",
+      "desired_state": "run",
+      "stats": {
+        "processed_frames": 2208,
+        "dropped_frames": 0,
+        "elapsed_seconds": 117.86525232438
+      },
+      "action": "Already terminal; no mutation"
+    }
+  ],
+  "streams": [
+    {
+      "id": "27c39007-0aee-4185-b8fa-9d1ece4de058",
+      "kind": "stream",
+      "state": "running",
+      "ready": true,
+      "desired_state": "run"
+    },
+    {
+      "id": "2d04c6fd-45ce-4ffa-8c6e-b0ae1b9cba4f",
+      "kind": "stream",
+      "state": "running",
+      "ready": true,
+      "desired_state": "run"
+    }
+  ]
+}

@@ -1,0 +1,1073 @@
+{
+  "attempts": {
+    "adcafe1dd4b34708bd9cdb6435e08589": {
+      "retained_frames": 936,
+      "retained_published_frames": 841,
+      "duration_seconds": {
+        "fifo_wait": {
+          "n": 903,
+          "mean": 0.16451883866582664,
+          "p50": 0.1297308001667261,
+          "p95": 0.4344158596359193,
+          "p99": 0.8190600240603093,
+          "min": 0.018722299486398697,
+          "max": 1.3588402001187205
+        },
+        "lookahead_residence": {
+          "n": 841,
+          "mean": 0.6862230305687284,
+          "p50": 0.7627082001417875,
+          "p95": 0.8932012002915144,
+          "p99": 1.0092343196272853,
+          "min": 0.028256800025701523,
+          "max": 1.0956404004245996
+        },
+        "release_to_render": {
+          "n": 841,
+          "mean": 0.007009592132064803,
+          "p50": 6.100162863731384e-06,
+          "p95": 0.058562399819493294,
+          "p99": 0.07815854009240868,
+          "min": 2.4996697902679443e-06,
+          "max": 0.09245739970356226
+        },
+        "render_wall": {
+          "n": 841,
+          "mean": 0.0005219256954974141,
+          "p50": 0.0004738001152873039,
+          "p95": 0.0009325994178652763,
+          "p99": 0.001145780272781849,
+          "min": 0.00016590021550655365,
+          "max": 0.0016123000532388687
+        },
+        "final_render_to_mux": {
+          "n": 841,
+          "mean": 0.05929132841536321,
+          "p50": 0.0030359001830220222,
+          "p95": 0.3267293004319072,
+          "p99": 0.454917759820819,
+          "min": 0.0010158997029066086,
+          "max": 0.49231080058962107
+        }
+      },
+      "sampled_release_reasons": {
+        "wall-deadline": 551,
+        "media-window": 139,
+        "scene-reset": 132,
+        "null": 83,
+        "capacity": 15,
+        "eof": 16
+      },
+      "approximate_largest_release_group_in_10ms": 9,
+      "event_boundaries": [
+        {
+          "sequence": 1,
+          "name": "media_attempt_enter",
+          "monotonic": 5096609.2930471,
+          "worker_attempt_started": 5096609.1109796
+        },
+        {
+          "sequence": 2,
+          "name": "publish_open_started",
+          "monotonic": 5096609.2938628
+        },
+        {
+          "sequence": 3,
+          "name": "source_open_started",
+          "monotonic": 5096609.2943267
+        },
+        {
+          "sequence": 4,
+          "name": "publish_open_completed",
+          "monotonic": 5096609.2947473
+        },
+        {
+          "sequence": 5,
+          "name": "source_open_completed",
+          "monotonic": 5096609.4906807
+        },
+        {
+          "sequence": 6,
+          "name": "source_validated",
+          "video_time_base": "1/90000",
+          "monotonic": 5096609.4909161,
+          "video_average_rate": "25/1",
+          "audio_sample_rate": 8000,
+          "audio_time_base": "1/8000"
+        },
+        {
+          "mux_monotonic": 5096610.322145,
+          "sequence": 7,
+          "monotonic": 5096610.3222323,
+          "name": "first_video_mux_completed"
+        },
+        {
+          "monotonic": 5097231.6566933,
+          "name": "decoder_drain_packet",
+          "sequence": 8
+        },
+        {
+          "monotonic": 5097231.6569403,
+          "name": "demux_eof",
+          "sequence": 9
+        },
+        {
+          "monotonic": 5097231.6569857,
+          "name": "reader_eof_set",
+          "sequence": 10
+        },
+        {
+          "monotonic": 5097231.9646805,
+          "name": "encoder_flush_started",
+          "sequence": 11
+        },
+        {
+          "monotonic": 5097231.9647574,
+          "name": "encoder_flush_completed",
+          "sequence": 12
+        },
+        {
+          "monotonic": 5097231.9647621,
+          "name": "publish_close_started",
+          "sequence": 13
+        },
+        {
+          "monotonic": 5097231.9751976,
+          "name": "publish_close_completed",
+          "sequence": 14
+        },
+        {
+          "name": "media_ending",
+          "phase": "source_read",
+          "sequence": 15,
+          "monotonic": 5097231.975214,
+          "reason": "source_eof"
+        },
+        {
+          "monotonic": 5097231.975573,
+          "name": "source_closed",
+          "sequence": 16
+        },
+        {
+          "alive": false,
+          "monotonic": 5097231.9757558,
+          "name": "reader_join_completed",
+          "sequence": 17
+        }
+      ],
+      "worker_boundaries": {
+        "media_execution_started": 5096609.2895185,
+        "media_execution_completed": 5097232.10704,
+        "publisher_prepare_started": 5096609.1372859,
+        "publisher_close_started": 5097232.1070476,
+        "worker_attempt_ending": 5097232.2144178,
+        "retry_wait_completed": 5097233.3053783,
+        "publisher_prepare_completed": 5096609.2646451,
+        "first_output_received": 5096610.3226446,
+        "source_validation_completed": 5096609.1372845,
+        "retry_wait_started": 5097232.3040262,
+        "source_validation_started": 5096609.1365982,
+        "publisher_close_completed": 5097232.2144126
+      },
+      "retained_audio_regression_examples": [],
+      "retained_audio_count": 195,
+      "retained_audio_output_count": 192,
+      "conditional_rebase_examples": [
+        {
+          "sequence": 7369,
+          "frame_id": 7370,
+          "moment": "633447/2000",
+          "raw": {
+            "pts": 28515570,
+            "duration": 3600,
+            "dts": 28515570,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 28515570,
+            "duration": 3600,
+            "dts": 28515570,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 28505115,
+            "duration": 0,
+            "dts": 28505115,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097153.7399288,
+          "due": 5097153.7779414,
+          "actual": 5097153.7780582,
+          "remaining": 0.038012673147023,
+          "conditional_no_rebase_due": 5097153.757956,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.038111853413284,
+          "conditional_rebase_request_seconds": 0.019985434599221,
+          "retained_anti_burst_request_seconds": 0.018027238547802
+        },
+        {
+          "sequence": 7380,
+          "frame_id": 7381,
+          "moment": "634329/2000",
+          "raw": {
+            "pts": 28555260,
+            "duration": 3600,
+            "dts": 28555260,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 28555260,
+            "duration": 3600,
+            "dts": 28555260,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 28544805,
+            "duration": 0,
+            "dts": 28544805,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097154.6480784,
+          "due": 5097154.685764,
+          "actual": 5097154.6858927,
+          "remaining": 0.037685574963689,
+          "conditional_no_rebase_due": 5097154.6657777,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.03779520560056,
+          "conditional_rebase_request_seconds": 0.019986250437796,
+          "retained_anti_burst_request_seconds": 0.017699324525893
+        },
+        {
+          "sequence": 7382,
+          "frame_id": 7383,
+          "moment": "634491/2000",
+          "raw": {
+            "pts": 28562550,
+            "duration": 3600,
+            "dts": 28562550,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 28562550,
+            "duration": 3600,
+            "dts": 28562550,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 28552095,
+            "duration": 0,
+            "dts": 28552095,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097154.7542197,
+          "due": 5097154.7916578,
+          "actual": 5097154.7917755,
+          "remaining": 0.037438138388097,
+          "conditional_no_rebase_due": 5097154.7716703,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.037540700286627,
+          "conditional_rebase_request_seconds": 0.01998748537153,
+          "retained_anti_burst_request_seconds": 0.017450653016567
+        },
+        {
+          "sequence": 7384,
+          "frame_id": 7385,
+          "moment": "634651/2000",
+          "raw": {
+            "pts": 28569750,
+            "duration": 3600,
+            "dts": 28569750,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 28569750,
+            "duration": 3600,
+            "dts": 28569750,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 28559295,
+            "duration": 0,
+            "dts": 28559295,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097154.8625829,
+          "due": 5097154.9011536,
+          "actual": 5097154.901266,
+          "remaining": 0.038570683449507,
+          "conditional_no_rebase_due": 5097154.8811693,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.038668577559292,
+          "conditional_rebase_request_seconds": 0.019984267652035,
+          "retained_anti_burst_request_seconds": 0.018586415797472
+        },
+        {
+          "sequence": 7386,
+          "frame_id": 7387,
+          "moment": "634811/2000",
+          "raw": {
+            "pts": 28576950,
+            "duration": 3600,
+            "dts": 28576950,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 28576950,
+            "duration": 3600,
+            "dts": 28576950,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 28566495,
+            "duration": 0,
+            "dts": 28566495,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097155.0002487,
+          "due": 5097155.020688,
+          "actual": 5097155.0207718,
+          "remaining": 0.020439264364541,
+          "conditional_no_rebase_due": 5097155.0006963,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.020515344105661,
+          "conditional_rebase_request_seconds": 0.019991633482277,
+          "retained_anti_burst_request_seconds": 0.00044763088226318
+        }
+      ]
+    },
+    "a13da7fa5fb545efa06d4d005622dd9f": {
+      "retained_frames": 7288,
+      "retained_published_frames": 5613,
+      "duration_seconds": {
+        "fifo_wait": {
+          "n": 7228,
+          "mean": 0.13629103143875734,
+          "p50": 0.08899619989097118,
+          "p95": 0.3398362798150628,
+          "p99": 0.7417457589693363,
+          "min": 0.00015609990805387497,
+          "max": 1.3158232998102903
+        },
+        "lookahead_residence": {
+          "n": 5613,
+          "mean": 0.6605887690981468,
+          "p50": 0.7445547999814153,
+          "p95": 0.8867823798209428,
+          "p99": 0.987565283998847,
+          "min": 0.02362359967082739,
+          "max": 1.1637356001883745
+        },
+        "release_to_render": {
+          "n": 5613,
+          "mean": 0.006312910994521792,
+          "p50": 7.100403308868408e-06,
+          "p95": 0.05694359969347712,
+          "p99": 0.08068175267428163,
+          "min": 2.400018274784088e-06,
+          "max": 0.10475470032542944
+        },
+        "render_wall": {
+          "n": 5613,
+          "mean": 0.0005441621862154115,
+          "p50": 0.0005099000409245491,
+          "p95": 0.0009603798389434813,
+          "p99": 0.0011831915006041529,
+          "min": 0.00010870024561882019,
+          "max": 0.0021020006388425827
+        },
+        "final_render_to_mux": {
+          "n": 5613,
+          "mean": 0.04264036068567034,
+          "p50": 0.0166147006675601,
+          "p95": 0.2300228403881191,
+          "p99": 0.4305896715447307,
+          "min": 0.0009254002943634987,
+          "max": 0.5552831999957561
+        }
+      },
+      "sampled_release_reasons": {
+        "media-window": 2006,
+        "wall-deadline": 2951,
+        "scene-reset": 546,
+        "null": 1675,
+        "capacity": 97,
+        "eof": 13
+      },
+      "approximate_largest_release_group_in_10ms": 10,
+      "event_boundaries": [
+        {
+          "sequence": 1,
+          "name": "media_attempt_enter",
+          "monotonic": 5097233.6018057,
+          "worker_attempt_started": 5097233.360429
+        },
+        {
+          "sequence": 2,
+          "name": "publish_open_started",
+          "monotonic": 5097233.602454
+        },
+        {
+          "sequence": 3,
+          "name": "source_open_started",
+          "monotonic": 5097233.6028795
+        },
+        {
+          "sequence": 4,
+          "name": "publish_open_completed",
+          "monotonic": 5097233.6032251
+        },
+        {
+          "sequence": 5,
+          "name": "source_open_completed",
+          "monotonic": 5097233.8763854
+        },
+        {
+          "sequence": 6,
+          "name": "source_validated",
+          "video_time_base": "1/90000",
+          "monotonic": 5097233.876619,
+          "video_average_rate": "25/1",
+          "audio_sample_rate": 8000,
+          "audio_time_base": "1/8000"
+        },
+        {
+          "mux_monotonic": 5097236.1381225,
+          "sequence": 7,
+          "monotonic": 5097236.138262,
+          "name": "first_video_mux_completed"
+        },
+        {
+          "sequence": 8,
+          "name": "decoder_drain_packet",
+          "monotonic": 5097738.1120266
+        },
+        {
+          "sequence": 9,
+          "name": "demux_eof",
+          "monotonic": 5097738.1122495
+        },
+        {
+          "sequence": 10,
+          "name": "reader_eof_set",
+          "monotonic": 5097738.11226
+        },
+        {
+          "sequence": 11,
+          "name": "encoder_flush_started",
+          "monotonic": 5097738.8888369
+        },
+        {
+          "sequence": 12,
+          "name": "encoder_flush_completed",
+          "monotonic": 5097738.8889157
+        },
+        {
+          "sequence": 13,
+          "name": "publish_close_started",
+          "monotonic": 5097738.88892
+        },
+        {
+          "sequence": 14,
+          "name": "publish_close_completed",
+          "monotonic": 5097738.8896362
+        },
+        {
+          "sequence": 15,
+          "phase": "source_read",
+          "name": "media_ending",
+          "monotonic": 5097738.8896449,
+          "reason": "source_eof"
+        },
+        {
+          "sequence": 16,
+          "name": "source_closed",
+          "monotonic": 5097738.8899818
+        },
+        {
+          "sequence": 17,
+          "name": "reader_join_completed",
+          "monotonic": 5097738.8902247,
+          "alive": false
+        }
+      ],
+      "worker_boundaries": {
+        "media_execution_started": 5097233.5991697,
+        "media_execution_completed": 5097739.0516301,
+        "publisher_prepare_started": 5097233.406555,
+        "publisher_close_started": 5097739.0516527,
+        "worker_attempt_ending": 5097739.1955974,
+        "retry_wait_completed": 5097740.2898431,
+        "publisher_prepare_completed": 5097233.5682521,
+        "first_output_received": 5097236.1386436,
+        "source_validation_completed": 5097233.4065492,
+        "retry_wait_started": 5097739.2886343,
+        "source_validation_started": 5097233.40527,
+        "publisher_close_completed": 5097739.1955905
+      },
+      "retained_audio_regression_examples": [
+        {
+          "previous": {
+            "raw": {
+              "pts": 1024,
+              "duration": 1024,
+              "dts": 1024,
+              "time_base": "1/8000"
+            },
+            "monotonic": 5097233.8773356,
+            "sequence": 2,
+            "normalized": {
+              "pts": 1024,
+              "duration": 1024,
+              "dts": 1024,
+              "time_base": "1/8000"
+            }
+          },
+          "current": {
+            "raw": {
+              "pts": 808,
+              "duration": 1024,
+              "dts": 808,
+              "time_base": "1/8000"
+            },
+            "monotonic": 5097233.9171742,
+            "sequence": 3,
+            "normalized": {
+              "pts": 2048,
+              "duration": 1024,
+              "dts": 2048,
+              "time_base": "1/8000"
+            }
+          }
+        },
+        {
+          "previous": {
+            "raw": {
+              "time_base": "1/8000",
+              "duration": 1024,
+              "pts": 81708,
+              "dts": 81708
+            },
+            "sequence": 82,
+            "monotonic": 5097249.5896311,
+            "normalized": {
+              "time_base": "1/8000",
+              "duration": 1024,
+              "pts": 82944,
+              "dts": 82944
+            }
+          },
+          "current": {
+            "raw": {
+              "time_base": "1/8000",
+              "duration": 1024,
+              "pts": 80745,
+              "dts": 80745
+            },
+            "sequence": 83,
+            "monotonic": 5097249.5897901,
+            "normalized": {
+              "time_base": "1/8000",
+              "duration": 1024,
+              "pts": 83968,
+              "dts": 83968
+            }
+          }
+        },
+        {
+          "previous": {
+            "raw": {
+              "time_base": "1/8000",
+              "duration": 1024,
+              "pts": 81769,
+              "dts": 81769
+            },
+            "sequence": 84,
+            "monotonic": 5097249.5899468,
+            "normalized": {
+              "time_base": "1/8000",
+              "duration": 1024,
+              "pts": 84992,
+              "dts": 84992
+            }
+          },
+          "current": {
+            "raw": {
+              "time_base": "1/8000",
+              "duration": 1024,
+              "pts": 80747,
+              "dts": 80747
+            },
+            "sequence": 85,
+            "monotonic": 5097249.5901264,
+            "normalized": {
+              "time_base": "1/8000",
+              "duration": 1024,
+              "pts": 86016,
+              "dts": 86016
+            }
+          }
+        }
+      ],
+      "retained_audio_count": 2298,
+      "retained_audio_output_count": 2293,
+      "conditional_rebase_examples": [
+        {
+          "sequence": 3,
+          "frame_id": 3,
+          "moment": "7201/90000",
+          "raw": {
+            "pts": 161677,
+            "duration": 3600,
+            "dts": 161677,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 161677,
+            "duration": 3600,
+            "dts": 161677,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 7201,
+            "duration": 0,
+            "dts": 7201,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097236.3464324,
+          "due": 5097236.3846966,
+          "actual": 5097236.3847884,
+          "remaining": 0.038264124654233,
+          "conditional_no_rebase_due": 5097236.3647021,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.038348112255335,
+          "conditional_rebase_request_seconds": 0.019994476810098,
+          "retained_anti_burst_request_seconds": 0.018269647844136
+        },
+        {
+          "sequence": 5,
+          "frame_id": 5,
+          "moment": "14401/90000",
+          "raw": {
+            "pts": 168877,
+            "duration": 3600,
+            "dts": 168877,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 168877,
+            "duration": 3600,
+            "dts": 168877,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 14401,
+            "duration": 0,
+            "dts": 14401,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097236.6992197,
+          "due": 5097236.7381623,
+          "actual": 5097236.738243,
+          "remaining": 0.038942541927099,
+          "conditional_no_rebase_due": 5097236.7181681,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.039016532711685,
+          "conditional_rebase_request_seconds": 0.01999416295439,
+          "retained_anti_burst_request_seconds": 0.018948378972709
+        },
+        {
+          "sequence": 6,
+          "frame_id": 6,
+          "moment": "18001/90000",
+          "raw": {
+            "pts": 172477,
+            "duration": 3600,
+            "dts": 172477,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 172477,
+            "duration": 3600,
+            "dts": 172477,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 18001,
+            "duration": 0,
+            "dts": 18001,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097236.7394263,
+          "due": 5097236.7781623,
+          "actual": 5097236.7782532,
+          "remaining": 0.038735908456147,
+          "conditional_no_rebase_due": 5097236.758243,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.038815979845822,
+          "conditional_rebase_request_seconds": 0.019919233396649,
+          "retained_anti_burst_request_seconds": 0.018816675059497
+        },
+        {
+          "sequence": 7,
+          "frame_id": 7,
+          "moment": "21691/90000",
+          "raw": {
+            "pts": 176167,
+            "duration": 3600,
+            "dts": 176167,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 176167,
+            "duration": 3600,
+            "dts": 176167,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 21691,
+            "duration": 0,
+            "dts": 21691,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097236.7812712,
+          "due": 5097236.8191623,
+          "actual": 5097236.8192757,
+          "remaining": 0.037891024723649,
+          "conditional_no_rebase_due": 5097236.799243,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.037986190058291,
+          "conditional_rebase_request_seconds": 0.019919233396649,
+          "retained_anti_burst_request_seconds": 0.017481930553913
+        },
+        {
+          "sequence": 8,
+          "frame_id": 8,
+          "moment": "25291/90000",
+          "raw": {
+            "pts": 179767,
+            "duration": 3600,
+            "dts": 179767,
+            "time_base": "1/90000"
+          },
+          "normalized": {
+            "pts": 179767,
+            "duration": 3600,
+            "dts": 179767,
+            "time_base": "1/90000"
+          },
+          "encoder": {
+            "pts": 25291,
+            "duration": 0,
+            "dts": 25291,
+            "time_base": "1/90000"
+          },
+          "decision_at": 5097236.8211427,
+          "due": 5097236.8591623,
+          "actual": 5097236.8592682,
+          "remaining": 0.038019600324333,
+          "conditional_no_rebase_due": 5097236.8392757,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.038108825683594,
+          "conditional_rebase_request_seconds": 0.019886526279151,
+          "retained_anti_burst_request_seconds": 0.018133074045181
+        }
+      ]
+    },
+    "4b527cf5f7c74ad9a37114143e5c01cd": {
+      "retained_frames": 111,
+      "retained_published_frames": 104,
+      "duration_seconds": {
+        "fifo_wait": {
+          "n": 107,
+          "mean": 0.1964664682658894,
+          "p50": 0.13473490066826344,
+          "p95": 0.5442572201602159,
+          "p99": 0.7521589175984263,
+          "min": 0.00015010032802820206,
+          "max": 1.0232638996094465
+        },
+        "lookahead_residence": {
+          "n": 104,
+          "mean": 0.7502742230695171,
+          "p50": 0.7905612997710705,
+          "p95": 0.918907275237143,
+          "p99": 1.0448348627332598,
+          "min": 0.05546970013529062,
+          "max": 1.0879450999200344
+        },
+        "release_to_render": {
+          "n": 104,
+          "mean": 0.01436709518580196,
+          "p50": 6.149988621473312e-06,
+          "p95": 0.07937379460781813,
+          "p99": 0.09881032908335327,
+          "min": 2.7995556592941284e-06,
+          "max": 0.09989930037409067
+        },
+        "render_wall": {
+          "n": 104,
+          "mean": 0.0005747202085331082,
+          "p50": 0.000497850589454174,
+          "p95": 0.001175294956192374,
+          "p99": 0.001434001103043556,
+          "min": 0.0002052001655101776,
+          "max": 0.0017277998849749565
+        },
+        "final_render_to_mux": {
+          "n": 104,
+          "mean": 0.06229995288707029,
+          "p50": 0.04129539988934994,
+          "p95": 0.2007397653069345,
+          "p99": 0.36200311873108143,
+          "min": 0.001060599461197853,
+          "max": 0.4032185999676585
+        }
+      },
+      "sampled_release_reasons": {
+        "wall-deadline": 82,
+        "scene-reset": 12,
+        "null": 7,
+        "media-window": 10
+      },
+      "approximate_largest_release_group_in_10ms": 10,
+      "event_boundaries": [
+        {
+          "worker_attempt_started": 5097740.3475899,
+          "monotonic": 5097740.5692384,
+          "name": "media_attempt_enter",
+          "sequence": 1
+        },
+        {
+          "monotonic": 5097740.570361,
+          "name": "publish_open_started",
+          "sequence": 2
+        },
+        {
+          "monotonic": 5097740.5707175,
+          "name": "publish_open_completed",
+          "sequence": 3
+        },
+        {
+          "monotonic": 5097740.5708666,
+          "name": "source_open_started",
+          "sequence": 4
+        },
+        {
+          "monotonic": 5097740.7793562,
+          "name": "source_open_completed",
+          "sequence": 5
+        },
+        {
+          "sequence": 6,
+          "name": "source_validated",
+          "video_time_base": "1/90000",
+          "monotonic": 5097740.77957,
+          "video_average_rate": "25/1",
+          "audio_sample_rate": 8000,
+          "audio_time_base": "1/8000"
+        },
+        {
+          "mux_monotonic": 5097743.4154686,
+          "name": "first_video_mux_completed",
+          "sequence": 7,
+          "monotonic": 5097743.4155043
+        }
+      ],
+      "worker_boundaries": {
+        "media_execution_started": 5097740.5667673,
+        "publisher_prepare_started": 5097740.3996835,
+        "publisher_prepare_completed": 5097740.5455373,
+        "source_validation_started": 5097740.3984934,
+        "source_validation_completed": 5097740.399681
+      },
+      "retained_audio_regression_examples": [],
+      "retained_audio_count": 49,
+      "retained_audio_output_count": 47,
+      "conditional_rebase_examples": [
+        {
+          "sequence": 4,
+          "frame_id": 4,
+          "moment": "5401/45000",
+          "raw": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 180722,
+            "dts": 180722
+          },
+          "normalized": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 180722,
+            "dts": 180722
+          },
+          "encoder": {
+            "time_base": "1/90000",
+            "duration": 0,
+            "pts": 10802,
+            "dts": 10802
+          },
+          "decision_at": 5097743.5788894,
+          "due": 5097743.6173958,
+          "actual": 5097743.6175224,
+          "remaining": 0.038506332784891,
+          "conditional_no_rebase_due": 5097743.5974074,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.038613465614617,
+          "conditional_rebase_request_seconds": 0.019988365471363,
+          "retained_anti_burst_request_seconds": 0.018517967313528
+        },
+        {
+          "sequence": 6,
+          "frame_id": 6,
+          "moment": "9091/45000",
+          "raw": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 188102,
+            "dts": 188102
+          },
+          "normalized": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 188102,
+            "dts": 188102
+          },
+          "encoder": {
+            "time_base": "1/90000",
+            "duration": 0,
+            "pts": 18182,
+            "dts": 18182
+          },
+          "decision_at": 5097743.6802559,
+          "due": 5097743.7204543,
+          "actual": 5097743.7205759,
+          "remaining": 0.040198374539614,
+          "conditional_no_rebase_due": 5097743.6994706,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.04030255228281,
+          "conditional_rebase_request_seconds": 0.020983619615436,
+          "retained_anti_burst_request_seconds": 0.019214754924178
+        },
+        {
+          "sequence": 8,
+          "frame_id": 8,
+          "moment": "6323/22500",
+          "raw": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 195212,
+            "dts": 195212
+          },
+          "normalized": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 195212,
+            "dts": 195212
+          },
+          "encoder": {
+            "time_base": "1/90000",
+            "duration": 0,
+            "pts": 25292,
+            "dts": 25292
+          },
+          "decision_at": 5097743.8468294,
+          "due": 5097743.8842001,
+          "actual": 5097743.8843355,
+          "remaining": 0.03737068362534,
+          "conditional_no_rebase_due": 5097743.8647136,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.037481656298041,
+          "conditional_rebase_request_seconds": 0.019486484117806,
+          "retained_anti_burst_request_seconds": 0.017884199507535
+        },
+        {
+          "sequence": 9,
+          "frame_id": 9,
+          "moment": "7223/22500",
+          "raw": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 198812,
+            "dts": 198812
+          },
+          "normalized": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 198812,
+            "dts": 198812
+          },
+          "encoder": {
+            "time_base": "1/90000",
+            "duration": 0,
+            "pts": 28892,
+            "dts": 28892
+          },
+          "decision_at": 5097743.8865773,
+          "due": 5097743.9242001,
+          "actual": 5097743.9243341,
+          "remaining": 0.037622774019837,
+          "conditional_no_rebase_due": 5097743.9047136,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.0377342319116,
+          "conditional_rebase_request_seconds": 0.019486484117806,
+          "retained_anti_burst_request_seconds": 0.017758237197995
+        },
+        {
+          "sequence": 10,
+          "frame_id": 10,
+          "moment": "8123/22500",
+          "raw": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 202412,
+            "dts": 202412
+          },
+          "normalized": {
+            "time_base": "1/90000",
+            "duration": 3600,
+            "pts": 202412,
+            "dts": 202412
+          },
+          "encoder": {
+            "time_base": "1/90000",
+            "duration": 0,
+            "pts": 32492,
+            "dts": 32492
+          },
+          "decision_at": 5097743.9287687,
+          "due": 5097743.9642001,
+          "actual": 5097743.9643431,
+          "remaining": 0.035431393422186,
+          "conditional_no_rebase_due": 5097743.9447136,
+          "rebase_reason": null,
+          "actual_wait_seconds": 0.035551447421312,
+          "conditional_rebase_request_seconds": 0.019486484117806,
+          "retained_anti_burst_request_seconds": 0.015565393492579
+        }
+      ]
+    }
+  },
+  "reconnects": [
+    {
+      "previous_attempt": "adcafe1dd4b34708bd9cdb6435e08589",
+      "next_attempt": "a13da7fa5fb545efa06d4d005622dd9f",
+      "reason": "source_eof",
+      "mux_gap_seconds": 4.173750299960375,
+      "previous_ended_monotonic": 5097231.975762,
+      "next_worker_started_monotonic": 5097233.360429,
+      "last_mux": 5097231.9643722,
+      "next_first_mux": 5097236.1381225
+    },
+    {
+      "previous_attempt": "a13da7fa5fb545efa06d4d005622dd9f",
+      "next_attempt": "4b527cf5f7c74ad9a37114143e5c01cd",
+      "reason": "source_eof",
+      "mux_gap_seconds": 4.5269581992179155,
+      "previous_ended_monotonic": 5097738.8902348,
+      "next_worker_started_monotonic": 5097740.3475899,
+      "last_mux": 5097738.8885104,
+      "next_first_mux": 5097743.4154686
+    }
+  ],
+  "note": "Frame distributions and examples use retained samples only; global costs use e0-summary cumulative counters; historical reconnects outside the captured server window removed from this view"
+}

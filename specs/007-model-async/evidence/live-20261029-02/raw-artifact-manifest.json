@@ -1,0 +1,183 @@
+{
+  "files": [
+    {
+      "path": "data/diagnostics/stage3-live-20261029-02/live-summary.json",
+      "bytes": 45929,
+      "sha256": "631b302f5fa5ec4f57038cf9fe199612b366d6770e4278fa42500bf34debe28f",
+      "load_phase": "clean-dual-RTSP"
+    },
+    {
+      "path": "data/diagnostics/stage3-live-20261029-02/peer/e0.jsonl",
+      "bytes": 4976707,
+      "sha256": "eddcb44d8984f611768867a6a20e9c9f5f2e0c436d0133148ae9bd2c85f0f511",
+      "load_phase": "clean-dual-RTSP"
+    },
+    {
+      "path": "data/diagnostics/stage3-live-20261029-02/primary/analysis.log",
+      "bytes": 21333,
+      "sha256": "43d9570cf3a2be62837a4e9cd2e0324d0d2e51df8356701d945f03eff7fcac70",
+      "load_phase": "clean-dual-RTSP"
+    },
+    {
+      "path": "data/diagnostics/stage3-live-20261029-02/primary/e0-details.json",
+      "bytes": 39967,
+      "sha256": "77bfb5fdb84aea383c605976eae42f70b297172e1da95873977d57253e658686",
+      "load_phase": "clean-dual-RTSP"
+    },
+    {
+      "path": "data/diagnostics/stage3-live-20261029-02/primary/e0-summary.json",
+      "bytes": 21331,
+      "sha256": "1057003f48ee9851cbe8e9af2e29bb4f63416a5c5764384ecb99f5187170b78a",
+      "load_phase": "clean-dual-RTSP"
+    },
+    {
+      "path": "data/diagnostics/stage3-live-20261029-02/primary/e0.jsonl",
+      "bytes": 41003327,
+      "sha256": "0cfa8d89f0f4dea0abb3af5c80e13d22cdff364781b6f56e9ed1df67f141d347",
+      "load_phase": "clean-dual-RTSP"
+    },
+    {
+      "path": "data/diagnostics/stage3-live-20261029-02/primary/window-reconnects.json",
+      "bytes": 760,
+      "sha256": "b5d7f044956a3dcefaf3487b7d8b346f261aa071e0150049b66840c83ae267ea",
+      "load_phase": "clean-dual-RTSP"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/completed-file-auxiliary-profile.json",
+      "bytes": 590893,
+      "sha256": "99bd861762789ef49ba52f3151415b2e49b974db39c41d48b20b68b5d70d9202",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/deployment-check.json",
+      "bytes": 5506,
+      "sha256": "fff33e90c3f8495c3d86c5b9d45df7ac87cc7ac07475feddcd5c8a8489e93b3b",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/experiment.log",
+      "bytes": 371,
+      "sha256": "efde6353d080e01423c430692f604c1b2a14796cc8c002f0c70998afba68747e",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/file-stop-audit.json",
+      "bytes": 1169,
+      "sha256": "f909f2cc00b3648c105e108feb0c2209bc43a21d700607fb1c0abdc1669d0ebf",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/1-normal/media-signature.json",
+      "bytes": 488436,
+      "sha256": "906a08390ca63fb09c09b928339495205a11e915b394589502d86317290f149a",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/1-normal/outcome.json",
+      "bytes": 2731,
+      "sha256": "9753ae0783907dc97fe15d898170a7b01dc9aaa57ea13fe06f8577b29612b4e7",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/1-normal/polls.jsonl",
+      "bytes": 242416,
+      "sha256": "2fcb2feaccb63ca43f73e991a80d9d4e514eddf7f98b3b0e6025a9ae31137260",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/1-normal/submission.json",
+      "bytes": 187,
+      "sha256": "0b439d4cf4197c12454d572ba9a64e766b0503c7bdca99feb1278663aa8ec449",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/2-async-host/polls.jsonl",
+      "bytes": 261297,
+      "sha256": "7d9f997022e3f1ff3fcf8a06b89fde2b59003ce5d705da41386fe11a188c4568",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/2-async-host/submission.json",
+      "bytes": 190,
+      "sha256": "08dbcd23e9d4cf7f0ab09c254ee7b4b2aa8ae82b45b8ac0fdb547e93de6200ca",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/experiment.json",
+      "bytes": 3382,
+      "sha256": "84c8e2ddd9e84eff0891252755f4ad58602f3aec8bce27fc8028444d72c220df",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/monitor/e0.jsonl",
+      "bytes": 25202056,
+      "sha256": "36ccfc96ca3f244a1f4df3139a154fd8bc187d4a983131f57f9f334061053c06",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/files/monitor.log",
+      "bytes": 536,
+      "sha256": "351d6665579af05cfb1cada22c581ec015f25de91203a5d5a35178d89c148818",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/final-task-status.json",
+      "bytes": 407,
+      "sha256": "f94570958c66ff5a27d71d02fae1fcf4b104f0a96a6fdd8e65ff4339eec83eb8",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/latest-live-slow-scopes.json",
+      "bytes": 20576,
+      "sha256": "41807a4cdc96d5e224010e536c93cad48add4ce4ec73f38d44b5c2ab08d86581",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/live-peer.log",
+      "bytes": 792,
+      "sha256": "41e0735f7f179e16dab034cd10a63066d7d893b87681b0d3da420181efdd3a7f",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/live-primary.log",
+      "bytes": 822,
+      "sha256": "d2a1d8f0190884e4cbfefdcccedb10cfb17f61542342ab3132e203dfcc49dbb4",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/no-active-file-check.json",
+      "bytes": 407,
+      "sha256": "3b54e0259e02678e7c36ed1af8acf2e093485bd628dab8111dfa4a3fa7b7deac",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/peer-runtime.json",
+      "bytes": 5512,
+      "sha256": "cc9727ef270b75a6990e746d5ccdc2522ec0bb55648a5a76506468fe9b0cdf83",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/resources-clean-start.json",
+      "bytes": 4651,
+      "sha256": "f721ef72c1e62be810dc38644b02c7e20479b156475f1d4f1aea9c698e8035de",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/rtx-file-run-stopped.py",
+      "bytes": 11803,
+      "sha256": "104ba94423c4f20e5166c7509258bd0754da851c89c282fd36e1367d40d2cead",
+      "load_phase": "mixed-file-load-or-audit-only"
+    },
+    {
+      "path": "data/diagnostics/stage3-rtx-20261029-01/stream-status-during.json",
+      "bytes": 602267,
+      "sha256": "bf5c586fa3f2570210095a52cd55a2a232f6d330e089a5adc1288667f0819f7f",
+      "load_phase": "mixed-file-load-or-audit-only"
+    }
+  ],
+  "notes": [
+    "File-test results and mixed-load capture are auxiliary only",
+    "Only primary/peer clean capture is used for RTSP performance",
+    "Second file output comparison was interrupted; no claimed complete AV equality"
+  ]
+}
