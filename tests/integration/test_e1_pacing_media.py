@@ -1,4 +1,4 @@
-"""Real H264/AAC/RTSP and lookahead with CPU scheduling and optional real CUDA media checks."""
+"""Compare independent media plans against pinned live E1 with real H264/AAC/RTSP."""
 from itertools import pairwise
 import base64
 import json
@@ -26,7 +26,7 @@ from vision_shield.redaction import redact
 def baseline_pacer():
     namespace = {}
     source = subprocess.check_output(['git', 'show',
-        '21bd631d5a3d02de052974b57f73428560944804:src/vision_shield/media/stream_pacing.py'], text=True)
+        '79ebddc22ab4d47337083f5514fd5dcd5176aa37:src/vision_shield/media/stream_pacing.py'], text=True)
     exec(source, namespace)
     return namespace['StreamPacer']
 
@@ -149,7 +149,7 @@ def run(source, monkeypatch, policy, scenario, costs, *, hardware=False):
 
 
 @pytest.mark.parametrize('scenario', ['continuous', 'reset', 'stop'])
-def test_e1_real_media_retains_clocks_bytes_and_audio_with_actual_lookahead(interleave_source, monkeypatch, scenario):
+def test_independent_plan_retains_clocks_bytes_and_audio_with_actual_lookahead(interleave_source, monkeypatch, scenario):
     arms = []
     for policy in (baseline_pacer(), StreamPacer):
         with monkeypatch.context() as scoped:
@@ -169,11 +169,11 @@ def test_e1_real_media_retains_clocks_bytes_and_audio_with_actual_lookahead(inte
         assert min(gaps) >= .019
 
 
-def test_e1_real_media_has_repeatable_bounded_scheduling_benefit(interleave_source, monkeypatch):
+def test_independent_plan_has_repeatable_bounded_scheduling_benefit(interleave_source, monkeypatch):
     measurements = []
     for _ in range(2):
         pair = []
-        for name, policy in [('baseline', baseline_pacer()), ('e1', StreamPacer)]:
+        for name, policy in [('deployed_e1', baseline_pacer()), ('independent_media_plan', StreamPacer)]:
             with monkeypatch.context() as scoped:
                 result = run(interleave_source, scoped, policy, 'continuous', [.09, .01, .01])
             elapsed = result['published'][-1]-result['published'][0]
@@ -181,14 +181,14 @@ def test_e1_real_media_has_repeatable_bounded_scheduling_benefit(interleave_sour
                              fps=(len(result['published'])-1)/elapsed))
         assert pair[1]['seconds'] < pair[0]['seconds']*.98
         measurements.append(pair)
-    target = os.getenv('E1_RESULT_PATH')
+    target = os.getenv('E1_MEDIA_PLAN_RESULT_PATH')
     if target:
         Path(target).write_text(json.dumps(measurements, indent=2), encoding='utf-8')
 
 
 @pytest.mark.skipif(os.getenv('RUN_GPU_TESTS') != '1', reason='requires actual NVDEC/CUDA masking/NVENC')
 @pytest.mark.parametrize('scenario', ['continuous', 'reset'])
-def test_e1_actual_gpu_lookahead_keeps_video_audio_and_pts(interleave_source, monkeypatch, scenario):
+def test_independent_plan_actual_gpu_keeps_video_audio_and_pts(interleave_source, monkeypatch, scenario):
     arms = []
     for policy in (baseline_pacer(), StreamPacer):
         with monkeypatch.context() as scoped:

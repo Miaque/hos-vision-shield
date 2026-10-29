@@ -116,3 +116,50 @@ def test_stop_interrupts_an_in_progress_large_gap_wait():
     worker.join(.5)
     assert not worker.is_alive() and results == [False]
     assert pacer.previous_moment == Fraction(0)
+
+
+def test_late_frame_floor_does_not_rebase_the_following_media_plan():
+    clock = Clock()
+    pacer = StreamPacer(clock, clock=clock)
+    observed = []
+    pacer.observer = observed.append
+    assert pacer.wait(Fraction(0))
+    # The live 336-338 case has this shape: late frame, floor, then another fast frame.
+    clock.now = .110
+    assert pacer.wait(Fraction(1, 25))
+    clock.now = .111
+    assert pacer.wait(Fraction(2, 25))
+    assert clock.now == pytest.approx(.130, rel=0, abs=1e-12)
+    clock.now = .131
+    assert pacer.wait(Fraction(3, 25))
+    assert clock.now == pytest.approx(.150, rel=0, abs=1e-12)
+    assert pacer.previous_release == pytest.approx(.120, rel=0, abs=1e-12)
+    assert [row['moment'] for row in observed] == ['0', '1/25', '2/25', '3/25']
+    assert all(b['actual']-a['actual'] >= .020-1e-12 for a, b in zip(observed, observed[1:]))
+
+
+@pytest.mark.parametrize('step', [Fraction(5, 90000), Fraction(6, 90000), Fraction(1, 25), Fraction(1)])
+def test_independent_media_plan_retains_each_interval_floor_and_stop_state(step):
+    class InterruptibleClock(Clock):
+        interrupt = False
+
+        def wait(self, seconds):
+            if self.interrupt:
+                self.now += seconds / 2
+                self.stopped = True
+                return True
+            return super().wait(seconds)
+
+    clock = InterruptibleClock()
+    pacer = StreamPacer(clock, clock=clock)
+    assert pacer.wait(Fraction(0))
+    clock.now = 1.
+    assert pacer.wait(step)
+    previous = clock.now
+    assert pacer.wait(2*step)
+    assert clock.now-previous >= min(.5, float(step))/2-1e-12
+    assert pacer.previous_release == pytest.approx(2*min(.5, float(step)), rel=0, abs=1e-12)
+    before = pacer.previous_moment, pacer.previous_release, pacer.previous_actual
+    clock.interrupt = True
+    assert not pacer.wait(3*step)
+    assert before == (pacer.previous_moment, pacer.previous_release, pacer.previous_actual)
