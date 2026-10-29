@@ -276,7 +276,7 @@ async def get_task(task_id: UUID, request: Request, response: Response):
     if request.app.state.settings.debug and task.get("timings"):
         response.headers["Server-Timing"] = ", ".join(
             f"task-{name};dur={task['timings'][name] * 1000:.3f}"
-            for name in ("frame", "inference", "encode", "candidate-primary", "candidate-detail", *STAGES)
+            for name in ("frame", "inference", "encode", "output-pacing", "candidate-primary", "candidate-detail", *STAGES)
             if name in task["timings"])
     return public(request, task)
 
