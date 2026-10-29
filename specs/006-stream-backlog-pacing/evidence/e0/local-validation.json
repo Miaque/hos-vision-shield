@@ -1,0 +1,50 @@
+{
+  "candidate_commit": "21bd631d5a3d02de052974b57f73428560944804",
+  "local_only": true,
+  "test_results": {
+    "focused": "71 passed in 13.54s",
+    "rtsp": "2 passed, 13 deselected in 16.59s",
+    "full_unit": "1 failed, 911 passed, 96 skipped, 9 warnings in 130.13s",
+    "failure": "tests/unit/test_rtsp_observer.py::test_real_rtsp_reader_is_bounded_and_stops_its_socket",
+    "observer_standalone": "3 passed in 3.81s",
+    "device_and_cuda_contract": "55 passed in 6.65s",
+    "capture_analysis": "3 passed in 1.19s",
+    "fixed_baseline_pacer": "1000 deterministic jitter/gap/regression decisions identical"
+  },
+  "baseline_identical_files": [
+    "src/vision_shield/media/rtsp_observer.py",
+    "tests/unit/test_rtsp_observer.py",
+    "scripts/deploy-server.sh",
+    "src/vision_shield/media/cuda_frames.py",
+    "src/vision_shield/media/video.py",
+    "src/vision_shield/media/stream_metrics.py"
+  ],
+  "limitation": "No RTX E0 deployment; full suite retains one observer shutdown timing failure; do not claim full green",
+  "artifacts": [
+    {
+      "path": "data/diagnostics/e0-final-unit-20261029.log",
+      "bytes": 5647,
+      "sha256": "128caa38023cea2359a643d8f9317bb962d04e1406e8ccd26465f19b2d5fff3e"
+    },
+    {
+      "path": "data/diagnostics/e0-release-focused-20261029.log",
+      "bytes": 102,
+      "sha256": "760e8bae8792b296ad81a4ca9601a040ecebd8dec7c9a7cdaf8068fe505ce05c"
+    },
+    {
+      "path": "data/diagnostics/e0-release-rtsp-20261029.log",
+      "bytes": 116,
+      "sha256": "9632cb7701b69d385c816746d03636bb2582706ea1cf9e80e390a2defd7b13ee"
+    },
+    {
+      "path": "data/diagnostics/e0-benchmark-20261029.json",
+      "bytes": 1310,
+      "sha256": "8978508eba6b03a89f588233b92c44912f2d7bb8ea64f000b2c78e594025cb86"
+    },
+    {
+      "path": "data/diagnostics/e0-readiness-20261029/baseline-verification.json",
+      "bytes": 3292,
+      "sha256": "76b768278cd97e613f5c6691c4fb864fb09a636e9ee730064ec62e5bb0e5cd31"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "captured_unix": 1793282561.7716525,
+  "baseline": "1c9be543c30fed7a2f4263b85c447ba079d438f8",
+  "task_id": "27c39007-0aee-4185-b8fa-9d1ece4de058",
+  "state": "running",
+  "ready": true,
+  "attempt_id": "302e442e83634790bfd96c9fb0cc26b3",
+  "checks": {
+    "detection.egoblur": true,
+    "media.rtsp_observer": true,
+    "detection.timing": true,
+    "media.plate_lookahead": true,
+    "detection.cuda_detail": true,
+    "detection.quality": true,
+    "detection.yolo": true,
+    "redaction": true,
+    "detection.cpu": true,
+    "media.streams": true,
+    "media.live_diagnostics": true,
+    "media.cuda_frames": true,
+    "media.stream_pacing": true,
+    "media.video": true,
+    "detection.plate_readability": true,
+    "detection.host_profile": true,
+    "detection.cuda_pixels": true
+  },
+  "runtime": {
+    "source_sha256": {
+      "detection.egoblur": "1dbc7674eb0616624d53b687f1e172769f79a7f722d34e1a2ba4d33021ceceb0",
+      "media.rtsp_observer": "06110647d11369d2ff435ef59e7e1f33738c6b1a6fe1d2bd01004e1ff8ff865a",
+      "detection.timing": "d960d1a9138f282b0732efdb7b570f0d975720fd171606357e320fd881222017",
+      "media.plate_lookahead": "72057c7be556fd43fd98d1464452496715999774c4c8e44484b6a83776e81be6",
+      "detection.cuda_detail": "6d08570c75c79fb266ff285ef6f53682c1bc806658cfa0c8d0eda0c2abe34040",
+      "detection.quality": "5f718140eb2107274f4b82c91233a95487f1313410152063836b72cb30e4b78b",
+      "detection.yolo": "a7252e8e869ae5bccd0a818909c3250e72a007a2e271ae09a7d7281f5bd48a4b",
+      "redaction": "8bf1d0921a136bdcb2d48dc92e714edb7aded27ae10a1a0fe1d85648584f4e38",
+      "detection.cpu": "8b2a4ee01b0ec532e81e9a4d0ee00a2db79847979b960db455dd1601337a7d9f",
+      "media.streams": "b0204b15ee3ee15b4272ba700183f5504ee62b1e62db498a91f166105490146b",
+      "media.live_diagnostics": "77af724d6092d95d3262e13e6018f51ac6a14a353e36dbbf9384aa45000654e9",
+      "media.cuda_frames": "6a2de76fa29f3c5d5c98df8f8d8b03157c40564b08628a2b349950ad8d095df0",
+      "media.stream_pacing": "0bbdd0db644200c5864eb7ff7d081284417950f23a41ea4e80b798ee793df39d",
+      "media.video": "8fefb4d7a61fbd9c7c2f3338000feeea90c7b1da3697455455c4b5a0765aebb4",
+      "detection.plate_readability": "04ba6b208389e26e380715bed2c45a4869e5908ff8dd38e85ce4b2dfd7ee68c4",
+      "detection.host_profile": "2ef56c3d0f8547dd6774910623462a6cfa69c44aeae5c95de3bebfe33b7da728",
+      "detection.cuda_pixels": "8e071f1188046c03a1ab35c847139484776dffc97c80095df60a6fd057a63352"
+    },
+    "effective_config": {
+      "max_bitrate": null,
+      "audio_buffer_bytes": 4194304,
+      "rtsp_read_timeout": 10,
+      "redaction_mode": "solid",
+      "audio_buffer_seconds": 16,
+      "stream_output_pacing": true,
+      "audio_enabled": true,
+      "stream_diagnostics": true,
+      "frame_buffer_size": 2,
+      "debug": true,
+      "detection_interval": 3,
+      "tracking": "flow",
+      "rtsp_connect_timeout": 10
+    },
+    "output_mux_options": {
+      "max_interleave_delta": "100000",
+      "rtsp_transport": "tcp"
+    },
+    "clock_identity": {
+      "boot_id": "35fb6945-03f7-48fa-b594-336ead489e3b",
+      "namespace_offsets": "monotonic           0         0\nboottime            0         0"
+    },
+    "av_version": "19.0.1"
+  }
+}

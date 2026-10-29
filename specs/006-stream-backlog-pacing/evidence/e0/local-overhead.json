@@ -1,0 +1,50 @@
+{
+  "rounds": [
+    {
+      "enabled": false,
+      "wall_ms_per_frame": 0.08090235000008761,
+      "cpu_ms_per_frame": 0.078125
+    },
+    {
+      "enabled": true,
+      "wall_ms_per_frame": 0.4247728499999539,
+      "cpu_ms_per_frame": 0.40625
+    },
+    {
+      "enabled": false,
+      "wall_ms_per_frame": 0.0917237000003297,
+      "cpu_ms_per_frame": 0.09375
+    },
+    {
+      "enabled": true,
+      "wall_ms_per_frame": 0.4079893999996784,
+      "cpu_ms_per_frame": 0.3984375
+    },
+    {
+      "enabled": false,
+      "wall_ms_per_frame": 0.07917085000008228,
+      "cpu_ms_per_frame": 0.078125
+    },
+    {
+      "enabled": true,
+      "wall_ms_per_frame": 0.408723149999787,
+      "cpu_ms_per_frame": 0.4140625
+    }
+  ],
+  "incremental_cpu_ms_per_frame": 0.328125,
+  "snapshot_ms": {
+    "median": 2.6935999999295746,
+    "max": 4.801299999598996
+  },
+  "combined_snapshot_ms": {
+    "median": 9.762599999703525,
+    "max": 10.348200000407815
+  },
+  "combined_snapshot_bytes": 189441,
+  "snapshot_bytes": 119598,
+  "traced_retained_bytes": 1094709,
+  "traced_peak_bytes": 1139975,
+  "scope_calls_per_frame": 24,
+  "frames_per_round": 2000,
+  "limitations": "Synthetic host probes; does not measure RTX/GPU contention, Redis or subprocess transport"
+}
