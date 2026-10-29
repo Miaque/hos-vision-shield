@@ -19,7 +19,7 @@ from vision_shield.media.plate_lookahead import PendingMask
 @pytest.mark.parametrize("delayed", [False, True])
 @pytest.mark.parametrize("repair", [False, True])
 @pytest.mark.parametrize('debug', [False, True])
-def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False, with_audio=False, default_schedule=False):
+def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False, with_audio=False, default_schedule=False, pacing=True):
     source_video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
     frames = [SimpleNamespace(width=64, height=48, pts=900000 + 3600 * i, time_base=Fraction(1, 90000))
               for i in range(3)]
@@ -113,8 +113,11 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     monkeypatch.setattr(streams.av, "open", open_endpoint)
     monkeypatch.setattr(streams, "add_video", add_video)
     monkeypatch.setattr(streams, "masked_frame", software_mask)
+    paced = []
+    wait = streams.StreamPacer.wait
+    monkeypatch.setattr(streams.StreamPacer, 'wait', lambda self, moment: paced.append(moment) or wait(self, moment))
     config = {**Settings(_env_file=None, debug=debug).model_dump(), "inference_device": "cuda",
-              "detection_interval": 3, "tracking": "flow"}
+              "detection_interval": 3, "tracking": "flow", "stream_output_pacing": pacing}
     if default_schedule:
         config.pop('detection_interval')
         config.pop('tracking')
@@ -138,6 +141,7 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         process()
         assert masked == [900000, 903600, 907200]
         assert encoded == [0, 3600, 7200]
+        assert len(paced) == (3 if pacing else 0)
         assert threads["context"] == threads["decode"] != threading.get_ident()
         assert add_video.call_args.kwargs == {"live": True, "device": "cuda"}
         assert events[-1]["stats"]["processed_frames"] == 3
@@ -160,6 +164,11 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     assert stop.is_set()
     if fault != "decode":
         assert closed.is_set()
+
+
+def test_live_pacing_can_be_disabled_without_changing_masked_output(monkeypatch):
+    test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
+        monkeypatch, None, False, False, True, pacing=False)
 
 
 def test_muted_rtmp_with_audio_repairs_video_clock_on_cuda_path(monkeypatch):

@@ -15,6 +15,7 @@ from vision_shield.media.video import add_video, check_streams, check_dimensions
 from vision_shield.media.stream_metrics import StreamMetrics, vcl_digest
 from vision_shield.media.attempts import failure_details
 from vision_shield.media.plate_lookahead import PlateLookahead
+from vision_shield.media.stream_pacing import StreamPacer
 from vision_shield.redaction import FrameRedactor
 from vision_shield.detection.timing import measure, snapshot
 if TYPE_CHECKING:
@@ -277,6 +278,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     frame_seconds = encode_seconds = 0.0
     video, last_stats, failed_frames, processing = None, None, 0, False
     delay = None
+    pacer = StreamPacer(stop)
     phase, ending = "publish_open", None
 
     def report(force=False):
@@ -320,6 +322,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     def write_output(sample):
         nonlocal video, audio, transcode_audio, phase, processing, count, last_output_report, encode_seconds
         output, packets, received_at, source_moment, moment, repaired, decoded_at, processing_at = sample
+        if delay and config.get('stream_output_pacing', True):
+            phase = 'output_pacing'
+            if not pacer.wait(moment):
+                return
         processing = True
         output.pts = round((moment - origin) / output.time_base)
         stage = time.monotonic() if debug else None

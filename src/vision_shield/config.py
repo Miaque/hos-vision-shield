@@ -43,6 +43,7 @@ class Settings(BaseSettings):
                                                      max_length=64)]] = Field(default_factory=list)
     vision_shield_notification_amqp_url: SecretStr = SecretStr("")
     frame_buffer_size: PositiveCount = 2
+    stream_output_pacing: bool = True
     audio_buffer_seconds: PositiveSeconds = 16
     audio_buffer_bytes: PositiveCount = 4 * 1024 * 1024
     max_image_bytes: PositiveCount = 20 * 1024 * 1024
