@@ -1,0 +1,32 @@
+services:
+  video-replay:
+    image: vision-shield:replay
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.replay
+    init: true
+    restart: unless-stopped
+    volumes:
+      - ./deploy/mediamtx.replay.yml:/mediamtx.yml:ro
+      - type: bind
+        source: ${REPLAY_MEDIA_DIR:-./data/replay}
+        target: /recordings
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - target: 8554
+        published: "8555"
+        host_ip: ${BIND_ADDRESS:-127.0.0.1}
+        protocol: tcp
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          ffprobe -v error -rtsp_transport tcp -timeout 5000000 -show_entries stream=codec_name -of csv=p=0 rtsp://127.0.0.1:8554/replay/rfm-01 >/dev/null &&
+          ffprobe -v error -rtsp_transport tcp -timeout 5000000 -show_entries stream=codec_name -of csv=p=0 rtsp://127.0.0.1:8554/replay/rfm-02 >/dev/null
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 30s

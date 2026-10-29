@@ -1,0 +1,40 @@
+logLevel: info
+api: no
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+moq: no
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    permissions:
+      - action: publish
+        path: replay/rfm-01
+      - action: publish
+        path: replay/rfm-02
+      - action: read
+        path: replay/rfm-01
+      - action: read
+        path: replay/rfm-02
+pathDefaults:
+  source: publisher
+  overridePublisher: no
+  record: no
+paths:
+  replay/rfm-01:
+    runOnInit: >-
+      ffmpeg -nostdin -hide_banner -loglevel warning -re -stream_loop -1
+      -i /recordings/rfm-01.mp4 -c copy -f rtsp -rtsp_transport tcp
+      rtsp://127.0.0.1:8554/replay/rfm-01
+    runOnInitRestart: yes
+  replay/rfm-02:
+    runOnInit: >-
+      ffmpeg -nostdin -hide_banner -loglevel warning -re -stream_loop -1
+      -i /recordings/rfm-02.mp4 -c copy -f rtsp -rtsp_transport tcp
+      rtsp://127.0.0.1:8554/replay/rfm-02
+    runOnInitRestart: yes
