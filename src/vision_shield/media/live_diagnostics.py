@@ -25,8 +25,11 @@ class LiveDiagnostics:
             if runtime is None:
                 try:
                     from vision_shield.detection.host_profile import runtime_metadata
+                    from vision_shield.media.rtsp_observer import clock_identity
                     runtime = runtime_metadata(detector, config)
-                    for name in ('media.cuda_frames', 'media.stream_pacing', 'detection.timing', 'media.live_diagnostics'):
+                    runtime['clock_identity'] = clock_identity()
+                    for name in ('media.cuda_frames', 'media.stream_pacing', 'detection.timing', 'media.live_diagnostics',
+                                 'media.rtsp_observer'):
                         path = Path(__file__).parents[1].joinpath(*name.split('.')).with_suffix('.py')
                         with path.open('rb') as handle:
                             runtime['source_sha256'][name] = hashlib.file_digest(handle, 'sha256').hexdigest()
@@ -38,6 +41,7 @@ class LiveDiagnostics:
             'debug', 'stream_diagnostics', 'detection_interval', 'tracking', 'redaction_mode',
             'frame_buffer_size', 'audio_buffer_seconds', 'audio_buffer_bytes', 'stream_output_pacing',
             'rtsp_connect_timeout', 'rtsp_read_timeout', 'max_bitrate', 'audio_enabled')})
+        self.runtime['effective_config']['audio_enabled'] = config.get('audio_enabled', True)
         if self.timing is not None:
             self.timing.observer = self.observe
 

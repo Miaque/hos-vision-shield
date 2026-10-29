@@ -299,6 +299,23 @@ async def detection_diagnostics(task_id: UUID, request: Request,
             result.update(attempts=task['stream_attempts'], attempts_discarded=task.get('stream_attempts_discarded', 0))
         if (task.get('device_profile') or {}).get('mode') == 'live':
             result['live'] = task['device_profile']
+            if request.app.state.settings.stream_diagnostics and not task.get('publish_url'):
+                from vision_shield.media.rtsp_observer import RTSPObserver
+
+                if not hasattr(request.app.state, 'live_receivers'):
+                    request.app.state.live_receivers = {}
+                    request.app.state.live_receiver_lock = asyncio.Lock()
+                async with request.app.state.live_receiver_lock:
+                    receivers = request.app.state.live_receivers
+                    key = str(task_id)
+                    receiver = receivers.get(key)
+                    if receiver is None or not receiver.thread.is_alive():
+                        if key not in receivers and len(receivers) >= 2:
+                            old = receivers.pop(next(iter(receivers)))
+                            await asyncio.to_thread(old.close)
+                        base = request.app.state.settings.rtsp_publish_base_url or request.app.state.settings.rtsp_public_base_url
+                        receiver = receivers[key] = RTSPObserver(f'{base}/redacted/{key}')
+                    result['receiver'] = receiver.snapshot()
         return result
     if task.get('device_profile') is None:
         raise HTTPException(409, 'diagnostics_not_ready')

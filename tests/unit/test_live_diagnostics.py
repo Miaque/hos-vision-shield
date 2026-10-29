@@ -82,8 +82,8 @@ async def test_stream_diagnostics_returns_runtime_evidence_with_attempts():
     from uuid import UUID
     from vision_shield.config import Settings
     from vision_shield.main import create_app
-    app = create_app(Settings(_env_file=None, debug=True))
-    app.state.settings = Settings(_env_file=None, debug=True)
+    app = create_app(Settings(_env_file=None, debug=True, stream_diagnostics=False))
+    app.state.settings = Settings(_env_file=None, debug=True, stream_diagnostics=False)
     app.state.store = SimpleNamespace(get=AsyncMock(return_value=dict(kind='stream', stream_attempts=[{'run_id': 'a'}],
         device_profile={'mode': 'live', 'attempt_id': 'new', 'operations': []})))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
