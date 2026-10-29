@@ -13,6 +13,17 @@ REQUIRED = {'media.stream_e0', 'media.stream_pacing', 'media.streams', 'media.pl
             'detection.timing', 'detection.quality', 'jobs.tasks', 'config'}
 
 
+def transported_fingerprint(runtime):
+    # Redis JSON transport writes integral float settings (16.0) as integers (16).
+    # Restore the three declared PositiveSeconds fields before checking the worker's digest.
+    effective = dict(runtime.get('effective_config') or {})
+    for key in ('audio_buffer_seconds', 'rtsp_connect_timeout', 'rtsp_read_timeout'):
+        if key in effective:
+            effective[key] = float(effective[key])
+    restored = dict(runtime, effective_config=effective) if 'effective_config' in runtime else runtime
+    return runtime_fingerprint(restored)
+
+
 def verify_runtime(runtime, ref):
     hashes = runtime['source_sha256']
     assert len(hashes) == 20 and REQUIRED <= hashes.keys(), 'Missing E0 source provenance'
@@ -87,7 +98,7 @@ def analyze(path, ref):
     for row in rows:
         if row['kind'] == 'runtime':
             verify_runtime(row['data'], ref)
-            identities.add(runtime_fingerprint(row['data']))
+            identities.add(transported_fingerprint(row['data']))
     groups, ends = defaultdict(list), {}
     for row in rows:
         if row['kind'] == 'e0_state':
@@ -108,6 +119,25 @@ def analyze(path, ref):
         assert first['runtime_fingerprint'] in identities and last['runtime_fingerprint'] in identities
         before = None if first['started_monotonic'] >= t0 else first
         result = budget(last, before)
+        # Normal source-PTS windows exclude observed worker clock repairs and large gaps.
+        # They do not prove that the upstream network delivers continuously.
+        normal = []
+        for start, end in zip(group, group[1:]):
+            counters = ('video_raw_frame_pts_forward_jumps_over_500ms', 'video_raw_frame_pts_nonincreasing')
+            a, b = start.get('last_output'), end.get('last_output')
+            if (a and b and b['monotonic'] > a['monotonic'] and
+                    all(start['clock_totals'].get(key, 0) == end['clock_totals'].get(key, 0) for key in counters)):
+                seconds = b['monotonic']-a['monotonic']
+                media = b['source_seconds']-a['source_seconds']
+                if seconds >= 1:
+                    normal.append(dict(wall_seconds=seconds, media_seconds=media,
+                        lag_growth_seconds=seconds-media, lag_growth_per_second=1-media/seconds))
+        result['no_observed_large_pts_jump_windows'] = dict(n=len(normal),
+            wall_seconds=sum(x['wall_seconds'] for x in normal),
+            media_seconds=sum(x['media_seconds'] for x in normal),
+            lag_growth_per_second=(sum(x['lag_growth_seconds'] for x in normal)/sum(x['wall_seconds'] for x in normal)
+                                   if normal else None),
+            note='Excludes observed >500ms source PTS jumps/nonincreasing PTS; smaller gaps and source arrival jitter may remain')
         lower = (before or {}).get('pacer_totals', {}).get('decisions', 0)
         observed = {r['data']['sequence'] for r in rows if r['kind']=='pacer' and r['attempt_id']==aid
                     and lower < r['data']['sequence'] <= last['pacer_totals'].get('decisions', 0)}

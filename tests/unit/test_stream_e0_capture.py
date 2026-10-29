@@ -63,3 +63,17 @@ def test_analysis_uses_counters_when_pacer_ring_has_no_retained_records(tmp_path
     assert result['pacer']['decisions'] == result['pacer_records_missing'] == 2000
     assert result['pacer']['conditional_rebase_wait_seconds'] == 1
     assert sum(result['categories_seconds'].values()) == 10
+
+
+def test_worker_digest_survives_integral_float_settings_in_redis_json(monkeypatch):
+    folder = Path(__file__).resolve().parents[2]/'specs/006-stream-backlog-pacing/experiments'
+    monkeypatch.syspath_prepend(str(folder))
+    analyze = importlib.import_module('e0_analyze')
+    worker = dict(source_sha256={'media.streams': 'fixed'},
+                  effective_config=dict(audio_buffer_seconds=16., rtsp_connect_timeout=10.,
+                                        rtsp_read_timeout=10., frame_buffer_size=2, audio_enabled=True),
+                  output_mux_options={'max_interleave_delta': '100000'})
+    transported = dict(worker, effective_config={key: int(value) if type(value) is float else value
+                                               for key, value in worker['effective_config'].items()})
+    assert runtime_fingerprint(worker) != runtime_fingerprint(transported)
+    assert analyze.transported_fingerprint(transported) == runtime_fingerprint(worker)
