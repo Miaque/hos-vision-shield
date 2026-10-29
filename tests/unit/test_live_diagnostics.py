@@ -90,3 +90,21 @@ async def test_stream_diagnostics_returns_runtime_evidence_with_attempts():
         response = await client.get(f'/v1/tasks/{UUID(int=1)}/diagnostics')
     assert response.status_code == 200
     assert response.json()['live']['attempt_id'] == 'new'
+
+
+async def test_production_diagnostics_does_not_read_tasks_or_start_receivers():
+    from unittest.mock import AsyncMock
+    import httpx
+    from uuid import UUID
+    from vision_shield.config import Settings
+    from vision_shield.main import create_app
+
+    settings = Settings(_env_file=None, debug=False, stream_diagnostics=True)
+    app = create_app(settings)
+    app.state.settings = settings
+    app.state.store = SimpleNamespace(get=AsyncMock())
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        response = await client.get(f'/v1/tasks/{UUID(int=1)}/diagnostics')
+    assert response.status_code == 404
+    app.state.store.get.assert_not_called()
+    assert not hasattr(app.state, 'live_receivers')

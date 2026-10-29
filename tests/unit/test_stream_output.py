@@ -90,6 +90,9 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(
     events = []
     config = Settings(_env_file=None, debug=debug).model_dump(mode="json")
     if not debug:
+        from vision_shield.media import live_diagnostics
+
+        monkeypatch.setattr(live_diagnostics, 'LiveDiagnostics', lambda *a, **k: pytest.fail('Production must not start live diagnostics'))
         monkeypatch.setattr(streams, 'vcl_digest', lambda _: pytest.fail('Production must not hash frames'))
         monkeypatch.setattr(streams.StreamMetrics, 'snapshot', lambda _: pytest.fail('Production must not sample output'))
     config["inference_device"] = device
@@ -115,7 +118,8 @@ def test_stream_output_muxes_processed_video_and_compatible_audio(
                            Detector(), config, threading.Event(), events.append)
     if not debug:
         assert events[-1]['stats']['processed_frames'] == 12
-        assert all('stream' not in event.get('stats', {}) and 'timings' not in event and 'detection_stats' not in event for event in events)
+        assert all('stream' not in event.get('stats', {}) and 'timings' not in event and 'detection_stats' not in event
+                   and 'device_profile' not in event for event in events)
         assert any(event.get('output') and event.get('ready') for event in events)
         with original_open(str(target)) as reader:
             output_frames = list(reader.decode(video=0))
