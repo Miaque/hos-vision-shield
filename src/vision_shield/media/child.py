@@ -24,6 +24,7 @@ def emit(event):
 def process(payload, stop, detector=None, *, on_initialized=None):
     observers = ExitStack()
     collector = None
+    debug = False
 
     try:
         cfg = payload["config"]
@@ -137,7 +138,7 @@ def process(payload, stop, detector=None, *, on_initialized=None):
         code = "storage_full" if isinstance(error, OSError) and error.errno == 28 else "processing_failed"
         emit({"retryable": retryable, "failure_type": type(error).__name__,
               **({"failure_errno": error.errno} if isinstance(getattr(error, "errno", None), int) else {}),
-              "failure_at": [f"{frame.name}:{frame.lineno}" for frame in traceback.extract_tb(error.__traceback__)],
+              **({"failure_at": [f"{frame.name}:{frame.lineno}" for frame in traceback.extract_tb(error.__traceback__)]} if debug else {}),
               "error": {"code": code, "message": code.replace("_", " ")}})
         from vision_shield.media.streams import StreamCleanupError
         return 1, retryable and not model_failed and not isinstance(error, StreamCleanupError)
@@ -172,6 +173,7 @@ def main(*, persistent=False):
             raise SystemExit(code)
         return
 
+    debug = False
     try:
         from vision_shield.detection import load_detector
         from vision_shield.detection.preflight import verify_models, validate_device, run_inference
@@ -196,7 +198,7 @@ def main(*, persistent=False):
         from vision_shield.detection.preflight import PreflightError
         emit(dict(preflight_error=str(error) if isinstance(error, PreflightError) else '模型预检失败：内部异常',
                   retryable=model_runtime_failure(error), failure_type=type(error).__name__,
-                  failure_at=failure_details(error, 'model_initialize')['at'],
+                  **({'failure_at': failure_details(error, 'model_initialize', debug=True)['at']} if debug else {}),
                   error=dict(code='processing_failed', message='Model preflight failed')))
         emit(dict(complete=True, returncode=1, reusable=False))
         return

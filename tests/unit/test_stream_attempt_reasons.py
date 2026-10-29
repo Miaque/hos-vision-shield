@@ -10,6 +10,56 @@ import pytest
 from vision_shield.config import Settings
 
 
+@pytest.mark.parametrize('debug', [False, True])
+async def test_stream_diagnostics_require_debug_without_disabling_recovery(monkeypatch, caplog, debug):
+    from vision_shield.jobs import tasks
+
+    caplog.set_level('INFO', logger=tasks.__name__)
+    record = dict(id='job', kind='stream', desired_state='run', generation=1, source_ref='rtsp://input')
+    cancel = asyncio.Event()
+    store = SimpleNamespace(update_owned=AsyncMock(return_value=True), finish=AsyncMock(),
+                            get=AsyncMock(return_value=record))
+    publisher = SimpleNamespace(prepare=AsyncMock(return_value='rtsp://output'), close=AsyncMock(return_value=True))
+    monkeypatch.setattr(tasks, 'Publisher', lambda *args: publisher)
+    monkeypatch.setattr(tasks, 'validate_source', AsyncMock(return_value=(httpx.URL(record['source_ref']), '127.0.0.1')))
+
+    async def run(*args, **kwargs):
+        await args[3](dict(failure_type='RuntimeError', failure_at=['debug-site:123'],
+            timings=dict(frame=1), video_encoder='h264_nvenc', detection_stats=dict(full_frames=1),
+            stats=dict(processed_frames=1, stream=dict(attempt_id='sampled', recent_outputs=[])),
+            stream_end=dict(reason='source_eof', phase='source_read')))
+        return dict(returncode=1, retryable=True)
+
+    async def retry_wait(awaitable, timeout):
+        awaitable.close()
+        cancel.set()
+        raise TimeoutError
+
+    monkeypatch.setattr(tasks, 'run_process', run)
+    monkeypatch.setattr(tasks.asyncio, 'wait_for', retry_wait)
+    await tasks.run_stream(record, store, Settings(_env_file=None, debug=debug), cancel, 'owner', 1)
+    updates = [call.kwargs for call in store.update_owned.call_args_list]
+    assert any(row.get('state') == 'recovering' for row in updates)
+    assert publisher.close.await_count >= 2
+    assert any('stream_attempts' in row for row in updates) is debug
+    assert any('media_failure' in row for row in updates) is debug
+    assert any('timings' in row for row in updates) is debug
+    assert any('stream' in row.get('stats', {}) for row in updates) is debug
+    assert ('debug-site:123' in caplog.text) is debug
+    assert ('流脱敏连接结束' in caplog.text) is debug
+
+
+def test_production_failure_details_do_not_collect_stack_or_ffmpeg_logs(monkeypatch):
+    import av
+    from vision_shield.media import attempts
+
+    monkeypatch.setattr(attempts.traceback, 'extract_tb', lambda *args: pytest.fail('No traceback sampling'))
+    error = av.error.InvalidDataError(1094995529, 'diagnostic detail', log=(16, 'rtsp', 'diagnostic log'))
+    result = attempts.failure_details(error, 'source_open')
+    assert result == dict(reason='source_open_error', phase='source_open',
+                          error_type='InvalidDataError', errno=1094995529)
+
+
 @pytest.mark.parametrize('output_case', ['stable', 'brief', 'unconfirmed', 'ready_only'])
 async def test_reconnect_backoff_resets_only_after_sustained_confirmed_output(monkeypatch, output_case):
     from vision_shield.jobs import tasks
@@ -94,7 +144,7 @@ async def test_eof_and_internal_publish_failure_have_distinct_retained_reasons(m
 
     monkeypatch.setattr(tasks, 'run_process', run)
     monkeypatch.setattr(tasks.asyncio, 'wait_for', stop_retry)
-    await tasks.run_stream(record, store, Settings(_env_file=None), cancel, 'owner', 1)
+    await tasks.run_stream(record, store, Settings(_env_file=None, debug=True), cancel, 'owner', 1)
     history = next(value['stream_attempts'] for value in reversed(saved) if 'stream_attempts' in value)
     assert len(history) == 2
     assert history[0]['reason'] == 'source_eof' and history[0]['attempt_id'] == 'first'
@@ -131,7 +181,7 @@ def test_failure_evidence_keeps_errno_and_location_without_exception_credentials
     try:
         raise ConnectionResetError(104, 'rtsp://private:secret@camera?token=hidden')
     except OSError as error:
-        row = failure_details(error, 'source_read')
+        row = failure_details(error, 'source_read', debug=True)
     assert row['errno'] == 104 and row['phase'] == 'source_read'
     assert row['error_type'] == 'ConnectionResetError'
     assert row['at'] and 'secret' not in str(row) and 'hidden' not in str(row)
@@ -149,7 +199,7 @@ def test_ffmpeg_failure_retains_safe_protocol_reason_and_bounds_log():
              'rtsp://private:camera-password@camera/live?token=hidden '
              'token=hidden sign=publish-secret password="password-secret"\n'
              'Authorization: Basic credential-secret\n' + 'x' * 2000))
-    row = failure_details(error, 'source_open')
+    row = failure_details(error, 'source_open', debug=True)
     assert row['ffmpeg_error'] == 'Invalid data found when processing input'
     assert 'DESCRIBE failed: 401 Unauthorized' in row['ffmpeg_log']
     assert len(row['ffmpeg_log']) <= 1024 and '\n' not in row['ffmpeg_log']
@@ -254,7 +304,7 @@ async def test_history_stays_bounded_and_marks_interrupted_owner_before_new_atte
         return dict(returncode=-9, cancelled=True)
 
     monkeypatch.setattr(tasks, 'run_process', run)
-    await tasks.run_stream(record, store, Settings(_env_file=None), cancel, 'owner', 2,
+    await tasks.run_stream(record, store, Settings(_env_file=None, debug=True), cancel, 'owner', 2,
                            cancellation=dict(reason='lease_lost', phase='worker_control'))
     result = store.update_owned.call_args.kwargs
     assert len(result['stream_attempts']) == 32 and result['stream_attempts_discarded'] == 1
@@ -284,7 +334,7 @@ async def test_fatal_child_failure_is_saved_before_terminal_state(monkeypatch):
     monkeypatch.setattr(tasks, 'validate_source', AsyncMock(return_value=(httpx.URL(record['source_ref']), '127.0.0.1')))
     monkeypatch.setattr(tasks, 'run_process', AsyncMock(return_value=dict(returncode=1, retryable=False,
         failure_type='ValueError', error=dict(code='processing_failed', message='Media processing failed'))))
-    await tasks.run_stream(record, store, Settings(_env_file=None), asyncio.Event(), 'owner', 1)
+    await tasks.run_stream(record, store, Settings(_env_file=None, debug=True), asyncio.Event(), 'owner', 1)
     store.finish.assert_awaited_once()
 
 
@@ -311,7 +361,8 @@ async def test_stop_during_model_recovery_does_not_start_another_attempt(monkeyp
 
 
 @pytest.mark.parametrize('resident', [False, True])
-async def test_external_publisher_stop_persists_reason_before_releasing_ownership(monkeypatch, resident):
+@pytest.mark.parametrize('debug', [False, True])
+async def test_external_publisher_stop_persists_reason_before_releasing_ownership(monkeypatch, resident, debug):
     from vision_shield.jobs import tasks
 
     record = dict(id='job', kind='stream', desired_state='stopped', generation=1,
@@ -329,7 +380,10 @@ async def test_external_publisher_stop_persists_reason_before_releasing_ownershi
         nonlocal terminal
         if process_exited or media_closed:
             assert media_closed == resident
-            assert saved['stream_attempts'][-1]['reason'] == 'stop_requested'
+            if debug:
+                assert saved['stream_attempts'][-1]['reason'] == 'stop_requested'
+            else:
+                assert 'stream_attempts' not in saved
             terminal = True
         return True
 
@@ -348,6 +402,34 @@ async def test_external_publisher_stop_persists_reason_before_releasing_ownershi
 
     monkeypatch.setattr(tasks, 'run_process', run)
     session = object() if resident else None
-    await tasks.run_stream(record, store, Settings(_env_file=None), cancel, 'owner', 1,
+    await tasks.run_stream(record, store, Settings(_env_file=None, debug=debug), cancel, 'owner', 1,
                            cancellation=dict(reason='stop_requested', phase='worker_control'), session=session)
-    assert terminal and saved['stream_attempts'][-1]['attempt_id'] == 'ended'
+    assert terminal
+    if debug:
+        assert saved['stream_attempts'][-1]['attempt_id'] == 'ended'
+
+
+def test_production_source_open_does_not_start_ffmpeg_log_capture(monkeypatch):
+    from vision_shield.media import streams
+
+    class Writer:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def open_endpoint(url, mode=None, **kwargs):
+        if mode == 'w':
+            return Writer()
+        raise ConnectionResetError(104, 'private source')
+
+    monkeypatch.setattr(streams.av, 'open', open_endpoint)
+    monkeypatch.setattr(streams.av.logging, 'Capture', lambda: pytest.fail('No FFmpeg capture in production'))
+    events = []
+    with pytest.raises(ConnectionResetError):
+        streams.process_stream('rtsp://source', 'rtsp://output', object(),
+                               Settings(_env_file=None).model_dump(), threading.Event(), events.append)
+    ending = events[-1]['stream_end']
+    assert ending == dict(reason='source_open_error', phase='source_open', error_type='ConnectionResetError', errno=104)
+    assert 'stream' not in events[-1]['stats']
