@@ -51,7 +51,9 @@ def test_zero_model_scene_cut_spaces_all_eight_ready_frames_without_rewriting_cl
     assert max(batches[:-1]) == 8  # Actual scene-reset flush, with zero model cost.
     assert [row[0] for row in published] == list(range(40))
     assert [row[1] for row in published] == [Fraction(i, 15) for i in range(40)]
-    assert all(b[3] - a[3] >= 1 / 15 - 1e-9 for a, b in zip(published, published[1:]))
+    # E1 retains a half-interval floor after stalls instead of rebasing to a full interval.
+    minimum = 1 / 30 if stall else 1 / 15
+    assert all(b[3] - a[3] >= minimum - 1e-9 for a, b in zip(published, published[1:]))
     assert all(row[2] == [(1, 1, 4, 4)] for row in published[12:20])
 
 
@@ -79,3 +81,38 @@ def test_normal_timer_oversleep_does_not_accumulate_latency():
         released.append(clock.now)
     assert released[-1] - 299 / 15 < .002
     assert min(b - a for a, b in zip(released, released[1:])) >= 1 / 30 - 1e-9
+
+
+def test_late_release_keeps_planned_due_and_bounds_subsequent_catchup():
+    clock = Clock()
+    pacer = StreamPacer(clock, clock=clock)
+    assert pacer.wait(Fraction(0))
+    clock.now = 1.
+    assert pacer.wait(Fraction(1, 25))
+    # The late frame itself does not wait or advance the media clock.
+    assert clock.now == 1.
+    assert pacer.previous_release == .04
+    clock.now += .005
+    assert pacer.wait(Fraction(2, 25))
+    assert clock.now == pytest.approx(1.02)
+    assert pacer.previous_moment == Fraction(2, 25)
+
+
+def test_stop_interrupts_an_in_progress_large_gap_wait():
+    from threading import Event, Thread
+    from time import perf_counter
+    stop, entered, results = Event(), Event(), []
+    wait = stop.wait
+    def observed_wait(seconds):
+        entered.set()
+        return wait(seconds)
+    stop.wait = observed_wait
+    pacer = StreamPacer(stop, clock=perf_counter)
+    assert pacer.wait(Fraction(0))
+    worker = Thread(target=lambda: results.append(pacer.wait(Fraction(100))))
+    worker.start()
+    assert entered.wait(1)
+    stop.set()
+    worker.join(.5)
+    assert not worker.is_alive() and results == [False]
+    assert pacer.previous_moment == Fraction(0)

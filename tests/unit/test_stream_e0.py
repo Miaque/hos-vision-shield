@@ -25,7 +25,7 @@ class Clock:
         return self.stopped
 
 
-def test_pacer_observation_keeps_decisions_and_measures_late_rebase_contribution():
+def test_pacer_observation_keeps_e1_decisions_without_late_rebase_contribution():
     from vision_shield.media.stream_e0 import StreamE0
     results = []
     for observed in (False, True):
@@ -40,13 +40,13 @@ def test_pacer_observation_keeps_decisions_and_measures_late_rebase_contribution
     assert results[0] == results[1]
     state = trace.snapshot()
     assert state['pacer_totals']['decisions'] == 4
-    assert state['pacer_totals']['rebases'] == 1
-    assert state['pacer_totals']['conditional_rebase_request_seconds'] == pytest.approx(.04)
+    assert state['pacer_totals']['rebases'] == 0
+    assert state['pacer_totals']['conditional_rebase_request_seconds'] == pytest.approx(0)
     record = state['pacer'][-2]
-    assert record['due'] == pytest.approx(1.04)
-    assert record['remaining'] == pytest.approx(.035)
-    assert record['actual_wait_seconds'] == pytest.approx(.035)
-    assert record['conditional_rebase_request_seconds'] == pytest.approx(.02)
+    assert record['due'] == pytest.approx(1.02)
+    assert record['remaining'] == pytest.approx(.015)
+    assert record['actual_wait_seconds'] == pytest.approx(.015)
+    assert record['conditional_rebase_request_seconds'] == pytest.approx(0)
     assert record['retained_anti_burst_request_seconds'] == pytest.approx(.015)
 
 
@@ -198,7 +198,7 @@ def test_e0_can_be_disabled_without_replacing_existing_observers():
     trace.close()
 
 
-def test_observed_pacer_matches_fixed_baseline_under_jitter_gaps_and_regressions():
+def test_observed_e1_pacer_keeps_bounds_and_does_not_add_wait_to_fixed_baseline():
     import random
     import subprocess
     from vision_shield.media.stream_e0 import StreamE0
@@ -225,4 +225,6 @@ def test_observed_pacer_matches_fixed_baseline_under_jitter_gaps_and_regressions
             assert pacer.wait(pts)
             rows.append((pacer.previous_release, pacer.previous_actual))
         results.append((rows, clock.waits))
-    assert results[0] == results[1] == results[2]
+    assert results[1] == results[2]
+    assert sum(results[1][1]) <= sum(results[0][1])
+    assert all(actual >= due for due, actual in results[1][0])

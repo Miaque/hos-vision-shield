@@ -1,0 +1,43 @@
+{
+  "baseline": "21bd631d5a3d02de052974b57f73428560944804",
+  "input": {
+    "path": "C:\\Users\\zhanjh\\.codex\\worktrees\\stream-e1-no-rebase\\vision-shield\\data\\diagnostics\\e1\\input.nut",
+    "sha256": "10e977115bb035f441473eb1d69ed14828047f7d701616824326f15b1bc82306",
+    "video_frames": 100,
+    "video_fps": 25,
+    "audio": "AAC/8000Hz",
+    "synthetic_scene": true
+  },
+  "local_device": "GTX970",
+  "measurements": [
+    [
+      {
+        "policy": "baseline",
+        "frames": 100,
+        "seconds": 5.983129500000359,
+        "fps": 16.54652469079836
+      },
+      {
+        "policy": "e1",
+        "frames": 100,
+        "seconds": 5.344663500000024,
+        "fps": 18.523149305844896
+      }
+    ],
+    [
+      {
+        "policy": "baseline",
+        "frames": 100,
+        "seconds": 5.989176099999895,
+        "fps": 16.52981951891542
+      },
+      {
+        "policy": "e1",
+        "frames": 100,
+        "seconds": 5.3509039000000485,
+        "fps": 18.501547000311312
+      }
+    ]
+  ],
+  "note": "Real CPU H264/AAC/RTSP and PlateLookahead, fixed ROI fixture, injected identical90/10/10ms per-frame costs; not rfm model or RTX throughput"
+}

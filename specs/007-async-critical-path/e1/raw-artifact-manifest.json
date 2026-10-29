@@ -1,0 +1,32 @@
+[
+  {
+    "path": "C:\\Users\\zhanjh\\.codex\\worktrees\\stream-e1-no-rebase\\vision-shield\\data\\diagnostics\\e1\\unit.log",
+    "bytes": 2881,
+    "sha256": "2c8486dadcada4a73da47584f1f6f6c4517fbdc269d8d28b26ea0b31ea94bc76"
+  },
+  {
+    "path": "C:\\Users\\zhanjh\\.codex\\worktrees\\stream-e1-no-rebase\\vision-shield\\data\\diagnostics\\e1\\focused.log",
+    "bytes": 184,
+    "sha256": "d3203e304f9794e5b3ca01e9d9b6fcfb2b0418eee562bc197b35fcf7966c0ee5"
+  },
+  {
+    "path": "C:\\Users\\zhanjh\\.codex\\worktrees\\stream-e1-no-rebase\\vision-shield\\data\\diagnostics\\e1\\final-media.log",
+    "bytes": 111,
+    "sha256": "0c7ece147a9980e1490aecc3e2a94f4dd8c2ee196e5a35bc85f4be4c79dbfe44"
+  },
+  {
+    "path": "C:\\Users\\zhanjh\\.codex\\worktrees\\stream-e1-no-rebase\\vision-shield\\data\\diagnostics\\e1\\benefit.log",
+    "bytes": 115,
+    "sha256": "02c4cc97b47695c3b93059a54474ee28521d3e4c5837456d44caebb257e590c1"
+  },
+  {
+    "path": "C:\\Users\\zhanjh\\.codex\\worktrees\\stream-e1-no-rebase\\vision-shield\\data\\diagnostics\\e1\\real-media-results.json",
+    "bytes": 554,
+    "sha256": "af6658d6ecb279893dc994d88d4f345f37099a198d26f165a6ef73c78556b2fd"
+  },
+  {
+    "path": "C:\\Users\\zhanjh\\.codex\\worktrees\\stream-e1-no-rebase\\vision-shield\\data\\diagnostics\\e1\\input.nut",
+    "bytes": 18273,
+    "sha256": "10e977115bb035f441473eb1d69ed14828047f7d701616824326f15b1bc82306"
+  }
+]

@@ -20,14 +20,11 @@ class StreamPacer:
             interval = min(.5, max(0, float(moment - self.previous_moment)))
             due = max(self.previous_release + interval, self.previous_actual + interval / 2)
             checked_at = self.clock()
-            rebased = due < checked_at - interval / 2
-            if rebased:
-                due = self.clock()
             decision_at = self.clock()
             remaining = due - decision_at
             if observed is not None:
                 observed.update(interval=interval, media_due=self.previous_release + interval,
-                    anti_burst_due=self.previous_actual + interval / 2, rebased=rebased,
+                    anti_burst_due=self.previous_actual + interval / 2, rebased=False,
                     rebase_checked_at=checked_at, decision_at=decision_at, remaining=remaining,
                     raw_media_interval=float(moment - self.previous_moment))
             if remaining > 0:
@@ -44,7 +41,7 @@ class StreamPacer:
             if observed is not None:
                 self.observer(dict(observed, due=due, actual=self.clock(), allowed=False))
             return False
-        # Keep ordinary timer jitter off the timeline; a stall rebases instead of accumulating credit.
+        # Retain the plan after stalls; the actual-release floor bounds catch-up to half an interval.
         self.previous_moment, self.previous_release, self.previous_actual = moment, due, self.clock()
         if observed is not None:
             self.observer(dict(observed, due=due, actual=self.previous_actual, allowed=True))
