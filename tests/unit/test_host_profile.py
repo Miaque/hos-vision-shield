@@ -20,7 +20,8 @@ def test_ort_nodes_match_the_sampled_real_call_and_bound_the_report():
                    args=dict(op_name='Conv', provider='CUDAExecutionProvider'))]
     events += [dict(cat='Node', name=f'conv{i}_kernel_time', ts=1000 + i * 100, dur=80 + i,
                     args=dict(op_name='Conv', provider='CUDAExecutionProvider')) for i in range(15)]
-    profile.attach_ort_nodes(samples, events)
+    runs = profile.attach_ort_nodes(samples, events)
+    assert runs == [dict(call=1, host_ms=.1), dict(call=2, host_ms=2)]
     assert samples[0]['ort_model_run_ms'] == 2
     nodes = samples[0]['ort_top_nodes']
     assert len(nodes) == 8 and nodes[0]['name'] == 'conv14_kernel_time'

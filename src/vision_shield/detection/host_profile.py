@@ -68,6 +68,7 @@ def attach_ort_nodes(samples, events):
                                        op=event.get('args', {}).get('op_name'),
                                        provider=event.get('args', {}).get('provider'))
                                    for event in sorted(nodes, key=lambda event: event['dur'], reverse=True)[:8]]
+    return [dict(call=index + 1, host_ms=event['dur'] / 1000) for index, event in enumerate(runs[:MAX_ORT_CALLS])]
 
 
 def instrument_ort_nodes(model, collector):
@@ -145,6 +146,7 @@ class ProfileTimes:
         self.local_requests, self.local_sessions, self.local_shapes, self.local_longest = 0, {}, {}, []
         self.local_last_shape = {}
         self.ort_session = None
+        self.ort_runs = []
 
     def record_masks(self, shape, boxes):
         height, width = shape[:2]
@@ -255,6 +257,7 @@ class ProfileTimes:
                                  for (name, origin, purpose, view), values in sorted(self.groups.items())],
                     views={name: dict(counts) for name, counts in self.views.items()}, device_samples=self.device_samples,
                     local_faces=dict(timing=statistics(self.samples['ort-local-face']), longest=self.local_longest),
+                    ort_local_runs=self.ort_runs,
                     candidate_evidence=dict(first_frames=32, byte_limit=64 * 1024,
                                             truncated=self.candidates_truncated, rows=self.candidates),
                     mask_evidence=dict(shape=self.mask_shape, byte_limit=64 * 1024,
@@ -279,7 +282,7 @@ class ProfileTimes:
         if target.stat().st_size > 32 * 1024**2:
             target.unlink()
             raise RuntimeError('ORT trace exceeded 32 MiB budget')
-        attach_ort_nodes(self.device_samples, json.loads(target.read_text('utf-8')))
+        self.ort_runs = attach_ort_nodes(self.device_samples, json.loads(target.read_text('utf-8')))
 
 
 def instrument_local_faces(stack, collector):
