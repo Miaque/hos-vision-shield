@@ -80,8 +80,12 @@ async def test_profile_request_is_private_store_metadata_and_video_only():
     assert profiled['profile_detection'] is True
     host = await store.create('video', 'upload', 'local', profile_detection='host')
     assert host['profile_detection'] == 'host'
+    local_face = await store.create('video', 'upload', 'local', profile_detection='local-face')
+    assert local_face['profile_detection'] == 'local-face'
     with pytest.raises(ValueError):
         await store.create('image', 'upload', 'local', profile_detection=True)
+    with pytest.raises(ValueError):
+        await store.create('image', 'upload', 'local', profile_detection='local-face')
 
 
 async def test_trace_resolved_outside_task_is_not_downloadable(tmp_path, monkeypatch):
