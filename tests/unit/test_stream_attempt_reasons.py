@@ -56,8 +56,10 @@ async def test_reconnect_backoff_resets_only_after_sustained_confirmed_output(mo
     store.finish.assert_not_awaited()
 
 
-async def test_eof_and_internal_publish_failure_have_distinct_retained_reasons(monkeypatch):
+async def test_eof_and_internal_publish_failure_have_distinct_retained_reasons(monkeypatch, caplog):
     from vision_shield.jobs import tasks
+
+    caplog.set_level('INFO', logger=tasks.__name__)
 
     record = dict(id='job', kind='stream', desired_state='run', generation=1, source_ref='rtsp://private:secret@input')
     store = SimpleNamespace(update_owned=AsyncMock(return_value=True), get=AsyncMock(return_value=record), finish=AsyncMock())
@@ -101,6 +103,10 @@ async def test_eof_and_internal_publish_failure_have_distinct_retained_reasons(m
     assert history[1]['reason'] != 'source_unreachable'
     assert all(row['ended_at_unix'] >= row['started_at_unix'] for row in history)
     assert 'secret' not in str(history)
+    events = [row for row in caplog.records if getattr(row, 'event', None) == 'vision_shield_stream_end']
+    assert len(events) == 2
+    assert events[0].task_id == 'job' and events[0].reason == 'source_eof'
+    assert events[1].phase == 'publisher_prepare' and 'secret' not in caplog.text
 
 
 async def test_attempt_history_is_available_without_exception_or_device_profile(tmp_path):
@@ -129,6 +135,59 @@ def test_failure_evidence_keeps_errno_and_location_without_exception_credentials
     assert row['errno'] == 104 and row['phase'] == 'source_read'
     assert row['error_type'] == 'ConnectionResetError'
     assert row['at'] and 'secret' not in str(row) and 'hidden' not in str(row)
+
+
+def test_ffmpeg_failure_retains_safe_protocol_reason_and_bounds_log():
+    """保留 FFmpeg 的具体协议错误，但过滤地址、查询凭据与授权头。"""
+    import av
+
+    from vision_shield.media.attempts import failure_details
+
+    error = av.error.InvalidDataError(1094995529, 'Invalid data found when processing input',
+        filename='rtsp://private:camera-password@camera/live?token=hidden',
+        log=(16, 'rtsp', 'method DESCRIBE failed: 401 Unauthorized\n'
+             'rtsp://private:camera-password@camera/live?token=hidden '
+             'token=hidden sign=publish-secret password="password-secret"\n'
+             'Authorization: Basic credential-secret\n' + 'x' * 2000))
+    row = failure_details(error, 'source_open')
+    assert row['ffmpeg_error'] == 'Invalid data found when processing input'
+    assert 'DESCRIBE failed: 401 Unauthorized' in row['ffmpeg_log']
+    assert len(row['ffmpeg_log']) <= 1024 and '\n' not in row['ffmpeg_log']
+    assert not any(secret in str(row) for secret in (
+        'camera-password', 'hidden', 'publish-secret', 'password-secret', 'credential-secret', 'rtsp://',
+    ))
+
+
+def test_real_ffmpeg_callback_is_kept_for_source_open_only(monkeypatch):
+    """真实 PyAV 错误回调留下协议原因，源打开结束后恢复原日志级别。"""
+    import av
+
+    from vision_shield.media import streams
+
+    class Writer:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def open_endpoint(url, mode=None, **kwargs):
+        if mode == 'w':
+            return Writer()
+        av.logging.log(av.logging.ERROR, 'rtsp',
+                       'method DESCRIBE failed: 401 Unauthorized rtsp://private:secret@camera')
+        av.error.err_check(-1094995529)
+
+    original_level = av.logging.get_level()
+    monkeypatch.setattr(streams.av, 'open', open_endpoint)
+    events = []
+    with pytest.raises(av.error.InvalidDataError):
+        streams.process_stream('rtsp://source', 'rtsp://output', object(),
+                               Settings(_env_file=None, debug=True).model_dump(), threading.Event(), events.append)
+    assert av.logging.get_level() == original_level
+    ending = events[-1]['stream_end']
+    assert 'DESCRIBE failed: 401 Unauthorized' in ending['ffmpeg_log']
+    assert ending['phase'] == 'source_open' and 'secret' not in str(events)
 
 
 @pytest.mark.parametrize('phase', ['source_open', 'source_read', 'source_decode', 'publish_open'])

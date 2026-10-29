@@ -203,8 +203,15 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 options = {"rtmp_tcurl": str(original.copy_with(path=original.path.rsplit("/", 1)[0],
                            query=None, username="", password="")),
                            "rw_timeout": str(round(config["rtsp_read_timeout"] * 1_000_000))}
-            source_reader = av.open(source, options=options,
-                                    timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
+            # PyAV 默认关闭回调会丢失协议错误；仅打开来源时保留 ERROR 证据，不启用逐帧日志。
+            log_level = av.logging.get_level()
+            try:
+                av.logging.set_level(av.logging.PANIC)
+                with av.logging.Capture():
+                    source_reader = av.open(source, options=options,
+                                            timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
+            finally:
+                av.logging.set_level(log_level)
             phase = "source_validate"
             video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"),
                                   audio_enabled=audio_enabled)

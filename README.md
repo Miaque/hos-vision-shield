@@ -79,13 +79,49 @@ bash scripts/deploy-server.sh --tag exp-20261023-b-deploy-02
 
 日常更新不先执行 `down`，构建成功后才替换容器。重建期间旧容器继续服务，替换时会短暂中断；正在执行的文件任务不会续跑，流任务会尝试恢复。当前 Dockerfile 已分离依赖层与应用层，构建缓存可用且依赖未变时，源码修改可复用已安装的 PyTorch/CUDA 依赖；不要在日常更新中使用 `--no-cache`。
 
-`compose.yaml` 包含 MediaMTX、API、reconciler 和两个 worker，共五个服务，直接复用现有带密码 Redis。在 `.env.compose` 设置 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`，并将文件权限设为 `600`；四个应用服务统一读取该地址。宿主发布端口须能从 Docker 网络访问。现有 Redis 的持久化及淘汰策略由部署方核对，不修改共享实例配置。
+`compose.yaml` 包含 MediaMTX、API、reconciler、notifier 和两个 worker，可显式追加 `compose.replay.yaml` 接入独立视频回放容器。应用服务直接复用现有带密码 Redis。在 `.env.compose` 设置 `REDIS_URL='redis://:URL编码后的密码@192.168.1.104:6378/6'`，并将文件权限设为 `600`；应用服务统一读取该地址。宿主发布端口须能从 Docker 网络访问。现有 Redis 的持久化及淘汰策略由部署方核对，不修改共享实例配置。
 
 仅 API/RTSP 端口按配置发布；部署地址和端口由 `.env.compose` 的 `BIND_ADDRESS`、`API_PORT`、`RTSP_PORT`、`RTSP_PUBLIC_BASE_URL` 指定，模型及媒体目录由 `MODEL_DIR`、`MEDIA_DIR` 指定。容器内部推流与控制沿用服务名，远程输入还须配置来源允许列表。媒体目录保留在宿主机，切换前按原文件组合执行 `down`，不使用 `down -v`。
 
 镜像构建可以联网安装依赖，`models/` 中的模型必须事先离线提供并只读挂载；quality_yolo 的 YOLO 权重随应用包交付，启动及推理不下载模型。worker 先在有 120 秒总超时的子进程中核验清单/哈希、实际推理及 NMS，成功后才接单并发布心跳；故障后的旧心跳最多有默认 20 秒租约窗口。`RTSP_PUBLISH_BASE_URL` 仅控制容器内部推流，对外仍返回公开播放地址。
 
 GPU 镜像按 [研究记录中的生成命令](specs/002-compose-cpu-gpu/research.md)使用 `deploy/requirements-cu126.txt`，共同依赖沿用根锁版本；根声明变更时重新生成，禁止手工改 pin。CPU 使用根 uv.lock，Windows 安装方式保持不变。初次交付证据与未运行项见 [实施记录](specs/002-compose-cpu-gpu/validation/gates.md)，后续服务器分阶段实测见 [时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)；这些记录不代表完整部署验收已通过。
+
+### 两路录像实时回放
+
+`video-replay` 必须显式启动，上述普通 Compose 命令及 `deploy-server.sh` 不启动或更新该服务，也不要求准备回放录像。单个容器内运行 MediaMTX 和两个 FFmpeg 回放进程，不使用 GPU。两段录像按原时间节奏无限循环，视频及音频直接复制码流；回放源允许匿名读取，只开放 `replay/rfm-01` 和 `replay/rfm-02` 两条路径。
+
+首次启动回放前，将两段未脱敏的录像放到服务器同一目录，分别命名为 `rfm-01.mp4`、`rfm-02.mp4`，并在 `.env.compose` 设置该绝对目录：
+
+```dotenv
+REPLAY_MEDIA_DIR=/home/meiya/vision-shield-replay/media
+```
+
+本次对应本地 `data/recordings/rfm-live-20261027-150312/rfm-original-preview.mp4` 和 `data/recordings/rfm-live-20261027-150915/rfm-original-preview.mp4`。录像不提交 Git、不打进镜像，只读挂载；未指定目录时使用仓库下的 `data/replay/`。目录缺失会拒绝启动，视频缺失或任一路不可读取会令回放容器的健康检查失败。
+
+实时任务使用以下输入地址，按服务器的 `BIND_ADDRESS` 替换 IP：
+
+```text
+rtsp://192.168.1.104:8555/replay/rfm-01
+rtsp://192.168.1.104:8555/replay/rfm-02
+```
+
+在 `SOURCE_ALLOWLIST` 原列表中保留已有条目并追加服务器 IP `192.168.1.104`，随后按原部署方式重新创建应用容器。测试任务显式使用 `X-Detection-Interval: 3`、`X-Tracking-Mode: flow`，以保持文件复测的调度条件。循环拼接点会发生画面跳变，分析跟踪失败与卡顿时需单独标记。
+
+在仓库根目录显式启动或更新回放，仅操作 `video-replay`，无需添加 GPU 配置：
+
+```bash
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.replay.yaml up -d --build --wait video-replay
+```
+
+检查和临时停止回放使用同一文件组合：
+
+```bash
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.replay.yaml logs --tail 50 video-replay
+docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.replay.yaml stop video-replay
+```
+
+不再需要回放时，执行上述停止命令及同参数的 `rm -f video-replay` 即可，不必删除仓库文件。已显式启动的回放会持续运行，普通部署不会自动停止它；仅使用主配置时可能提示该容器为 orphan，不要使用 `--remove-orphans` 清理仍需运行的回放。现有 `8554` 媒体服务与检测 worker 不依赖回放容器。
 
 ## 本地 Redis / MediaMTX
 
@@ -174,6 +210,12 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/tasks/$($stream.id)" -Method Patch -
 - `playback_url` 优先返回请求指定的播放地址；未指定时，外部推流沿用完整 `publish_url`（含其凭据和鉴权参数），默认输出仍使用公开 RTSP 地址。接收平台播放地址与推流地址不同时，应显式传入 `playback_url`。通知不携带这些地址。`ready`/health 证明本 worker 已写出数据，不证明接收平台可播放。同一幂等键不能更换推流或播放地址。
 - 外部推流在本次媒体处理确认发布连接、编解码器和读取线程全部关闭，或子进程退出/超时强杀完成后确认停止；空 MediaMTX 会话列表不能证明外部推流已停止。租约过期后，在原发布者关闭确认前保持 `recovering`，不派发替代任务；相同发布者和代次的确认到达后，按停止意图结束任务，或允许新 worker 接管。旧版本任务缺少确认记录时同样保守处理，未开始执行的旧任务仍可正常调度。
 - 外部平台没有远程踢流接口；worker 崩溃或退出确认写入失败时，任务可能持续处于 `recovering`，需在接收平台核实和处理旧发布连接。接收平台需限制同一路径重复发布，不应让多个任务同时使用同一地址。MediaMTX 固定一起部署，`/health/ready` 始终检查 Redis、worker 和 MediaMTX。
+
+每次流连接结束后，worker 在 `INFO` 日志输出 `vision_shield_stream_end` 结构化摘要，携带 `task_id`、`run_id`、`attempt_id`（已有时）、代次、起止时间、持续秒数、`reason`、`phase` 和异常类型。Platform 的 FLV 结束摘要通过 `shield_task_id` 与此处 `task_id` 对应，可判断页面断流前是否出现输入 EOF、打开来源失败、解码失败或推流失败。
+
+FFmpeg 异常额外保留 `ffmpeg_error` 和可用时的 `ffmpeg_log`，每字段最多 1024 字符，移除完整 URL、查询凭据、授权头和换行后才写入日志及诊断记录。源打开期间临时启用 PyAV 的错误回调，完成后恢复原日志级别，不打开持续的逐帧日志。PyAV 默认关闭日志会减少异常细节，依据见[官方日志说明](https://pyav.basswood.io/docs/stable/api/utils.html#logging)。没有底层协议详情时，通用 `InvalidDataError` 仍不能证明是鉴权、网络或媒体格式中的哪一项。
+
+调试环境的 `GET /v1/tasks/{id}/diagnostics` 沿用最近 32 次连接记录，也包含这些安全错误字段；重建 worker 后的新故障才会产生新增证据，既有记录不会补全。该变更不增加回调、MQ 字段或公开任务响应字段，也不修改重连与停止规则。
 
 PATCH返回202表示停止意图已保存；查询到cancelled/stopped才表示资源清理完成。已成功文件不能再取消（409）。流自动重连并保留停止意图，文件worker崩溃则标记worker_lost，不自动续跑。
 
