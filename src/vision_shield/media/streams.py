@@ -417,13 +417,16 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             write_output(output)
 
     try:
-        options = {"rtsp_transport": "tcp"}
+        options = {"rtsp_transport": "tcp", "max_interleave_delta": "100000"}
         if protocol == "rtmp":
             original = httpx.URL(config.get("publish_url") or target)
             # DNS 固定到授权 IP，RTMP tcUrl 仍保留平台用于虚拟主机路由的原域名。
             options = {"rtmp_tcurl": str(original.copy_with(path=original.path.rsplit("/", 1)[0],
                        query=None, username="", password="")),
                        "rw_timeout": str(round(config["rtsp_read_timeout"] * 1_000_000))}
+        if diagnostics:
+            diagnostics.runtime['output_mux_options'] = {key:value for key,value in options.items()
+                if key in ('rtsp_transport', 'max_interleave_delta', 'flush_packets')}
         with av.open(target, "w", format="flv" if protocol == "rtmp" else "rtsp", options=options,
                      timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"])) as writer:
             video, audio = None, None

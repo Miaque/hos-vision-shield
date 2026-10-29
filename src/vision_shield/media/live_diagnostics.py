@@ -26,7 +26,10 @@ class LiveDiagnostics:
                 try:
                     from vision_shield.detection.host_profile import runtime_metadata
                     from vision_shield.media.rtsp_observer import clock_identity
+                    import av
                     runtime = runtime_metadata(detector, config)
+                    runtime['av_version'] = av.__version__
+                    runtime['av_library_versions'] = {name:list(version) for name,version in av.library_versions.items()}
                     runtime['clock_identity'] = clock_identity()
                     for name in ('media.cuda_frames', 'media.stream_pacing', 'detection.timing', 'media.live_diagnostics',
                                  'media.rtsp_observer'):
