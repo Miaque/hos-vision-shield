@@ -4,7 +4,7 @@
 
 运行环境：项目 `.venv`。先将本目录Python脚本复制到独立的 `data/diagnostics/<本轮目录>/`，分析器以脚本所在目录为数据根。原始采集不提交Git；完整材料的文件大小和SHA256保留在 `../evidence/raw-artifact-manifest.json`。本轮原始数据位于 `data/diagnostics/stall-3c66326a-20261029/`，约159MB。
 
-- `capture-live.py <绝对输出目录> <秒数>`：HTTP GET任务与诊断，默认600秒，文件上限96MiB。须先确认服务器DEBUG已开启；查询实时诊断会启动有20秒闲置退出的内部只读接收器。
+- `capture-live.py <输出目录> <秒数> [任务ID] [HTTP地址]`：HTTP GET任务与诊断，默认600秒，文件上限96MiB。默认仍为本轮旧任务及`http://127.0.0.1:18000`，复用时显式传入当前任务；按墙钟检查停止，可超出一轮请求时间。须先确认服务器DEBUG已开启；查询实时诊断会启动有20秒闲置退出的内部只读接收器。
 - `capture-rtp.py <绝对输出目录> <秒数>`：原流/脱敏流并行只读RTSP/TCP接收，包含keepalive、完整图片VCL哈希，单流文件上限64MiB；不解码、不发布。使用前编辑顶部URL。
 - `phase-analysis.py internal baseline`、`phase-analysis.py interleave-b 100000`、`phase-analysis.py restored-a restored`：分别分析三组；先验证服务器时钟身份，然后用VCL哈希与媒体/RTP偏移匹配。
 - `supplement-analysis.py <分组目录名>`：队列、主机计时增量、资源及PTS修复统计。它的非process/render操作总量只含>=100ms选择样本。

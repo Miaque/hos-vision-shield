@@ -1,0 +1,62 @@
+[
+  {
+    "path": "data/diagnostics/phase2-backlog-20261029/live.jsonl",
+    "bytes": 15717278,
+    "sha256": "135d8c980879a06f95dc9279b4ab1f06e33c0360908964c223290558aeb33acf"
+  },
+  {
+    "path": "data/diagnostics/phase2-backlog-20261029/summary.json",
+    "bytes": 13175,
+    "sha256": "9b6b201a95944321ab0d05ab921672d96bcd620211d1c8e8582f2786176d8961"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/compute_above_budget-baseline.json",
+    "bytes": 302702,
+    "sha256": "76c1e62838a2c4b8c7c2255799c6d6321a0b047a320a885ca2e8a874d7e5e536"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/compute_above_budget-keep_planned_due.json",
+    "bytes": 295299,
+    "sha256": "86a38f6ce8a176cef74dc83caa770d54eaea4e9822361ce83f1f8df5650c8afe"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/compute_above_budget-separate_writer_baseline_pacer.json",
+    "bytes": 302277,
+    "sha256": "dd8351c088a47a8124e9166b17371419cf313981b5644512528409829cd98e12"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/counterfactual-summary.json",
+    "bytes": 5670,
+    "sha256": "afd31c07d1dba46202e0a0149e85292b7eced9b3a39ad4bd08a69144132f0698"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/jitter_below_budget-baseline.json",
+    "bytes": 302706,
+    "sha256": "8813bd886174b6bf129670c51c302139c9e394df7de5fbebaa1595de1e3b2f2d"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/jitter_below_budget-keep_planned_due.json",
+    "bytes": 302846,
+    "sha256": "0c2d8d006b426a07257bb6fc53d2af2f747753b9139c2f587a585ea3e5282880"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/jitter_below_budget-separate_writer_baseline_pacer.json",
+    "bytes": 287664,
+    "sha256": "3a3a5943690c7d35aef9e22859ce3fd8a71df365789005cd9ce036f18e3c4b84"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/light-baseline.json",
+    "bytes": 251812,
+    "sha256": "c945daf1f5cd7db3583fa5f4dae24b9619c05aa64e9c63925a718dd1a76e123d"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/light-keep_planned_due.json",
+    "bytes": 251812,
+    "sha256": "c945daf1f5cd7db3583fa5f4dae24b9619c05aa64e9c63925a718dd1a76e123d"
+  },
+  {
+    "path": "data/diagnostics/phase2-local-20261029/light-separate_writer_baseline_pacer.json",
+    "bytes": 251811,
+    "sha256": "e8233e9519d7eda17f8bb171068ca24aa05c984d169a61cd1360d64cef3cf9c8"
+  }
+]

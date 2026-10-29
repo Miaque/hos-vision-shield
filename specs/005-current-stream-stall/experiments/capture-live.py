@@ -9,7 +9,8 @@ import httpx
 ROOT = Path(sys.argv[1]).resolve()
 ROOT.mkdir(parents=True, exist_ok=True)
 DURATION = int(sys.argv[2]) if len(sys.argv) > 2 else 600
-TASK = '3c66326a-fd00-4fc8-9e99-9af23fbe45b7'
+TASK = sys.argv[3] if len(sys.argv) > 3 else '3c66326a-fd00-4fc8-9e99-9af23fbe45b7'
+BASE_URL = sys.argv[4] if len(sys.argv) > 4 else 'http://127.0.0.1:18000'
 
 
 def main():
@@ -18,7 +19,7 @@ def main():
     seen_receipts = set()
     written = 0
     started = time.perf_counter()
-    with httpx.Client(base_url='http://127.0.0.1:18000', trust_env=False, timeout=8) as client, \
+    with httpx.Client(base_url=BASE_URL, trust_env=False, timeout=8) as client, \
             (ROOT / 'live.jsonl').open('w', encoding='utf-8') as target:
         def save(kind, **data):
             nonlocal written
@@ -31,6 +32,8 @@ def main():
             target.flush()
 
         for tick in range(DURATION):
+            if time.perf_counter() - started >= DURATION:
+                break
             try:
                 before = time.perf_counter()
                 r = client.get(f'/v1/tasks/{TASK}')
