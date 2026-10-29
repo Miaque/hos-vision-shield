@@ -1,0 +1,456 @@
+{
+  "status": "sampled",
+  "clock_verified": {
+    "boot_id": "35fb6945-03f7-48fa-b594-336ead489e3b",
+    "namespace_offsets": "monotonic           0         0\nboottime            0         0"
+  },
+  "server": {
+    "attempts": {
+      "0a40cb8a5a0c46df97065749867d04c1": {
+        "frames": 2314,
+        "first_sequence": 1578,
+        "last_sequence": 3891,
+        "capture_sequence_gaps": 0,
+        "wall_progress_seconds": 146.45479159988463,
+        "media_progress_seconds": 96.10463333333334,
+        "accumulated_lateness_increase_seconds": 50.35015826655129
+      },
+      "01ac5c3a753045b5a29355ce2fb313ca": {
+        "frames": 1368,
+        "first_sequence": 1,
+        "last_sequence": 1368,
+        "capture_sequence_gaps": 0,
+        "wall_progress_seconds": 111.11516409926116,
+        "media_progress_seconds": 60.1096,
+        "accumulated_lateness_increase_seconds": 51.005564099261164
+      }
+    },
+    "mux_completion_intervals": {
+      "n": 3680,
+      "p50_ms": 41.00989969447255,
+      "p95_ms": 187.74239486083388,
+      "p99_ms": 379.2354249302299,
+      "max_ms": 818.804900161922,
+      "over_ms": {
+        "100": 575,
+        "200": 160,
+        "500": 16,
+        "1000": 0
+      }
+    },
+    "app_read_intervals": {
+      "n": 3680,
+      "p50_ms": 50.07690005004406,
+      "p95_ms": 179.3296650517732,
+      "p99_ms": 417.32549377717083,
+      "max_ms": 1679.4642005115747,
+      "over_ms": {
+        "100": 533,
+        "200": 148,
+        "500": 19,
+        "1000": 2
+      }
+    },
+    "decoded_to_process": {
+      "n": 3682,
+      "p50_ms": 157.04274969175458,
+      "p95_ms": 513.9991655480111,
+      "p99_ms": 807.3930518794805,
+      "max_ms": 1376.4051999896765,
+      "over_ms": {
+        "100": 3366,
+        "200": 1283,
+        "500": 196,
+        "1000": 14
+      }
+    },
+    "process_start_to_mux_completion": {
+      "n": 3682,
+      "p50_ms": 815.9106499515474,
+      "p95_ms": 991.5721350815145,
+      "p99_ms": 1144.5734193269163,
+      "max_ms": 1707.8593000769615,
+      "over_ms": {
+        "100": 3667,
+        "200": 3661,
+        "500": 3516,
+        "1000": 167
+      }
+    },
+    "media_intervals": {
+      "n": 3680,
+      "p50_ms": 40.0,
+      "p95_ms": 41.0,
+      "p99_ms": 42.0,
+      "max_ms": 2975.0,
+      "over_ms": {
+        "100": 11,
+        "200": 11,
+        "500": 7,
+        "1000": 4
+      }
+    },
+    "timestamp_repaired_samples": 0,
+    "repeated_vcl_hashes": 0
+  },
+  "operations": {
+    "audio-mux": {
+      "n": 1,
+      "p50_ms": 258.9507419616,
+      "p95_ms": 258.9507419616,
+      "p99_ms": 258.9507419616,
+      "max_ms": 258.9507419616,
+      "over_ms": {
+        "100": 1,
+        "200": 1,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "lookahead-expire": {
+      "n": 17,
+      "p50_ms": 144.06731259078,
+      "p95_ms": 209.4686761498439,
+      "p99_ms": 298.3323511481288,
+      "max_ms": 320.54826989770004,
+      "over_ms": {
+        "100": 17,
+        "200": 1,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "lookahead-flush": {
+      "n": 1,
+      "p50_ms": 111.32531333714999,
+      "p95_ms": 111.32531333714999,
+      "p99_ms": 111.32531333714999,
+      "max_ms": 111.32531333714999,
+      "over_ms": {
+        "100": 1,
+        "200": 0,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "lookahead-push": {
+      "n": 30,
+      "p50_ms": 136.31861377507502,
+      "p95_ms": 171.11565116793147,
+      "p99_ms": 211.20543332770606,
+      "max_ms": 227.02759783715,
+      "over_ms": {
+        "100": 30,
+        "200": 1,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "output-pacing": {
+      "n": 3,
+      "p50_ms": 205.70539031178,
+      "p95_ms": 332.918134052307,
+      "p99_ms": 344.22593349590943,
+      "max_ms": 347.05288335681,
+      "over_ms": {
+        "100": 3,
+        "200": 2,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "process": {
+      "n": 3223,
+      "p50_ms": 49.798819236457,
+      "p95_ms": 102.27651288732896,
+      "p99_ms": 122.13144149631047,
+      "max_ms": 186.62486411631,
+      "over_ms": {
+        "100": 194,
+        "200": 0,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "render": {
+      "n": 3224,
+      "p50_ms": 0.41969632729888,
+      "p95_ms": 0.850338488817219,
+      "p99_ms": 1.055450355634129,
+      "max_ms": 319.79396846145,
+      "over_ms": {
+        "100": 1,
+        "200": 1,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "video-encode": {
+      "n": 4,
+      "p50_ms": 128.850088920445,
+      "p95_ms": 165.12002446689002,
+      "p99_ms": 169.842103170234,
+      "max_ms": 171.02262284607,
+      "over_ms": {
+        "100": 4,
+        "200": 0,
+        "500": 0,
+        "1000": 0
+      }
+    }
+  },
+  "paired_frame_compute": {
+    "n": 3210,
+    "p50_ms": 50.26107933372244,
+    "p95_ms": 102.95766382478322,
+    "p99_ms": 123.60395347699934,
+    "max_ms": 365.064355544742,
+    "over_ms": {
+      "100": 200,
+      "200": 1,
+      "500": 0,
+      "1000": 0
+    }
+  },
+  "internal_rtp_intervals": {
+    "n": 3152,
+    "p50_ms": 0.23353006690740585,
+    "p95_ms": 497.5890197325498,
+    "p99_ms": 931.3669719453868,
+    "max_ms": 1811.5100432187319,
+    "over_ms": {
+      "100": 578,
+      "200": 433,
+      "500": 154,
+      "1000": 22
+    }
+  },
+  "mux_return_to_internal_receipt": {
+    "n": 3154,
+    "p50_ms": 209.88890761509538,
+    "p95_ms": 848.6970171332349,
+    "p99_ms": 1251.5622138138845,
+    "max_ms": 1859.6560321748257,
+    "over_ms": {
+      "100": 2335,
+      "200": 1650,
+      "500": 477,
+      "1000": 83
+    }
+  },
+  "matched_internal_frames": 3154,
+  "raw_rtp": {
+    "frames": 5759,
+    "connections": 1,
+    "intervals": {
+      "n": 5758,
+      "p50_ms": 0.8636499997010105,
+      "p95_ms": 160.51268000137497,
+      "p99_ms": 201.81838800092038,
+      "max_ms": 3058.026199998494,
+      "over_ms": {
+        "100": 1458,
+        "200": 60,
+        "500": 15,
+        "1000": 9
+      }
+    },
+    "errors": [],
+    "timestamp_discontinuities": [
+      {
+        "local_unix": 1793265720.2527995,
+        "media_gap": 1.199,
+        "receipt_gap": 1.4280095000012807
+      },
+      {
+        "local_unix": 1793265745.7666402,
+        "media_gap": 0.572,
+        "receipt_gap": 0.0021885000005568145
+      },
+      {
+        "local_unix": 1793265758.8291683,
+        "media_gap": 2.975,
+        "receipt_gap": 3.0129926999998133
+      },
+      {
+        "local_unix": 1793265778.261573,
+        "media_gap": 0.334,
+        "receipt_gap": 0.5334418999991613
+      },
+      {
+        "local_unix": 1793265789.5585353,
+        "media_gap": 0.784,
+        "receipt_gap": 0.7890060999998241
+      },
+      {
+        "local_unix": 1793265798.9663906,
+        "media_gap": 0.224,
+        "receipt_gap": 0.001338799998848117
+      },
+      {
+        "local_unix": 1793265812.1976922,
+        "media_gap": 1.199,
+        "receipt_gap": 1.3819977000002837
+      },
+      {
+        "local_unix": 1793265837.6880314,
+        "media_gap": 0.572,
+        "receipt_gap": 0.0002530999990995042
+      },
+      {
+        "local_unix": 1793265850.7660775,
+        "media_gap": 2.975,
+        "receipt_gap": 3.0125803999999334
+      },
+      {
+        "local_unix": 1793265870.197877,
+        "media_gap": 0.334,
+        "receipt_gap": 0.5109787999990658
+      },
+      {
+        "local_unix": 1793265881.4949703,
+        "media_gap": 0.784,
+        "receipt_gap": 0.8252400000001217
+      },
+      {
+        "local_unix": 1793265890.9058113,
+        "media_gap": 0.224,
+        "receipt_gap": 0.0028732000009767944
+      },
+      {
+        "local_unix": 1793265904.1346798,
+        "media_gap": 1.199,
+        "receipt_gap": 1.4352374999998574
+      },
+      {
+        "local_unix": 1793265929.6657722,
+        "media_gap": 0.572,
+        "receipt_gap": 0.0020351000002847286
+      },
+      {
+        "local_unix": 1793265942.7700434,
+        "media_gap": 2.975,
+        "receipt_gap": 3.058026199998494
+      }
+    ],
+    "max_rtp_sequence_gaps": 0
+  },
+  "remote_rtp": {
+    "frames": 3291,
+    "connections": 2,
+    "intervals": {
+      "n": 3289,
+      "p50_ms": 7.893500000136555,
+      "p95_ms": 449.24538000050234,
+      "p99_ms": 871.1377240002176,
+      "max_ms": 1746.240200000102,
+      "over_ms": {
+        "100": 567,
+        "200": 393,
+        "500": 126,
+        "1000": 17
+      }
+    },
+    "errors": [
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 1,
+        "local_perf": 13166.1509695,
+        "local_unix": 1793265844.1407278,
+        "error_type": "EOFError",
+        "detail": "RTSP EOF"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 2,
+        "local_perf": 13167.1908631,
+        "local_unix": 1793265845.1800418,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 3,
+        "local_perf": 13168.2302234,
+        "local_unix": 1793265846.2192519,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 4,
+        "local_perf": 13169.2726331,
+        "local_unix": 1793265847.2618802,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      }
+    ],
+    "timestamp_discontinuities": [
+      {
+        "local_unix": 1793265720.9945433,
+        "media_gap": 2.975,
+        "receipt_gap": 0.6701439999997092
+      },
+      {
+        "local_unix": 1793265755.1819968,
+        "media_gap": 0.334,
+        "receipt_gap": 0.3252548000000388
+      },
+      {
+        "local_unix": 1793265776.6786203,
+        "media_gap": 0.784,
+        "receipt_gap": 0.237894599998981
+      },
+      {
+        "local_unix": 1793265795.8351605,
+        "media_gap": 0.224,
+        "receipt_gap": 0.0067282999989402015
+      },
+      {
+        "local_unix": 1793265820.8023107,
+        "media_gap": 1.199,
+        "receipt_gap": 0.3977027000000817
+      },
+      {
+        "local_unix": 1793265851.5428526,
+        "media_gap": 2.975,
+        "receipt_gap": 0.0788315000008879
+      },
+      {
+        "local_unix": 1793265886.40837,
+        "media_gap": 0.334,
+        "receipt_gap": 0.4265381000004709
+      },
+      {
+        "local_unix": 1793265908.8502793,
+        "media_gap": 0.784,
+        "receipt_gap": 0.6192441000002873
+      },
+      {
+        "local_unix": 1793265928.7965915,
+        "media_gap": 0.224,
+        "receipt_gap": 0.0010311000005458482
+      }
+    ],
+    "max_rtp_sequence_gaps": 0
+  },
+  "post_mux_severe_count": 143,
+  "source_attempt_ends": [
+    {
+      "returncode": 0,
+      "phase": "source_read",
+      "started_at_unix": 1793265576.1016,
+      "reason": "source_eof",
+      "attempt_id": "0a40cb8a5a0c46df97065749867d04c1",
+      "generation": 1,
+      "run_id": "7f67cd61a3734fb994bc49c4b22bc34c",
+      "started_monotonic": 5074290.49056,
+      "ended_monotonic": 5074556.6936115,
+      "ended_at_unix": 1793265842.4915
+    }
+  ]
+}

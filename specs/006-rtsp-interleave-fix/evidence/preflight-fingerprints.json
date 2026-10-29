@@ -1,0 +1,19 @@
+{
+  "detection.egoblur": true,
+  "media.rtsp_observer": true,
+  "detection.timing": true,
+  "media.plate_lookahead": true,
+  "detection.cuda_detail": true,
+  "detection.quality": true,
+  "detection.yolo": true,
+  "redaction": true,
+  "detection.cpu": true,
+  "media.streams": true,
+  "media.live_diagnostics": true,
+  "media.cuda_frames": true,
+  "media.stream_pacing": true,
+  "media.video": true,
+  "detection.plate_readability": true,
+  "detection.host_profile": true,
+  "detection.cuda_pixels": true
+}

@@ -1,0 +1,201 @@
+{
+  "raw": {
+    "frames": 5759,
+    "connections": 1,
+    "intervals": {
+      "n": 5758,
+      "p50_ms": 0.8636499997010105,
+      "p95_ms": 160.51268000137497,
+      "p99_ms": 201.81838800092038,
+      "max_ms": 3058.026199998494,
+      "over_ms": {
+        "100": 1458,
+        "200": 60,
+        "500": 15,
+        "1000": 9
+      }
+    },
+    "errors": [],
+    "timestamp_discontinuities": [
+      {
+        "local_unix": 1793265720.2527995,
+        "media_gap": 1.199,
+        "receipt_gap": 1.4280095000012807
+      },
+      {
+        "local_unix": 1793265745.7666402,
+        "media_gap": 0.572,
+        "receipt_gap": 0.0021885000005568145
+      },
+      {
+        "local_unix": 1793265758.8291683,
+        "media_gap": 2.975,
+        "receipt_gap": 3.0129926999998133
+      },
+      {
+        "local_unix": 1793265778.261573,
+        "media_gap": 0.334,
+        "receipt_gap": 0.5334418999991613
+      },
+      {
+        "local_unix": 1793265789.5585353,
+        "media_gap": 0.784,
+        "receipt_gap": 0.7890060999998241
+      },
+      {
+        "local_unix": 1793265798.9663906,
+        "media_gap": 0.224,
+        "receipt_gap": 0.001338799998848117
+      },
+      {
+        "local_unix": 1793265812.1976922,
+        "media_gap": 1.199,
+        "receipt_gap": 1.3819977000002837
+      },
+      {
+        "local_unix": 1793265837.6880314,
+        "media_gap": 0.572,
+        "receipt_gap": 0.0002530999990995042
+      },
+      {
+        "local_unix": 1793265850.7660775,
+        "media_gap": 2.975,
+        "receipt_gap": 3.0125803999999334
+      },
+      {
+        "local_unix": 1793265870.197877,
+        "media_gap": 0.334,
+        "receipt_gap": 0.5109787999990658
+      },
+      {
+        "local_unix": 1793265881.4949703,
+        "media_gap": 0.784,
+        "receipt_gap": 0.8252400000001217
+      },
+      {
+        "local_unix": 1793265890.9058113,
+        "media_gap": 0.224,
+        "receipt_gap": 0.0028732000009767944
+      },
+      {
+        "local_unix": 1793265904.1346798,
+        "media_gap": 1.199,
+        "receipt_gap": 1.4352374999998574
+      },
+      {
+        "local_unix": 1793265929.6657722,
+        "media_gap": 0.572,
+        "receipt_gap": 0.0020351000002847286
+      },
+      {
+        "local_unix": 1793265942.7700434,
+        "media_gap": 2.975,
+        "receipt_gap": 3.058026199998494
+      }
+    ],
+    "max_rtp_sequence_gaps": 0
+  },
+  "output": {
+    "frames": 3291,
+    "connections": 2,
+    "intervals": {
+      "n": 3289,
+      "p50_ms": 7.893500000136555,
+      "p95_ms": 449.24538000050234,
+      "p99_ms": 871.1377240002176,
+      "max_ms": 1746.240200000102,
+      "over_ms": {
+        "100": 567,
+        "200": 393,
+        "500": 126,
+        "1000": 17
+      }
+    },
+    "errors": [
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 1,
+        "local_perf": 13166.1509695,
+        "local_unix": 1793265844.1407278,
+        "error_type": "EOFError",
+        "detail": "RTSP EOF"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 2,
+        "local_perf": 13167.1908631,
+        "local_unix": 1793265845.1800418,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 3,
+        "local_perf": 13168.2302234,
+        "local_unix": 1793265846.2192519,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 4,
+        "local_perf": 13169.2726331,
+        "local_unix": 1793265847.2618802,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      }
+    ],
+    "timestamp_discontinuities": [
+      {
+        "local_unix": 1793265720.9945433,
+        "media_gap": 2.975,
+        "receipt_gap": 0.6701439999997092
+      },
+      {
+        "local_unix": 1793265755.1819968,
+        "media_gap": 0.334,
+        "receipt_gap": 0.3252548000000388
+      },
+      {
+        "local_unix": 1793265776.6786203,
+        "media_gap": 0.784,
+        "receipt_gap": 0.237894599998981
+      },
+      {
+        "local_unix": 1793265795.8351605,
+        "media_gap": 0.224,
+        "receipt_gap": 0.0067282999989402015
+      },
+      {
+        "local_unix": 1793265820.8023107,
+        "media_gap": 1.199,
+        "receipt_gap": 0.3977027000000817
+      },
+      {
+        "local_unix": 1793265851.5428526,
+        "media_gap": 2.975,
+        "receipt_gap": 0.0788315000008879
+      },
+      {
+        "local_unix": 1793265886.40837,
+        "media_gap": 0.334,
+        "receipt_gap": 0.4265381000004709
+      },
+      {
+        "local_unix": 1793265908.8502793,
+        "media_gap": 0.784,
+        "receipt_gap": 0.6192441000002873
+      },
+      {
+        "local_unix": 1793265928.7965915,
+        "media_gap": 0.224,
+        "receipt_gap": 0.0010311000005458482
+      }
+    ],
+    "max_rtp_sequence_gaps": 0
+  }
+}

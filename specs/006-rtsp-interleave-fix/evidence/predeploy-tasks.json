@@ -1,0 +1,19 @@
+{
+  "current": [
+    {
+      "id": "27c39007-0aee-4185-b8fa-9d1ece4de058",
+      "state": "running",
+      "desired_state": "run",
+      "redaction_mode": "solid",
+      "ready": true
+    },
+    {
+      "id": "f78fb79c-4849-4687-afb3-a144ef469032",
+      "state": "running",
+      "desired_state": "run",
+      "redaction_mode": "mosaic",
+      "ready": true
+    }
+  ],
+  "queued": []
+}

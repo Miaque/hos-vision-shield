@@ -1,0 +1,11 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+_______ test_rtsp_interleave_keeps_video_audio_and_sync[missing-100ms] ________
+tests\integration\test_rtsp_interleave.py:197: in test_rtsp_interleave_keeps_video_audio_and_sync
+    assert max(gaps) < .5, f'Video withheld after mux accepted pictures: {max(gaps):.3f}s'
+E   AssertionError: Video withheld after mux accepted pictures: 1.094s
+E   assert 1.0939999999991414 < 0.5
+E    +  where 1.0939999999991414 = max([0.125, 0.0, 0.0, 0.11000000000058208, 0.0, 0.0, ...])
+=========================== short test summary info ===========================
+FAILED tests/integration/test_rtsp_interleave.py::test_rtsp_interleave_keeps_video_audio_and_sync[missing-100ms]
+1 failed, 12 deselected in 4.71s
