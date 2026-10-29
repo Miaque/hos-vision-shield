@@ -1,0 +1,111 @@
+{
+  "raw": {
+    "av_audio_packets": 896,
+    "av_audio_nonpositive": 16,
+    "wire_audio_aus": 898,
+    "wire_audio_nonpositive": 13,
+    "wire_audio_min_step": -0.12775,
+    "wire_audio_max_step": 1.8995,
+    "wire_rtp_seq_gaps": 0,
+    "wire_errors": [],
+    "av_errors": []
+  },
+  "output": {
+    "av_audio_packets": 552,
+    "av_audio_nonpositive": 1,
+    "wire_audio_aus": 561,
+    "wire_audio_nonpositive": 0,
+    "wire_audio_min_step": 0.116625,
+    "wire_audio_max_step": 1.4675,
+    "wire_rtp_seq_gaps": 0,
+    "wire_errors": [
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 1,
+        "local_perf": 14855.6465791,
+        "local_unix": 1793267533.6363237,
+        "error_type": "EOFError",
+        "detail": "RTSP EOF"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 2,
+        "local_perf": 14856.6755215,
+        "local_unix": 1793267534.664356,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 3,
+        "local_perf": 14857.7065653,
+        "local_unix": 1793267535.6963196,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 4,
+        "local_perf": 14858.7432486,
+        "local_unix": 1793267536.732828,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      },
+      {
+        "kind": "error",
+        "role": "output",
+        "connection": 5,
+        "local_perf": 14859.7711556,
+        "local_unix": 1793267537.760681,
+        "error_type": "ValueError",
+        "detail": "RTSP response RTSP/1.0 404 Not Found"
+      }
+    ],
+    "av_errors": [
+      {
+        "kind": "error",
+        "connection": 2,
+        "local_monotonic": 14855.546,
+        "local_unix": 1793267533.6948724,
+        "type": "HTTPNotFoundError",
+        "counts": {}
+      },
+      {
+        "kind": "error",
+        "connection": 3,
+        "local_monotonic": 14856.593,
+        "local_unix": 1793267534.7424414,
+        "type": "HTTPNotFoundError",
+        "counts": {}
+      },
+      {
+        "kind": "error",
+        "connection": 4,
+        "local_monotonic": 14857.64,
+        "local_unix": 1793267535.791491,
+        "type": "HTTPNotFoundError",
+        "counts": {}
+      },
+      {
+        "kind": "error",
+        "connection": 5,
+        "local_monotonic": 14858.703,
+        "local_unix": 1793267536.8459477,
+        "type": "HTTPNotFoundError",
+        "counts": {}
+      },
+      {
+        "kind": "error",
+        "connection": 6,
+        "local_monotonic": 14859.859,
+        "local_unix": 1793267538.0060954,
+        "type": "HTTPNotFoundError",
+        "counts": {}
+      }
+    ]
+  }
+}

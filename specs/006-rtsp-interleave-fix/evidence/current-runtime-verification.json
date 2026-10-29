@@ -1,0 +1,80 @@
+{
+  "observed_at_unix": 1793267899.2356815,
+  "task": {
+    "sequence": 43,
+    "health": {
+      "observed_at": "2026-10-29 17:58:16",
+      "last_output_at": "2026-10-29 17:58:16",
+      "valid_until": "2026-10-29 17:58:36",
+      "lease_valid": true,
+      "generation": 2
+    },
+    "redaction_mode": "solid",
+    "id": "27c39007-0aee-4185-b8fa-9d1ece4de058",
+    "kind": "stream",
+    "state": "running",
+    "desired_state": "run",
+    "ready": true,
+    "created_at": "2026-10-29 16:52:42",
+    "updated_at": "2026-10-29 17:58:16",
+    "result_url": null,
+    "playback_url": "rtsp://192.168.1.104:8554/redacted/27c39007-0aee-4185-b8fa-9d1ece4de058",
+    "error": null
+  },
+  "tasks": {
+    "current": [
+      {
+        "id": "27c39007-0aee-4185-b8fa-9d1ece4de058",
+        "state": "running",
+        "ready": true,
+        "desired_state": "run"
+      },
+      {
+        "id": "f78fb79c-4849-4687-afb3-a144ef469032",
+        "state": "running",
+        "ready": true,
+        "desired_state": "run"
+      }
+    ],
+    "queued": []
+  },
+  "attempt_id": "ac24ecc82bde4c69be02a60705f7d7ec",
+  "source_fingerprints_match": {
+    "detection.cuda_pixels": true,
+    "media.rtsp_observer": true,
+    "detection.timing": true,
+    "media.plate_lookahead": true,
+    "detection.cuda_detail": true,
+    "detection.quality": true,
+    "detection.yolo": true,
+    "redaction": true,
+    "detection.cpu": true,
+    "media.streams": true,
+    "media.live_diagnostics": true,
+    "media.cuda_frames": true,
+    "media.stream_pacing": true,
+    "media.video": true,
+    "detection.egoblur": true,
+    "detection.host_profile": true,
+    "detection.plate_readability": true
+  },
+  "output_mux_options": {
+    "max_interleave_delta": "100000",
+    "rtsp_transport": "tcp"
+  },
+  "effective_config": {
+    "max_bitrate": null,
+    "audio_buffer_bytes": 4194304,
+    "rtsp_read_timeout": 10,
+    "redaction_mode": "solid",
+    "audio_buffer_seconds": 16,
+    "stream_output_pacing": true,
+    "audio_enabled": true,
+    "stream_diagnostics": true,
+    "frame_buffer_size": 2,
+    "rtsp_connect_timeout": 10,
+    "detection_interval": 3,
+    "tracking": "flow",
+    "debug": true
+  }
+}
