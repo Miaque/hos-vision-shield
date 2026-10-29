@@ -28,6 +28,7 @@ async def native_app(redis_url, tmp_path):
     media_config.update(rtspAddress=f"127.0.0.1:{rtsp_port}", apiAddress=f"127.0.0.1:{media_api_port}",
                         authHTTPAddress=f"http://127.0.0.1:{port}/internal/media/publish-check")
     media_config["authHTTPExclude"].append({"action": "publish", "path": "test-source"})
+    media_config["authHTTPExclude"].append({"action": "read", "path": "test-source"})
     config_path = tmp_path / "mediamtx.yml"
     config_path.write_text(yaml.safe_dump(media_config), "utf-8")
     commands = [

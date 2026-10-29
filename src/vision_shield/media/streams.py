@@ -417,7 +417,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             write_output(output)
 
     try:
-        options = {"rtsp_transport": "tcp"}
+        options = {"rtsp_transport": "tcp", "max_interleave_delta": "100000"}
         if protocol == "rtmp":
             original = httpx.URL(config.get("publish_url") or target)
             # DNS 固定到授权 IP，RTMP tcUrl 仍保留平台用于虚拟主机路由的原域名。
