@@ -1,0 +1,22 @@
+[
+  {
+    "previous_attempt": "d6c4ccac9b974235b51da00dc4f7ddd4",
+    "next_attempt": "da9a26e6a34b4ad1985c2847a1633a97",
+    "reason": "source_eof",
+    "mux_gap_seconds": 3.6021330999210477,
+    "previous_ended_monotonic": 5099693.6021536,
+    "next_worker_started_monotonic": 5099695.0487927,
+    "last_mux": 5099693.6002704,
+    "next_first_mux": 5099697.2024035
+  },
+  {
+    "previous_attempt": "da9a26e6a34b4ad1985c2847a1633a97",
+    "next_attempt": "2ea3bd553c08496688d032dad87a75f7",
+    "reason": "source_eof",
+    "mux_gap_seconds": 4.015772200189531,
+    "previous_ended_monotonic": 5100037.7349751,
+    "next_worker_started_monotonic": 5100039.0919804,
+    "last_mux": 5100037.7330818,
+    "next_first_mux": 5100041.748854
+  }
+]

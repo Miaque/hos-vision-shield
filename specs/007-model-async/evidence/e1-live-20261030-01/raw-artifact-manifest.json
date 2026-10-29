@@ -1,0 +1,120 @@
+{
+  "ref": "669377f0e3439865a24413ce3f7ed96c31b0a116",
+  "control": "41ba7e3210cc9d8e0d2a34c06d77be49ef2ee0f5",
+  "files": [
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/before-deployment.json",
+      "bytes": 1515788,
+      "sha256": "d3663149f24cb0e7c30d1dca89f2cd3dc53d3f2381f7975b99cf136fc8d358ff",
+      "load_phase": "authorized-cutover"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/cutover.jsonl",
+      "bytes": 12389521,
+      "sha256": "5863906b125ef9e5ea7eef0fb2306af1c858194d97fa22e756592235ffddfeb3",
+      "load_phase": "authorized-cutover"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/cutover.log",
+      "bytes": 65,
+      "sha256": "ed0df3afcda991c3fca4d4ce022458cf8f20c8df75f4a249b2c8e1abf0d68fad",
+      "load_phase": "authorized-cutover"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/deploy.log",
+      "bytes": 16932,
+      "sha256": "8b4611362a680579acff763d4951f051b26335fd62e2ba8392ce93c2f1f1fb3c",
+      "load_phase": "authorized-cutover"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/deployment-verification.json",
+      "bytes": 12856,
+      "sha256": "6b32ac7e3609a6a2ecf5ab86476a7b200c742d3fca608b93e09699094c80fff8",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/final-http-verification.json",
+      "bytes": 13362,
+      "sha256": "e02a74d8ea72f69a18a91f00cc0732182b53472058db9fe3437fb771f15421e7",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/finalize-evidence.py",
+      "bytes": 4289,
+      "sha256": "3c40c893a17a4da19b8c70db99f77c94ccbb9baf1a9774a6020349588fbeba87",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/live-summary.json",
+      "bytes": 45920,
+      "sha256": "4ff2f20e8ce936b27b49972f5427d3746721b401468d6117dc230fe1820c428d",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/peer/e0.jsonl",
+      "bytes": 5230670,
+      "sha256": "75fe163b594f4bf951de010c144475e54030cb31dd8b50b6bb0a70d5fd0bd636",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/peer.log",
+      "bytes": 830,
+      "sha256": "a3cf20c319688d8e65bdc7933d5fe4de6ed6e4e4c716542d39033b5fc30e35a1",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/player-error-observed.json",
+      "bytes": 1118,
+      "sha256": "df48b765a0deb34c69a809fefe97ca39d3d531036a294c160fd561a4045952a1",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/primary/analysis.log",
+      "bytes": 21300,
+      "sha256": "74868a8266bb360d7b8c54000230b6a6a74f5ed7a41533e9af4b145fbb9d82f0",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/primary/details.log",
+      "bytes": 8665,
+      "sha256": "81d910372ec3365c2466981c435e69978191c1d8ff44403a40d6d152316621ae",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/primary/e0-details.json",
+      "bytes": 27731,
+      "sha256": "1e4359c3d89e8a8a415949602041a2ce1d20f046cdd35c4b933e70955da7dbe9",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/primary/e0-summary.json",
+      "bytes": 21298,
+      "sha256": "00de9e3ffb9113e83878267f22219313aa83daf2a82b05da1842e4fab23e3e6e",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/primary/e0.jsonl",
+      "bytes": 44715565,
+      "sha256": "53db997513596062322d37ea3670c009f4a5a47aba17cc71bfa3d06cd99af39b",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/primary/window-reconnects.json",
+      "bytes": 761,
+      "sha256": "1d4550a64023bee123c7525bebe98cd2fb766365d9bdc18aead0433d1e2f75e7",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/primary.log",
+      "bytes": 861,
+      "sha256": "098442c7fafa29595f510be0e4672b5583f1ea3e0c0aeffdd8affefd89d403eb",
+      "load_phase": "clean-dual-RTSP-or-local-analysis"
+    },
+    {
+      "path": "data/diagnostics/e1-live-20261030-01/cutover-rtp-gaps.json",
+      "bytes": 346,
+      "sha256": "c432f2da9ecd26e06d88bbece532aae7ec83b880571a3ae20ea89b0465a9b815",
+      "load_phase": "authorized-cutover"
+    }
+  ]
+}

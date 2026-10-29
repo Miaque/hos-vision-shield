@@ -1,0 +1,383 @@
+{
+  "source": "H:\\workspace\\python\\vision-shield\\data\\diagnostics\\e1-live-20261030-01\\primary\\e0.jsonl",
+  "source_sha256": "53db997513596062322d37ea3670c009f4a5a47aba17cc71bfa3d06cd99af39b",
+  "candidate_unchanged": "669377f0e3439865a24413ce3f7ed96c31b0a116",
+  "runs": [
+    {
+      "attempt_id": "d6c4ccac9b974235b51da00dc4f7ddd4",
+      "first_sequence": 333,
+      "last_sequence": 727,
+      "e1": {
+        "rows": 395,
+        "positive_waits": 171,
+        "requested_wait_seconds": 4.045687090873616,
+        "replay_elapsed_seconds": 28.92375450142463,
+        "checked_release_floors": 395
+      },
+      "independent_media_plan": {
+        "rows": 395,
+        "positive_waits": 158,
+        "requested_wait_seconds": 2.222050592236152,
+        "replay_elapsed_seconds": 27.100118002787163,
+        "checked_release_floors": 395
+      },
+      "fixture_wait_change_seconds": -1.8236364986374642
+    },
+    {
+      "attempt_id": "d6c4ccac9b974235b51da00dc4f7ddd4",
+      "first_sequence": 731,
+      "last_sequence": 834,
+      "e1": {
+        "rows": 104,
+        "positive_waits": 47,
+        "requested_wait_seconds": 1.141785596840085,
+        "replay_elapsed_seconds": 4.410916199319066,
+        "checked_release_floors": 104
+      },
+      "independent_media_plan": {
+        "rows": 104,
+        "positive_waits": 46,
+        "requested_wait_seconds": 0.6886537955775867,
+        "replay_elapsed_seconds": 3.9577843980565675,
+        "checked_release_floors": 104
+      },
+      "fixture_wait_change_seconds": -0.4531318012624983
+    },
+    {
+      "attempt_id": "d6c4ccac9b974235b51da00dc4f7ddd4",
+      "first_sequence": 837,
+      "last_sequence": 1404,
+      "e1": {
+        "rows": 568,
+        "positive_waits": 356,
+        "requested_wait_seconds": 7.525350604086098,
+        "replay_elapsed_seconds": 23.759628509051083,
+        "checked_release_floors": 568
+      },
+      "independent_media_plan": {
+        "rows": 568,
+        "positive_waits": 346,
+        "requested_wait_seconds": 5.8989722844890125,
+        "replay_elapsed_seconds": 22.133250189453996,
+        "checked_release_floors": 568
+      },
+      "fixture_wait_change_seconds": -1.6263783195970856
+    },
+    {
+      "attempt_id": "d6c4ccac9b974235b51da00dc4f7ddd4",
+      "first_sequence": 1424,
+      "last_sequence": 1676,
+      "e1": {
+        "rows": 253,
+        "positive_waits": 173,
+        "requested_wait_seconds": 3.8595061009004166,
+        "replay_elapsed_seconds": 11.594381798542981,
+        "checked_release_floors": 253
+      },
+      "independent_media_plan": {
+        "rows": 253,
+        "positive_waits": 173,
+        "requested_wait_seconds": 2.8710282029062153,
+        "replay_elapsed_seconds": 10.60590390054878,
+        "checked_release_floors": 253
+      },
+      "fixture_wait_change_seconds": -0.9884778979942013
+    },
+    {
+      "attempt_id": "d6c4ccac9b974235b51da00dc4f7ddd4",
+      "first_sequence": 1679,
+      "last_sequence": 2935,
+      "e1": {
+        "rows": 1257,
+        "positive_waits": 448,
+        "requested_wait_seconds": 11.363490940414442,
+        "replay_elapsed_seconds": 103.23973265976466,
+        "checked_release_floors": 1257
+      },
+      "independent_media_plan": {
+        "rows": 1257,
+        "positive_waits": 424,
+        "requested_wait_seconds": 7.040538998327688,
+        "replay_elapsed_seconds": 98.91678071767791,
+        "checked_release_floors": 1257
+      },
+      "fixture_wait_change_seconds": -4.322951942086754
+    },
+    {
+      "attempt_id": "d6c4ccac9b974235b51da00dc4f7ddd4",
+      "first_sequence": 2939,
+      "last_sequence": 3039,
+      "e1": {
+        "rows": 101,
+        "positive_waits": 46,
+        "requested_wait_seconds": 1.1396591987535372,
+        "replay_elapsed_seconds": 4.3888665007501855,
+        "checked_release_floors": 101
+      },
+      "independent_media_plan": {
+        "rows": 101,
+        "positive_waits": 46,
+        "requested_wait_seconds": 0.7155055027157073,
+        "replay_elapsed_seconds": 3.964712804712356,
+        "checked_release_floors": 101
+      },
+      "fixture_wait_change_seconds": -0.4241536960378298
+    },
+    {
+      "attempt_id": "d6c4ccac9b974235b51da00dc4f7ddd4",
+      "first_sequence": 3044,
+      "last_sequence": 3880,
+      "e1": {
+        "rows": 837,
+        "positive_waits": 550,
+        "requested_wait_seconds": 11.567188497809713,
+        "replay_elapsed_seconds": 35.60825030243958,
+        "checked_release_floors": 837
+      },
+      "independent_media_plan": {
+        "rows": 837,
+        "positive_waits": 539,
+        "requested_wait_seconds": 9.319899250556489,
+        "replay_elapsed_seconds": 33.36096105518635,
+        "checked_release_floors": 837
+      },
+      "fixture_wait_change_seconds": -2.2472892472532244
+    },
+    {
+      "attempt_id": "d6c4ccac9b974235b51da00dc4f7ddd4",
+      "first_sequence": 3887,
+      "last_sequence": 4306,
+      "e1": {
+        "rows": 420,
+        "positive_waits": 177,
+        "requested_wait_seconds": 5.144245301581848,
+        "replay_elapsed_seconds": 32.87454640327387,
+        "checked_release_floors": 420
+      },
+      "independent_media_plan": {
+        "rows": 420,
+        "positive_waits": 171,
+        "requested_wait_seconds": 2.9044640980138774,
+        "replay_elapsed_seconds": 30.6347651997059,
+        "checked_release_floors": 420
+      },
+      "fixture_wait_change_seconds": -2.2397812035679707
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 1,
+      "last_sequence": 627,
+      "e1": {
+        "rows": 627,
+        "positive_waits": 233,
+        "requested_wait_seconds": 5.550776903614337,
+        "replay_elapsed_seconds": 49.916139100775055,
+        "checked_release_floors": 626
+      },
+      "independent_media_plan": {
+        "rows": 627,
+        "positive_waits": 215,
+        "requested_wait_seconds": 3.2575044030251403,
+        "replay_elapsed_seconds": 47.62286660018586,
+        "checked_release_floors": 626
+      },
+      "fixture_wait_change_seconds": -2.2932725005891967
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 631,
+      "last_sequence": 732,
+      "e1": {
+        "rows": 102,
+        "positive_waits": 48,
+        "requested_wait_seconds": 1.1522540969476118,
+        "replay_elapsed_seconds": 4.359593603543939,
+        "checked_release_floors": 102
+      },
+      "independent_media_plan": {
+        "rows": 102,
+        "positive_waits": 47,
+        "requested_wait_seconds": 0.6868261969089522,
+        "replay_elapsed_seconds": 3.894165703505279,
+        "checked_release_floors": 102
+      },
+      "fixture_wait_change_seconds": -0.46542790003865964
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 736,
+      "last_sequence": 1572,
+      "e1": {
+        "rows": 837,
+        "positive_waits": 552,
+        "requested_wait_seconds": 11.658577485543958,
+        "replay_elapsed_seconds": 35.718953994636706,
+        "checked_release_floors": 837
+      },
+      "independent_media_plan": {
+        "rows": 837,
+        "positive_waits": 535,
+        "requested_wait_seconds": 9.280758123751113,
+        "replay_elapsed_seconds": 33.34113463284386,
+        "checked_release_floors": 837
+      },
+      "fixture_wait_change_seconds": -2.377819361792845
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 1579,
+      "last_sequence": 2834,
+      "e1": {
+        "rows": 1256,
+        "positive_waits": 439,
+        "requested_wait_seconds": 10.904012543410156,
+        "replay_elapsed_seconds": 103.92629854593436,
+        "checked_release_floors": 1256
+      },
+      "independent_media_plan": {
+        "rows": 1256,
+        "positive_waits": 415,
+        "requested_wait_seconds": 6.831968846975968,
+        "replay_elapsed_seconds": 99.85425484950017,
+        "checked_release_floors": 1256
+      },
+      "fixture_wait_change_seconds": -4.0720436964341875
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 2839,
+      "last_sequence": 2908,
+      "e1": {
+        "rows": 70,
+        "positive_waits": 49,
+        "requested_wait_seconds": 1.1345528921701855,
+        "replay_elapsed_seconds": 3.361813588871891,
+        "checked_release_floors": 70
+      },
+      "independent_media_plan": {
+        "rows": 70,
+        "positive_waits": 47,
+        "requested_wait_seconds": 0.6688754031807198,
+        "replay_elapsed_seconds": 2.8961360998824253,
+        "checked_release_floors": 70
+      },
+      "fixture_wait_change_seconds": -0.4656774889894657
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 2910,
+      "last_sequence": 2940,
+      "e1": {
+        "rows": 31,
+        "positive_waits": 0,
+        "requested_wait_seconds": 0.0,
+        "replay_elapsed_seconds": 0.9510214012116194,
+        "checked_release_floors": 31
+      },
+      "independent_media_plan": {
+        "rows": 31,
+        "positive_waits": 0,
+        "requested_wait_seconds": 0.0,
+        "replay_elapsed_seconds": 0.9510214012116194,
+        "checked_release_floors": 31
+      },
+      "fixture_wait_change_seconds": 0.0
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 2945,
+      "last_sequence": 3780,
+      "e1": {
+        "rows": 836,
+        "positive_waits": 558,
+        "requested_wait_seconds": 11.79015738526546,
+        "replay_elapsed_seconds": 35.75210229968839,
+        "checked_release_floors": 836
+      },
+      "independent_media_plan": {
+        "rows": 836,
+        "positive_waits": 544,
+        "requested_wait_seconds": 9.405323163211145,
+        "replay_elapsed_seconds": 33.36726807763407,
+        "checked_release_floors": 836
+      },
+      "fixture_wait_change_seconds": -2.384834222054314
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 3787,
+      "last_sequence": 4715,
+      "e1": {
+        "rows": 929,
+        "positive_waits": 400,
+        "requested_wait_seconds": 11.51127725504412,
+        "replay_elapsed_seconds": 75.20122775379642,
+        "checked_release_floors": 929
+      },
+      "independent_media_plan": {
+        "rows": 929,
+        "positive_waits": 377,
+        "requested_wait_seconds": 6.214393158682012,
+        "replay_elapsed_seconds": 69.9043436574343,
+        "checked_release_floors": 929
+      },
+      "fixture_wait_change_seconds": -5.296884096362109
+    },
+    {
+      "attempt_id": "da9a26e6a34b4ad1985c2847a1633a97",
+      "first_sequence": 4720,
+      "last_sequence": 5396,
+      "e1": {
+        "rows": 677,
+        "positive_waits": 432,
+        "requested_wait_seconds": 9.79427888237078,
+        "replay_elapsed_seconds": 29.736409876422474,
+        "checked_release_floors": 677
+      },
+      "independent_media_plan": {
+        "rows": 677,
+        "positive_waits": 424,
+        "requested_wait_seconds": 7.250487739245809,
+        "replay_elapsed_seconds": 27.192618733297504,
+        "checked_release_floors": 677
+      },
+      "fixture_wait_change_seconds": -2.5437911431249702
+    },
+    {
+      "attempt_id": "2ea3bd553c08496688d032dad87a75f7",
+      "first_sequence": 1,
+      "last_sequence": 191,
+      "e1": {
+        "rows": 191,
+        "positive_waits": 77,
+        "requested_wait_seconds": 1.876669301070256,
+        "replay_elapsed_seconds": 16.11753630486874,
+        "checked_release_floors": 190
+      },
+      "independent_media_plan": {
+        "rows": 191,
+        "positive_waits": 72,
+        "requested_wait_seconds": 1.1708381002619737,
+        "replay_elapsed_seconds": 15.411705104060458,
+        "checked_release_floors": 190
+      },
+      "fixture_wait_change_seconds": -0.7058312008082823
+    }
+  ],
+  "fixture_totals": {
+    "e1": {
+      "rows": 9491,
+      "requested_wait_seconds": 111.15947007669662,
+      "elapsed_seconds": 599.8411733443156,
+      "checked_release_floors": 9489
+    },
+    "independent_media_plan": {
+      "rows": 9491,
+      "requested_wait_seconds": 76.42808786006556,
+      "elapsed_seconds": 565.1097911276846,
+      "checked_release_floors": 9489
+    }
+  },
+  "stop_contract_passed": true,
+  "limitation": "Incomplete retained continuous-run fixture with old-policy initial state and fixed intervening host gaps; excludes timer overrun and CPU/GPU/network feedback. Not a server total or benefit estimate."
+}
