@@ -13,6 +13,29 @@ def runtime_fingerprint(runtime):
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
+def primary_segments(spans):
+    """Disjoint same-thread stage intervals, excluding nested children."""
+    nodes, stack = [], []
+    for row in sorted(spans, key=lambda r:(r['started'], -r['ended'])):
+        node = [row, []]
+        while stack and row['started'] >= stack[-1][0]['ended']:
+            stack.pop()
+        if stack:
+            stack[-1][1].append(row)
+        nodes.append(node)
+        stack.append(node)
+    result = []
+    for row, children in nodes:
+        cursor = row['started']
+        for child in children:
+            if child['started'] > cursor:
+                result.append((cursor, child['started'], row['stage']))
+            cursor = child['ended']
+        if cursor < row['ended']:
+            result.append((cursor, row['ended'], row['stage']))
+    return result
+
+
 class StreamE0:
     def __init__(self, *, clock=time.monotonic):
         self.clock, self.lock, self.context = clock, Lock(), local()
@@ -30,6 +53,94 @@ class StreamE0:
         self.packet_clock, self.full_since = None, None
         self.main_stack = []
         self.runtime_fingerprint = None
+        self.primary_tasks, self.primary_task_totals = deque(maxlen=32), Counter()
+
+    def submit_primary(self, pool, fn, *args, route=None, **kwargs):
+        with self.lock:
+            self.primary_task_totals['submitted'] += 1
+            job = dict(task_id=self.primary_task_totals['submitted'], sequence=self.primary_task_totals['submitted'],
+                       revision=1, submit=self.clock(),
+                       kind=kwargs.get('kind'), full_frame=kwargs.get('full_frame'),
+                       route=route,
+                       input_shape=list(getattr(args[-1], 'shape', ())) if args else [],
+                       input_dtype=str(getattr(args[-1], 'dtype', None)) if args else None,
+                       input_device=str(getattr(args[-1], 'device', 'cpu')) if args else None,
+                       call=getattr(self.context, 'call', None), worker_spans=[], main_spans=[],
+                       worker_spans_discarded=0, main_spans_discarded=0)
+        self.context.primary_job = job
+        def run():
+            self.context.primary_job = job
+            job['worker_start'], job['worker_thread'] = self.clock(), get_ident()
+            cpu_started = time.thread_time()
+            try:
+                return fn(*args, **kwargs)
+            except BaseException:
+                job['failed'] = True
+                raise
+            finally:
+                job['worker_thread_cpu_seconds'] = time.thread_time()-cpu_started
+                job['worker_return'] = self.clock()
+                self.context.primary_job = None
+        try:
+            future = pool.submit(run)
+        except BaseException:
+            self.context.primary_job = None
+            with self.lock:
+                self.primary_task_totals['submit_failed'] += 1
+            raise
+        future._vision_shield_live_primary = job
+        def completed(value):
+            with self.lock:
+                job['future_done_callback'] = self.clock()
+                job['revision'] += 1
+        future.add_done_callback(completed)
+        return future
+
+    def primary_result(self, future):
+        job = future._vision_shield_live_primary
+        job['result_enter'] = self.clock()
+        cpu_started = time.thread_time()
+        try:
+            return future.result()
+        except BaseException:
+            job['result_failed'] = True
+            raise
+        finally:
+            cpu_elapsed = time.thread_time()-cpu_started
+            ended = job['result_exit'] = self.clock()
+            self.context.primary_job = None
+            start = job['result_enter']
+            worker_start, worker_end = job.get('worker_start', ended), job.get('worker_return', ended)
+            queue = max(0., min(ended, worker_start)-start)
+            execution = max(0., min(ended, worker_end)-max(start, worker_start))
+            counts = Counter(wait_calls=1, completed=1, failed=bool(job.get('result_failed')),
+                wait_seconds=ended-start, wait_queue_dispatch_seconds=queue, wait_worker_seconds=execution,
+                result_thread_cpu_seconds=cpu_elapsed,
+                wait_after_worker_seconds=max(0., ended-start-queue-execution),
+                queue_dispatch_seconds=worker_start-job['submit'], worker_seconds=worker_end-worker_start,
+                worker_thread_cpu_seconds=job.get('worker_thread_cpu_seconds',0.),
+                spans_discarded=job['worker_spans_discarded']+job['main_spans_discarded'])
+            # An overflow remains explicit; incomplete nested spans cannot establish phase attribution.
+            worker_segments = [] if job['worker_spans_discarded'] else primary_segments(job['worker_spans'])
+            for a,b,stage in worker_segments:
+                counts['worker_'+stage+'_seconds'] += b-a
+                counts['wait_'+stage+'_seconds'] += max(0., min(ended,b)-max(start,a))
+            counts['wait_unattributed_worker_seconds'] = max(0., execution-sum(
+                value for key,value in counts.items() if key.startswith('wait_stage:')))
+            for a,b,stage in ([] if job['main_spans_discarded'] else primary_segments(job['main_spans'])):
+                # This is already overlapped work, not extra critical-path time.
+                counts['overlap_main_'+stage+'_seconds'] += max(0., min(worker_end,b)-max(worker_start,a))
+            for spans in (job['worker_spans'],job['main_spans']):
+                if job['worker_spans_discarded' if spans is job['worker_spans'] else 'main_spans_discarded']:
+                    continue
+                for row in spans:
+                    counts[('worker_cpu_' if spans is job['worker_spans'] else 'main_cpu_')+row['stage']+'_seconds'] += row['exclusive_cpu']
+            job['partition'] = dict(counts)
+            with self.lock:
+                self.primary_task_totals.update(counts)
+                job['future_done_at_result_exit'] = future.done()
+                job['revision'] += 1
+                self.primary_tasks.append(job)
 
     @staticmethod
     def media_clock(value):
@@ -147,10 +258,18 @@ class StreamE0:
         if stack is None:
             stack = self.context.stack = self.main_stack if get_ident() == self.main_thread else []
         item = [self.clock(), 0., name]
+        job = None if name=='stage:wait-primary' else getattr(self.context, 'primary_job', None)
+        cpu = time.thread_time() if job is not None else None
+        if job is not None:
+            cpu_children = getattr(self.context, 'cpu_children', None)
+            if cpu_children is None:
+                cpu_children = self.context.cpu_children = []
+            cpu_children.append([0.])
         stack.append(item)
         try:
             yield
         finally:
+            active_cpu = time.thread_time()-cpu if job is not None else None
             elapsed = self.clock() - item[0]
             stack.pop()
             if stack:
@@ -158,6 +277,16 @@ class StreamE0:
             with self.lock:
                 self.budgets[get_ident()][name] += max(0., elapsed - item[1])
                 self.scope_counts[name] += 1
+            if job is not None:
+                child_cpu = cpu_children.pop()[0]
+                if cpu_children:
+                    cpu_children[-1][0] += active_cpu
+                target = job['main_spans'] if get_ident()==self.main_thread else job['worker_spans']
+                if len(target) < 128:
+                    target.append(dict(stage=name,started=item[0],ended=item[0]+elapsed,
+                                       exclusive_cpu=max(0.,active_cpu-child_cpu)))
+                else:
+                    job['main_spans_discarded' if get_ident()==self.main_thread else 'worker_spans_discarded'] += 1
 
     def event(self, name, **data):
         with self.lock:
@@ -252,7 +381,7 @@ class StreamE0:
 
     def summary(self):
         result = self.snapshot()
-        for key in ('frames', 'pacer', 'audio_clocks', 'video_clocks', 'audio_outputs', 'events'):
+        for key in ('frames', 'pacer', 'audio_clocks', 'video_clocks', 'audio_outputs', 'events', 'primary_tasks'):
             result.pop(key)
         return result
 
@@ -269,6 +398,11 @@ class StreamE0:
                 runtime_fingerprint=self.runtime_fingerprint,
                 started_monotonic=self.started, sampled_monotonic=now, ended_monotonic=self.ended,
                 pacer_totals=dict(self.pacer_totals), fifo_totals=dict(self.fifo_totals),
+                primary_task_totals=dict(self.primary_task_totals), primary_tasks=[dict(job) for job in self.primary_tasks],
+                primary_task_limits=dict(retained_tasks=32, spans_per_task_per_thread=128,
+                    clock='worker_monotonic', scope='quality primary executor only; other executors remain uncorrelated',
+                    cpu='per-thread active host CPU; wall minus CPU is not pure GPU',
+                    completion='done callback follows Future state publication and may follow result exit'),
                 clock_totals=dict(self.clock_totals), scope_counts=dict(self.scope_counts),
                 main_exclusive_seconds=main, main_wall_seconds=wall,
                 main_unattributed_seconds=max(0., wall - sum(main.values())),
@@ -286,13 +420,16 @@ class StreamE0:
                     audio_clocks=self.clock_totals['audio_packets']-len(self.audio),
                     video_clocks=self.clock_totals['video_demux_packets']-len(self.video),
                     audio_outputs=self.clock_totals['audio_mux_attempts']-len(self.audio_outputs),
+                    primary_tasks=self.primary_task_totals['completed']-len(self.primary_tasks),
                     events=self.event_count-len(self.events)),
                 discarded={}, totals=dict(frames=self.frame_count, pacer=self.pacer_totals['decisions'],
                     audio_clocks=self.clock_totals['audio_packets'],
+                    primary_tasks=self.primary_task_totals['completed'],
                     video_clocks=self.clock_totals['video_demux_packets'],
                     audio_outputs=self.clock_totals['audio_mux_attempts'], events=self.event_count))
         # Serialize each candidate record once; repeatedly serializing the whole tree blocks the media loop.
-        shares = dict(frames=.30, pacer=.40, audio_clocks=.07, video_clocks=.07, audio_outputs=.09, events=.07)
+        shares = dict(frames=.26, pacer=.35, audio_clocks=.06, video_clocks=.06, audio_outputs=.08,
+                      events=.07, primary_tasks=.12)
         records = {key: result[key] for key in shares}
         result.update({key: [] for key in shares})
         available = 128 * 1024 - 1024 - len(json.dumps(result).encode())

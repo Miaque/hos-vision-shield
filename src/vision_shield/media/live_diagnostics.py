@@ -22,6 +22,7 @@ class LiveDiagnostics:
         self.timing = getattr(detector, 'stage_times', None)
         self.previous_observer = getattr(self.timing, 'observer', None)
         self.previous_span_observer = getattr(self.timing, 'span_observer', None)
+        self.previous_primary_observer = getattr(self.timing, 'primary_observer', None)
         self.e0 = None
         if config.get('stream_e0_diagnostics', True):
             from vision_shield.media.stream_e0 import StreamE0
@@ -56,6 +57,7 @@ class LiveDiagnostics:
             self.timing.observer = self.observe
             if self.e0:
                 self.timing.span_observer = self.e0.span
+                self.timing.primary_observer = self.e0
 
     def observe(self, name, elapsed):
         if elapsed < .1:
@@ -76,10 +78,17 @@ class LiveDiagnostics:
         stages, started = snapshot(self.detector), time.monotonic()
         if kind == 'process':
             self.frame_sequence += 1
+        previous_call = None
+        if self.e0:
+            previous_call = getattr(self.e0.context, 'call', None)
+            self.e0.context.call = dict(operation=kind, frame_sequence=self.frame_sequence,
+                                       source_pts=None if source_pts is None else str(source_pts))
         try:
             with self.e0.span('op:' + kind) if self.e0 else nullcontext():
                 yield
         finally:
+            if self.e0:
+                self.e0.context.call = previous_call
             ended, after = time.monotonic(), snapshot(self.detector)
             sample = dict(sequence=self.operation_count + 1, kind=kind,
                           source_pts=None if source_pts is None else str(source_pts),
@@ -119,3 +128,4 @@ class LiveDiagnostics:
         if self.timing is not None:
             self.timing.observer = self.previous_observer
             self.timing.span_observer = self.previous_span_observer
+            self.timing.primary_observer = self.previous_primary_observer

@@ -24,6 +24,7 @@ class StageTimes:
         self.lock = Lock()
         self.observer = None
         self.span_observer = None
+        self.primary_observer = None
 
     @contextmanager
     def measure(self, name):

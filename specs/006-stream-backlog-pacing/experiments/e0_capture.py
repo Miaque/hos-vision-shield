@@ -26,7 +26,7 @@ def main():
     last_rtp = started
     clock_identity = None
     names = dict(frames='frame', pacer='pacer', audio_clocks='audio_clock', video_clocks='video_clock',
-                 audio_outputs='audio_output', events='event')
+                 audio_outputs='audio_output', events='event', primary_tasks='primary_task')
     with httpx.Client(base_url=args.base_url, trust_env=False, timeout=8) as client, \
             (args.directory/'e0.jsonl').open('x', encoding='utf-8') as stream:
         def save(kind, **data):
@@ -62,9 +62,9 @@ def main():
                 assert decisions >= previous.get(aid, 0), 'Counter went backwards within one attempt'
                 previous[aid] = decisions
                 for key, kind in names.items():
-                    for row in e0.pop(key):
-                        if key == 'frames':
-                            fid = row['frame_id']
+                    for row in e0.pop(key, []):
+                        if key in ('frames','primary_tasks'):
+                            fid = row['frame_id'] if key=='frames' else ('primary_task',row['task_id'])
                             if row['revision'] <= revisions.get(fid, 0):
                                 continue
                             revisions[fid] = row['revision']
@@ -74,7 +74,9 @@ def main():
                                 continue
                             sequences[skey] = row['sequence']
                         save(kind, attempt_id=aid, data=row)
-                revisions = {fid: rev for fid, rev in revisions.items() if fid > e0['totals']['frames']-256}
+                revisions = {fid: rev for fid, rev in revisions.items() if
+                    (fid[1] > e0.get('primary_task_totals',{}).get('completed',0)-32 if isinstance(fid,tuple)
+                     else fid > e0['totals']['frames']-256)}
                 save('e0_state', attempt_id=aid, data=e0)
                 for attempt in data.get('attempts', []):
                     key = attempt['run_id']
