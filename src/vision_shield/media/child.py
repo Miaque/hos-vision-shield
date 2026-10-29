@@ -48,7 +48,7 @@ def process(payload, stop, detector=None, *, on_initialized=None):
         if isinstance(profile_mode, str):
             from vision_shield.detection.host_profile import FORWARDS, ProfileTimes, instrument
 
-            if (profile_mode not in ('host', *FORWARDS) or cfg['inference_device'] != 'cuda'
+            if (profile_mode not in ('host', 'local-face', *FORWARDS) or cfg['inference_device'] != 'cuda'
                     or cfg['detection_backend'] != 'quality_yolo'):
                 raise ValueError('A model profiling requires quality_yolo/CUDA')
             collector = ProfileTimes(directory / 'host-profile',
@@ -74,8 +74,10 @@ def process(payload, stop, detector=None, *, on_initialized=None):
             load_seconds = 0.0 if reused else time.monotonic() - loading
             emit({"model_load_seconds": load_seconds, "model_reused": reused})
         if collector:
-            from vision_shield.detection.host_profile import instrument_candidates, runtime_metadata
+            from vision_shield.detection.host_profile import instrument_candidates, instrument_ort_nodes, runtime_metadata
 
+            if profile_mode == 'local-face':
+                instrument_ort_nodes(detector.detail, collector)
             instrument_candidates(detector.primary, 'primary', collector)
             instrument_candidates(detector.detail, 'detail', collector)
             metadata = runtime_metadata(detector, cfg)

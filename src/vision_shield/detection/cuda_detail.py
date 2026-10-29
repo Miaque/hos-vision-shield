@@ -90,7 +90,10 @@ class Detector(CPUDetector):
             output.type.tensor_type.shape.dim[1].dim_param = output.name + "_anchors"
         self.face_model, self.face_sessions = model.SerializeToString(), {}
         self.plate_model, self.plate_sessions = _batch_plate_model(onnx.load(str(plate_path))), {}
-        self.face = ort.InferenceSession(self.face_model, sess_options=options, providers=providers)
+        # Ada's dynamic local shapes can spend seconds in cuDNN's heuristic plan construction.
+        face_providers = [(name, {**values, 'cudnn_conv_algo_search': 'DEFAULT'}) for name, values in providers] \
+            if torch.cuda.get_device_capability()[0] >= 8 else providers
+        self.face = ort.InferenceSession(self.face_model, sess_options=options, providers=face_providers)
         self.plate = ort.InferenceSession(str(plate_path), sess_options=options, providers=providers)
         for session in (self.face, self.plate):
             session.disable_fallback()

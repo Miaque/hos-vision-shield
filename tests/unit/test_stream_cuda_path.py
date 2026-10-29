@@ -2,6 +2,7 @@
 
 from fractions import Fraction
 import threading
+import time
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -19,13 +20,13 @@ from vision_shield.media.plate_lookahead import PendingMask
 @pytest.mark.parametrize("delayed", [False, True])
 @pytest.mark.parametrize("repair", [False, True])
 @pytest.mark.parametrize('debug', [False, True])
-def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False, with_audio=False, default_schedule=False):
+def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch, fault, delayed, repair, debug, muted=False, with_audio=False, default_schedule=False, pacing=True, slow_first=False):
     source_video = SimpleNamespace(width=64, height=48, codec_context=SimpleNamespace(name="h264"))
     frames = [SimpleNamespace(width=64, height=48, pts=900000 + 3600 * i, time_base=Fraction(1, 90000))
               for i in range(3)]
     if repair:
         frames[-1].pts = frames[-2].pts
-    threads, masked, encoded = {}, [], []
+    threads, masked, encoded, published_at = {}, [], [], []
     closed = threading.Event()
     accelerator = object()
 
@@ -77,6 +78,7 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             if fault == "mux":
                 raise RuntimeError("mux failed")
             encoded.append(packet.pts)
+            published_at.append(time.monotonic())
             packet.pts = -1  # Muxers may rescale/mutate the packet after accepting it.
 
     def open_endpoint(url, *args, **kwargs):
@@ -97,6 +99,8 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             return pending
         if fault == "encode":
             raise RuntimeError("encode failed")
+        if slow_first and frame.pts == 0:
+            time.sleep(.08)
         packet = av.Packet(b'\x00\x00\x00\x01\x65picture')
         packet.pts, packet.time_base = frame.pts, frame.time_base
         if delayed:
@@ -113,8 +117,17 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     monkeypatch.setattr(streams.av, "open", open_endpoint)
     monkeypatch.setattr(streams, "add_video", add_video)
     monkeypatch.setattr(streams, "masked_frame", software_mask)
+    paced = []
+    wait = streams.StreamPacer.wait
+    def paced_wait(self, moment):
+        paced.append(moment)
+        if fault == 'stop':
+            self.stop.set()
+            return False
+        return wait(self, moment)
+    monkeypatch.setattr(streams.StreamPacer, 'wait', paced_wait)
     config = {**Settings(_env_file=None, debug=debug).model_dump(), "inference_device": "cuda",
-              "detection_interval": 3, "tracking": "flow"}
+              "detection_interval": 3, "tracking": "flow", "stream_output_pacing": pacing}
     if default_schedule:
         config.pop('detection_interval')
         config.pop('tracking')
@@ -127,7 +140,7 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         streams.process_stream("rtmp://camera/input" if muted or with_audio else "rtsp://camera/input",
                                "rtsp://output/test", object(), config, stop, events.append)
 
-    if fault:
+    if fault and fault != 'stop':
         with pytest.raises(RuntimeError, match=f"{fault} failed"):
             process()
         assert not encoded and not any(event.get("output") for event in events)
@@ -136,8 +149,17 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             assert events[-1]['stats']['stream']['encoded_frames'] == 0
     else:
         process()
+        if fault == 'stop':
+            assert not encoded and not any(event.get('output') for event in events)
+            assert events[-1]['stats']['stream']['encoded_frames'] == 0
+            assert stop.is_set() and closed.is_set()
+            return
         assert masked == [900000, 903600, 907200]
         assert encoded == [0, 3600, 7200]
+        assert len(paced) == (3 if pacing else 0)
+        if slow_first:
+            assert all(b - a >= .018 for a, b in zip(published_at, published_at[1:]))
+            assert events[-1]['timings']['output-pacing'] > .03
         assert threads["context"] == threads["decode"] != threading.get_ident()
         assert add_video.call_args.kwargs == {"live": True, "device": "cuda"}
         assert events[-1]["stats"]["processed_frames"] == 3
@@ -160,6 +182,21 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     assert stop.is_set()
     if fault != "decode":
         assert closed.is_set()
+
+
+def test_live_pacing_can_be_disabled_without_changing_masked_output(monkeypatch):
+    test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
+        monkeypatch, None, False, False, True, pacing=False)
+
+
+def test_slow_encoder_does_not_squeeze_following_final_packets_together(monkeypatch):
+    test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
+        monkeypatch, None, False, False, True, slow_first=True)
+
+
+def test_stop_during_pacing_does_not_report_an_unwritten_packet_as_output(monkeypatch):
+    test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
+        monkeypatch, 'stop', False, False, True)
 
 
 def test_muted_rtmp_with_audio_repairs_video_clock_on_cuda_path(monkeypatch):

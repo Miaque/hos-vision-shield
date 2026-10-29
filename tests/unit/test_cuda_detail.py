@@ -35,6 +35,46 @@ def test_cuda_detail_refuses_cpu_only_runtime(monkeypatch):
         Detector("unused-face", "unused-plate")
 
 
+@pytest.mark.parametrize('capability,algorithm', [((6, 1), 'HEURISTIC'), ((8, 9), 'DEFAULT')])
+def test_local_face_plan_policy_keeps_device_precision_and_plate_provider(monkeypatch, capability, algorithm):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    import onnx
+    import onnxruntime as ort
+    import torch
+    from vision_shield.detection import cuda_detail
+
+    model = MagicMock()
+    model.graph.input = [SimpleNamespace(type=SimpleNamespace(tensor_type=SimpleNamespace(
+        shape=SimpleNamespace(dim=[SimpleNamespace() for _ in range(4)]))))]
+    model.graph.output = []
+    model.SerializeToString.return_value = b'unchanged-face'
+    monkeypatch.setattr(onnx, 'load', lambda path: model)
+    monkeypatch.setattr(cuda_detail, '_batch_plate_model', lambda value: b'unchanged-plate')
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
+    monkeypatch.setattr(torch.cuda, 'current_device', lambda: 2)
+    monkeypatch.setattr(torch.cuda, 'get_device_capability', lambda *args: capability)
+    monkeypatch.setattr(torch.cuda, 'Stream', lambda **kwargs: object())
+    monkeypatch.setattr(ort, 'get_available_providers', lambda: ['CUDAExecutionProvider'])
+    created = []
+
+    class Session:
+        def __init__(self, model, *, sess_options, providers):
+            created.append(dict(providers[0][1]))
+            assert sess_options.get_session_config_entry('session.disable_cpu_ep_fallback') == '1'
+
+        def disable_fallback(self):
+            pass
+
+        def get_providers(self):
+            return ['CUDAExecutionProvider']
+
+    monkeypatch.setattr(ort, 'InferenceSession', Session)
+    cuda_detail.Detector('face.onnx', 'plate.onnx')
+    assert created == [dict(device_id=2, use_tf32=0, cudnn_conv_algo_search=algorithm),
+                       dict(device_id=2, use_tf32=0, cudnn_conv_algo_search='HEURISTIC')]
+
+
 @pytest.mark.parametrize("provider", ["CUDAExecutionProvider", "CPUExecutionProvider"])
 def test_fixed_face_sessions_keep_dimensions_device_and_bounded_lifetime(monkeypatch, provider):
     import sys

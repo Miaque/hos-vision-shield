@@ -21,6 +21,7 @@ def test_profile_header_and_sample_choices_are_described_in_openapi():
                                                ('video', 'forward-primary-plate', 202),
                                                ('video', 'forward-detail-face', 202),
                                                ('video', 'forward-detail-plate', 202),
+                                               ('video', 'local-face', 202), ('image', 'local-face', 422),
                                                ('image', '1', 422), ('image', 'host', 422),
                                                ('video', '0', 422), ('video', 'yes', 422)])
 async def test_only_explicit_video_profile_request_reaches_worker(tmp_path, monkeypatch, kind, header, status):
@@ -79,8 +80,12 @@ async def test_profile_request_is_private_store_metadata_and_video_only():
     assert profiled['profile_detection'] is True
     host = await store.create('video', 'upload', 'local', profile_detection='host')
     assert host['profile_detection'] == 'host'
+    local_face = await store.create('video', 'upload', 'local', profile_detection='local-face')
+    assert local_face['profile_detection'] == 'local-face'
     with pytest.raises(ValueError):
         await store.create('image', 'upload', 'local', profile_detection=True)
+    with pytest.raises(ValueError):
+        await store.create('image', 'upload', 'local', profile_detection='local-face')
 
 
 async def test_trace_resolved_outside_task_is_not_downloadable(tmp_path, monkeypatch):
@@ -102,7 +107,7 @@ async def test_trace_resolved_outside_task_is_not_downloadable(tmp_path, monkeyp
         assert response.status_code == 409 and 'private' not in response.text
 
 
-@pytest.mark.parametrize('mode', ['forward-primary-face', 'forward-detail-plate'])
+@pytest.mark.parametrize('mode', ['forward-primary-face', 'forward-detail-plate', 'local-face'])
 async def test_named_model_trace_uses_validated_task_relative_path(tmp_path, mode):
     app = create_app(Settings(_env_file=None, media_root=tmp_path, debug=True))
     task_id = '00000000-0000-0000-0000-000000000001'
@@ -120,7 +125,8 @@ async def test_named_model_trace_uses_validated_task_relative_path(tmp_path, mod
         assert (await client.get(url)).status_code == 409
 
 
-async def test_production_disables_diagnostics_and_profile_requests_before_io(tmp_path):
+@pytest.mark.parametrize('mode', ['host', 'local-face'])
+async def test_production_disables_diagnostics_and_profile_requests_before_io(tmp_path, mode):
     app = create_app(Settings(_env_file=None, media_root=tmp_path))
     async with app.router.lifespan_context(app), httpx.AsyncClient(
         transport=httpx.ASGITransport(app), base_url='http://test'
@@ -130,7 +136,7 @@ async def test_production_disables_diagnostics_and_profile_requests_before_io(tm
         app.state.redis.time = AsyncMock(side_effect=AssertionError('No resource reads in production'))
         for path in ('/v1/diagnostics/resources', '/v1/tasks/00000000-0000-0000-0000-000000000001/diagnostics'):
             assert (await client.get(path)).status_code == 404
-        response = await client.post('/v1/file-tasks/uploads', headers={'X-Detection-Profile': 'host'},
+        response = await client.post('/v1/file-tasks/uploads', headers={'X-Detection-Profile': mode},
                                      data={'kind': 'video'}, files={'file': ('input.mp4', b'video', 'video/mp4')})
         assert response.status_code == 422 and response.json()['error']['code'] == 'diagnostics_disabled'
         app.state.store.create.assert_not_called()

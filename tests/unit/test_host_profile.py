@@ -11,6 +11,23 @@ import pytest
 from vision_shield.detection import host_profile as profile
 from vision_shield.detection import Detection
 
+
+def test_ort_nodes_match_the_sampled_real_call_and_bound_the_report():
+    samples = [dict(call=2)]
+    events = [dict(cat='Session', name='model_run', ts=0, dur=100),
+              dict(cat='Session', name='model_run', ts=1000, dur=2000),
+              dict(cat='Node', name='outside_kernel_time', ts=10, dur=90,
+                   args=dict(op_name='Conv', provider='CUDAExecutionProvider'))]
+    events += [dict(cat='Node', name=f'conv{i}_kernel_time', ts=1000 + i * 100, dur=80 + i,
+                    args=dict(op_name='Conv', provider='CUDAExecutionProvider')) for i in range(15)]
+    runs = profile.attach_ort_nodes(samples, events)
+    assert runs == [dict(call=1, host_ms=.1), dict(call=2, host_ms=2)]
+    assert samples[0]['ort_model_run_ms'] == 2
+    nodes = samples[0]['ort_top_nodes']
+    assert len(nodes) == 8 and nodes[0]['name'] == 'conv14_kernel_time'
+    assert nodes[0]['host_ms'] == .094 and nodes[0]['provider'] == 'CUDAExecutionProvider'
+    assert all(row['name'] != 'outside_kernel_time' for row in nodes)
+
 def test_parallel_scopes_keep_frame_view_and_actual_forward_counts(tmp_path):
     collector = profile.ProfileTimes(tmp_path, clock=iter(range(20)).__next__)
     with profile.scope(frame=7, purpose="discovery", view="tile"):
@@ -84,6 +101,126 @@ def test_statistics_keep_first_and_warmup_separate():
     assert summary["p95_ms"] == pytest.approx(19.05)
     assert summary["steady_after_10_calls"]["calls"] == 10
     assert summary["steady_after_10_calls"]["p50_ms"] == 15.5
+
+
+def test_statistics_expose_tail_not_hidden_by_average():
+    summary = profile.statistics([1.0] * 99 + [1600.0])
+    assert summary['p99_ms'] == pytest.approx(16.99)
+    assert summary['max_ms'] == 1600
+    assert summary['over_500_ms'] == summary['over_1000_ms'] == 1
+    assert profile.statistics([])['max_ms'] is None
+
+
+def test_local_face_observer_keeps_roi_shape_session_and_phase_identity(tmp_path, monkeypatch):
+    from contextlib import ExitStack
+    import cv2
+    import numpy as np
+    import onnxruntime as ort
+    import torch
+
+    sentinel = [np.ones((1, 1), np.float32)]
+    ended = []
+
+    class Session:
+        def get_providers(self):
+            return ['CUDAExecutionProvider']
+
+        def run(self, outputs, feed):
+            assert feed['input'].shape == (1, 3, 32, 64)
+            return sentinel
+
+        def end_profiling(self):
+            ended.append(True)
+            target = tmp_path / 'ort.json'
+            target.write_text('[]', 'utf-8')
+            return str(target)
+
+    monkeypatch.setattr(ort, 'InferenceSession', Session)
+    session = Session()
+    collector = profile.ProfileTimes(tmp_path)
+    collector.ort_session = session
+    monkeypatch.setattr(profile, 'MAX_ORT_CALLS', 1, raising=False)
+    with ExitStack() as stack:
+        profile.instrument_local_faces(stack, collector)
+        with profile.scope(frame=17, purpose='local-confirm', local_id='17:1',
+                           local_face=True, local_details={}):
+            pixels = torch.zeros((14, 29, 3), dtype=torch.uint8).cpu().numpy()
+            pixels = cv2.resize(pixels, (64, 32))
+            blob = cv2.dnn.blobFromImage(pixels)
+            assert session.run(None, {'input': blob}) is sentinel
+            assert session.run(None, {'input': blob}) is sentinel
+    assert ended == [True] and collector.ort_session is None
+    collector.close()
+    rows = [json.loads(line) for line in (tmp_path / 'calls.jsonl').read_text().splitlines()]
+    assert {'local-readback', 'local-numpy', 'local-resize', 'ort-local-face'} <= {r['stage'] for r in rows}
+    runs = [r for r in rows if r['stage'] == 'ort-local-face']
+    assert [r['first_local_shape'] for r in runs] == [True, False]
+    assert runs[0]['frame'] == 17 and runs[0]['local_id'] == '17:1'
+    assert runs[0]['roi_shape'] == [14, 29, 3]
+    assert runs[0]['resized_shape'] == [32, 64, 3]
+    assert runs[0]['input_shape'] == [1, 3, 32, 64]
+    assert runs[0]['provider'] == 'CUDAExecutionProvider'
+    assert runs[0]['session_instance'] == runs[1]['session_instance']
+    assert collector.report(1)['local_faces']['timing']['calls'] == 2
+    assert len(collector.report(1)['local_faces']['longest']) == 2
+
+
+def test_local_trace_discards_fast_call_and_keeps_slow_call_in_fixed_slot(tmp_path, monkeypatch):
+    import torch.profiler
+
+    stage = 'ort-local-face'
+    durations = iter([2000, 1600000])
+
+    @contextmanager
+    def profiler(**kwargs):
+        duration = next(durations)
+        trace = {'traceEvents': [
+            dict(ph='X', cat='user_annotation', name=stage, tid=1, ts=0, dur=duration),
+            dict(ph='X', cat='cuda_runtime', name='cudaLaunchKernel', tid=1, ts=1, dur=2, args={'correlation': 7}),
+            dict(ph='X', cat='kernel', name='actual-local-kernel', tid=2, ts=10, dur=5, args={'correlation': 7}),
+        ]}
+        yield SimpleNamespace(events=lambda: [SimpleNamespace(name=stage, cpu_time_total=duration)],
+                              export_chrome_trace=lambda target: Path(target).write_text(json.dumps(trace)))
+
+    monkeypatch.setattr(torch.profiler, 'profile', profiler)
+    collector = profile.ProfileTimes(tmp_path, device_stage='local-face')
+    with profile.scope(frame=40, purpose='local-confirm'), collector.trace(stage, 3, slow_only=True):
+        pass
+    assert not list(tmp_path.glob('*.json'))
+    with profile.scope(frame=90, purpose='local-confirm'), collector.trace(stage, 9, slow_only=True):
+        pass
+    assert (tmp_path / 'local-face-64.json').is_file()
+    assert collector.device_samples[0]['call'] == 9
+    assert collector.device_samples[0]['host_forward_ms'] == 1600
+    collector.close()
+
+
+def test_nested_confirmation_keeps_parent_for_readback_and_run_correlation(tmp_path, monkeypatch):
+    from contextlib import ExitStack
+    import numpy as np
+    from vision_shield.detection.quality import Detector
+    from vision_shield.redaction import FrameRedactor
+
+    monkeypatch.setattr(Detector, '_confirmed', lambda *args, **kwargs: True)
+
+    def recheck(instance, pixels, box, *args):
+        return Detector._confirmed(object(), pixels, Detection('face', box, 0.5), object())
+
+    monkeypatch.setattr(FrameRedactor, '_recheck', recheck)
+    collector = profile.ProfileTimes(tmp_path)
+    try:
+        with ExitStack() as stack:
+            profile.instrument(stack, collector)
+            with profile.scope(frame=17):
+                assert FrameRedactor._recheck(object(), np.zeros((32, 32, 3), np.uint8), (1, 2, 8, 9))
+    finally:
+        collector.close()
+    rows = [json.loads(line) for line in (tmp_path / 'calls.jsonl').read_text().splitlines()]
+    child, parent = rows
+    assert parent['parent_local_id'] is None
+    assert child['parent_local_id'] == parent['local_id']
+    assert child['local_id'] != parent['local_id']
+    assert child['target_box'] == parent['target_box'] == [1, 2, 8, 9]
 
 
 def test_candidate_evidence_is_bounded_and_keeps_empty_discovery_results(tmp_path):

@@ -15,6 +15,7 @@ from vision_shield.media.video import add_video, check_streams, check_dimensions
 from vision_shield.media.stream_metrics import StreamMetrics, vcl_digest
 from vision_shield.media.attempts import failure_details
 from vision_shield.media.plate_lookahead import PlateLookahead
+from vision_shield.media.stream_pacing import StreamPacer
 from vision_shield.redaction import FrameRedactor
 from vision_shield.detection.timing import measure, snapshot
 if TYPE_CHECKING:
@@ -274,9 +275,10 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     previous_source, step, clock_offset = None, None, 0
     started = time.monotonic()
     last_output_report = None
-    frame_seconds = encode_seconds = 0.0
+    frame_seconds = encode_seconds = pacing_seconds = 0.0
     video, last_stats, failed_frames, processing = None, None, 0, False
     delay = None
+    pacer = StreamPacer(stop)
     phase, ending = "publish_open", None
 
     def report(force=False):
@@ -299,15 +301,24 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         "elapsed_seconds": now - started, **({"stream": stream_stats} if debug else {})},
               **({"detection_stats": redactor.detection_stats.copy(),
               "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
-                              encode=encode_seconds, **redactor.candidate_timings, **snapshot(detector))} if debug else {})})
+                              encode=encode_seconds, **{'output-pacing': pacing_seconds},
+                              **redactor.candidate_timings, **snapshot(detector))} if debug else {})})
         last_stats = now
 
     def mux_video(packet):
-        nonlocal failed_frames, processing, ending
+        nonlocal failed_frames, processing, ending, phase, pacing_seconds
         # Capture the encoder clock before mux rescales it (notably FLV milliseconds).
         moment = packet.pts * packet.time_base if packet.pts is not None and packet.time_base is not None else None
         encoded_bytes = packet.size if debug else None
         encoded_vcl_sha256 = vcl_digest(bytes(packet)) if debug else None
+        if delay and config.get('stream_output_pacing', True) and moment is not None:
+            phase = 'output_pacing'
+            waiting = time.monotonic() if debug else None
+            allowed = pacer.wait(moment)
+            if debug:
+                pacing_seconds += time.monotonic() - waiting
+            if not allowed:
+                return False
         try:
             writer.mux(packet)
         except Exception as error:
@@ -316,6 +327,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             ending = failure_details(error, "publish_write")
             raise
         metrics.written(moment, time.monotonic(), encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256)
+        return True
 
     def write_output(sample):
         nonlocal video, audio, transcode_audio, phase, processing, count, last_output_report, encode_seconds
@@ -323,6 +335,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         processing = True
         output.pts = round((moment - origin) / output.time_base)
         stage = time.monotonic() if debug else None
+        pacing_before = pacing_seconds
         if video is None:
             phase = "encoder_initialize"
             video_options = dict(live=True, device=config.get("inference_device", "cpu"))
@@ -354,10 +367,9 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         metrics.submit(output, received_at, source_moment, timeline_pts=moment, timestamp_repaired=repaired,
                        decoded_at=decoded_at, processing_at=processing_at)
         for packet in video.encode(output):
-            mux_video(packet)
-            published = True
+            published = mux_video(packet) or published
         if debug:
-            encode_seconds += time.monotonic() - stage
+            encode_seconds += time.monotonic() - stage - (pacing_seconds - pacing_before)
         # 只有视频包实际写入成功才证明输出；合并到至多每五秒一次。
         if published and (last_output_report is None or time.monotonic() - last_output_report >= 5):
             emit({"output": True, "output_monotonic": time.monotonic(), "ready": True})

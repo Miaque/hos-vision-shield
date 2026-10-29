@@ -295,7 +295,7 @@ class TaskStore:
         if profile_detection and kind != 'video':
             raise ValueError('Detection profiling requires a video task')
         if profile_detection not in (False, True, 'host', 'forward-primary-face', 'forward-primary-plate',
-                                     'forward-detail-face', 'forward-detail-plate'):
+                                     'forward-detail-face', 'forward-detail-plate', 'local-face'):
             raise ValueError('Unsupported detection profile')
         if (type(detection_interval) is not int or detection_interval not in (1, 3)
                 or detection_interval != 1 and kind not in ('video', 'stream')):

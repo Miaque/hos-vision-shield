@@ -13,6 +13,7 @@ x-app: &app
   stop_grace_period: 60s
   environment:
     DEBUG: "${DEBUG:-false}"
+    STREAM_OUTPUT_PACING: "${STREAM_OUTPUT_PACING:-true}"
     REDIS_URL: ${REDIS_URL:?请设置现有 Redis 的连接地址及凭据}
     MEDIA_ROOT: /data
     DETECTION_BACKEND: quality
