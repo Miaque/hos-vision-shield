@@ -28,6 +28,14 @@ def log_model_timing(event: dict, task_id: str, generation: int) -> None:
                                          event["model_load_seconds"])
 
 
+def progress_fields(event, debug):
+    keys = ('stats', 'timings', 'video_encoder', 'video_decoder', 'device_profile', 'detection_stats') if debug else ('stats',)
+    values = {key: event[key] for key in keys if key in event}
+    if not debug and 'stats' in values:
+        values['stats'] = {key: value for key, value in values['stats'].items() if key != 'stream'}
+    return values
+
+
 async def execute(task_id, broker, context):
     deployment_stop = getattr(broker.state, "stop_event", None)
     if deployment_stop is not None and deployment_stop.is_set():
@@ -70,7 +78,7 @@ async def execute(task_id, broker, context):
                         return
                 await asyncio.sleep(min(settings.heartbeat_seconds, 1))
         except Exception as error:
-            cancellation.update(failure_details(error, "worker_control"))
+            cancellation.update(failure_details(error, "worker_control", debug=settings.debug))
             cancel.set()
 
     controller = asyncio.create_task(control())
@@ -104,9 +112,9 @@ async def execute(task_id, broker, context):
                 log_model_timing(event, task_id, generation)
             if event.get("failure_type"):
                 logger.warning("task=%s media failure type=%s", task_id, event["failure_type"])
-            if "stats" in event or "device_profile" in event or "detection_stats" in event:
-                await store.update_owned(task_id, owner, generation,
-                                         **{key: event[key] for key in ("stats", "timings", "video_encoder", "video_decoder", "device_profile", "detection_stats") if key in event})
+            values = progress_fields(event, settings.debug)
+            if values:
+                await store.update_owned(task_id, owner, generation, **values)
 
         result = {}
         if not cancel.is_set():
@@ -153,13 +161,15 @@ async def execute(task_id, broker, context):
 async def run_stream(record, store, settings, cancel, owner, generation, *, cancellation=None, session=None):
     task_id, retry = record["id"], 0
     publisher = Publisher(store, settings)
-    history = list(record.get("stream_attempts", []))
+    history = list(record.get("stream_attempts", [])) if settings.debug else []
     discarded = record.get("stream_attempts_discarded", 0)
     for previous in history:
         if "ended_at_unix" not in previous:
             previous.update(reason="worker_lost", phase="worker_control", ended_at_unix=time.time())
 
     async def persist_ending():
+        if not settings.debug:
+            return
         attempt.update(ending, ended_at_unix=time.time())
         await store.update_owned(task_id, owner, generation, stream_attempts=history,
                                  stream_attempts_discarded=discarded)
@@ -181,13 +191,15 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
 
     try:
         while not cancel.is_set():
-            attempt = dict(run_id=uuid4().hex, generation=generation, started_at_unix=time.time(),
-                           started_monotonic=time.monotonic())
-            history.append(attempt)
-            discarded += max(0, len(history) - 32)
-            history = history[-32:]
-            await store.update_owned(task_id, owner, generation, stream_attempts=history,
-                                     stream_attempts_discarded=discarded)
+            attempt = {}
+            if settings.debug:
+                attempt.update(run_id=uuid4().hex, generation=generation, started_at_unix=time.time(),
+                               started_monotonic=time.monotonic())
+                history.append(attempt)
+                discarded += max(0, len(history) - 32)
+                history = history[-32:]
+                await store.update_owned(task_id, owner, generation, stream_attempts=history,
+                                         stream_attempts_discarded=discarded)
             ending, phase, finish_error = {}, "source_validate", None
             first_output = None
             try:
@@ -201,15 +213,17 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                     if settings.debug:
                         log_model_timing(event, task_id, generation)
                     if event.get("failure_type"):
-                        logging.getLogger(__name__).warning("task=%s media failure type=%s at=%s", task_id, event["failure_type"], event.get("failure_at"))
+                        logging.getLogger(__name__).warning("task=%s media failure type=%s", task_id, event["failure_type"])
+                        if settings.debug:
+                            logging.getLogger(__name__).info("task=%s media failure at=%s", task_id, event.get("failure_at"))
                     values = {}
                     if event.get("stream_end"):
                         ending.update(event["stream_end"])
                     stream = event.get("stats", {}).get("stream")
-                    if stream and "attempt_id" not in attempt:
+                    if settings.debug and stream and "attempt_id" not in attempt:
                         attempt["attempt_id"] = stream["attempt_id"]
                         values["stream_attempts"] = history
-                    if event.get("failure_type"):
+                    if settings.debug and event.get("failure_type"):
                         values["media_failure"] = dict(type=event["failure_type"], at=event.get("failure_at", []),
                                                        generation=generation, observed_at_unix=time.time())
                     if event.get("output"):
@@ -224,8 +238,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                         elif event["output_monotonic"] - first_output >= settings.heartbeat_seconds:
                             retry = 0
                         values.update(state="running", ready=True, error=None)
-                    values.update({key: event[key] for key in ("stats", "timings", "video_encoder", "video_decoder", "detection_stats")
-                                   if key in event})
+                    values.update(progress_fields(event, settings.debug))
                     if values:
                         await store.update_owned(task_id, owner, generation, **values)
 
@@ -233,7 +246,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                                publish_url=publish_url, config={**settings.model_dump(mode="json"), "redaction_mode": record.get("redaction_mode", "solid"),
                                                                "publish_url": record.get("publish_url"),
                                                                "source_url": record["source_ref"],
-                                                               "stream_started_monotonic": attempt['started_monotonic']},
+                                                               "stream_started_monotonic": attempt.get('started_monotonic')},
                                directory=str(settings.media_root.resolve() / task_id / f"attempt-{generation}"))
                 for key in ('detection_interval', 'tracking', 'max_bitrate', 'audio_enabled'):
                     if key in record:
@@ -259,22 +272,23 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                 if result.get("error") and not result.get("retryable"):
                     finish_error = result["error"]
             except SourceError as error:
-                ending.update(failure_details(error, phase))
+                ending.update(failure_details(error, phase, debug=settings.debug))
                 if error.code != "source_unreachable":
                     raise
             except (httpx.HTTPError, TimeoutError) as error:
-                ending.update(failure_details(error, phase))
+                ending.update(failure_details(error, phase, debug=settings.debug))
             except Exception as error:
-                ending.update(failure_details(error, phase))
+                ending.update(failure_details(error, phase, debug=settings.debug))
                 raise
             finally:
                 if not ending:
                     ending.update(cancellation or dict(reason="worker_interrupted", phase=phase))
                 await persist_ending()
                 # 与 Platform 的 shield_task_id 关联；原因已在媒体边界过滤，不记录来源地址。
-                summary = {"event": "vision_shield_stream_end", "entry_point": "stream_worker", "task_id": task_id,
-                           **attempt, "duration_seconds": round(time.monotonic() - attempt["started_monotonic"], 3)}
-                logging.getLogger(__name__).info("流脱敏连接结束 %s", json.dumps(summary, ensure_ascii=False), extra=summary)
+                if settings.debug:
+                    summary = {"event": "vision_shield_stream_end", "entry_point": "stream_worker", "task_id": task_id,
+                               **attempt, "duration_seconds": round(time.monotonic() - attempt["started_monotonic"], 3)}
+                    logging.getLogger(__name__).info("流脱敏连接结束 %s", json.dumps(summary, ensure_ascii=False), extra=summary)
             if finish_error:
                 await store.finish(task_id, owner, generation, "failed", error=finish_error)
                 return

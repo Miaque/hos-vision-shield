@@ -119,7 +119,11 @@ def test_encoder_backlog_cannot_grow_without_bound(debug):
     assert metrics.snapshot()['encoded_frames'] == 0
 
 
-def test_production_keeps_encoder_guards_without_recording_samples():
+def test_production_keeps_encoder_guards_without_recording_samples(monkeypatch):
+    from vision_shield.media import stream_metrics
+
+    monkeypatch.setattr(stream_metrics.time, 'monotonic', lambda: pytest.fail('No sample clock'))
+    monkeypatch.setattr(stream_metrics, 'uuid4', lambda: pytest.fail('No diagnostic attempt ID'))
     metrics = StreamMetrics(debug=False)
     metrics.submit(frame(40), None, object())
     with pytest.raises(BufferError, match='Duplicate encoder input clock'):
@@ -127,3 +131,4 @@ def test_production_keeps_encoder_guards_without_recording_samples():
     metrics.written(Fraction(40, 1000), 10.25)
     assert not metrics.outputs and not metrics.pending
     assert metrics.frames == 1
+    assert metrics.snapshot()['sampled_monotonic'] is None

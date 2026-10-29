@@ -14,6 +14,8 @@
 CLI 不连接 Redis/API，不创建业务任务：
 
 ```powershell
+# PowerShell：诊断脚本要求进程环境显式启用 DEBUG，脚本不再覆盖此开关。
+$env:DEBUG='true'
 python scripts/profile-local-clip.py <固定原始MP4> <新证据目录> --models <已有模型目录> --mode host
 python scripts/profile-local-clip.py <同一MP4> <另一个新证据目录> --models <同一模型目录> --mode local-face
 ```

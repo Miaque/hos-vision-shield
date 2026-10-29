@@ -205,14 +205,18 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                            query=None, username="", password="")),
                            "rw_timeout": str(round(config["rtsp_read_timeout"] * 1_000_000))}
             # PyAV 默认关闭回调会丢失协议错误；仅打开来源时保留 ERROR 证据，不启用逐帧日志。
-            log_level = av.logging.get_level()
-            try:
-                av.logging.set_level(av.logging.PANIC)
-                with av.logging.Capture():
-                    source_reader = av.open(source, options=options,
-                                            timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
-            finally:
-                av.logging.set_level(log_level)
+            if debug:
+                log_level = av.logging.get_level()
+                try:
+                    av.logging.set_level(av.logging.PANIC)
+                    with av.logging.Capture():
+                        source_reader = av.open(source, options=options,
+                                                timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
+                finally:
+                    av.logging.set_level(log_level)
+            else:
+                source_reader = av.open(source, options=options,
+                                        timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"]), **hardware)
             phase = "source_validate"
             video = check_streams(source_reader, config, audio_codecs=("aac", "pcm_alaw", "pcm_mulaw"),
                                   audio_enabled=audio_enabled)
@@ -259,7 +263,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         except Exception as error:
             with buffer.condition:
                 buffer.error = error
-                buffer.failure = failure_details(error, phase)
+                buffer.failure = failure_details(error, phase, debug=debug)
         finally:
             with buffer.condition:
                 buffer.eof = True
@@ -324,9 +328,9 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         except Exception as error:
             failed_frames += 1
             processing = False
-            ending = failure_details(error, "publish_write")
+            ending = failure_details(error, "publish_write", debug=debug)
             raise
-        metrics.written(moment, time.monotonic(), encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256)
+        metrics.written(moment, time.monotonic() if debug else None, encoded_bytes=encoded_bytes, encoded_vcl_sha256=encoded_vcl_sha256)
         return True
 
     def write_output(sample):
@@ -484,12 +488,13 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     except Exception as error:
         failed_frames += int(processing)
         if ending is None:
-            ending = buffer.failure if error is buffer.error else failure_details(error, phase)
+            ending = buffer.failure if error is buffer.error else failure_details(error, phase, debug=debug)
         raise
     finally:
         if ending is None:
             ending = dict(reason="stop_requested" if stop.is_set() else "source_eof", phase="source_read")
-        ending.update(attempt_id=metrics.attempt_id, ended_monotonic=time.monotonic())
+        if debug:
+            ending.update(attempt_id=metrics.attempt_id, ended_monotonic=time.monotonic())
         stop.set()
         writer_done.set()
         reader.join(timeout=config["rtsp_read_timeout"] + 1)

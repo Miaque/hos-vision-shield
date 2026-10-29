@@ -20,12 +20,15 @@ def main():
     parser.add_argument('--models', type=Path, required=True)
     parser.add_argument('--mode', choices=('host', 'local-face'), required=True)
     args = parser.parse_args()
+    settings = Settings(_env_file=None, detection_backend='quality_yolo', inference_device='cuda',
+        face_model_path=args.models / 'yunet_face.onnx', plate_model_path=args.models / 'hyperlpr_plate.onnx',
+        egoblur_face_model_path=args.models / 'face.jit', egoblur_plate_model_path=args.models / 'license_plate.jit')
+    if not settings.debug:
+        parser.error('Local profiling requires DEBUG=true')
     with args.video.open('rb') as source:
         digest = hashlib.file_digest(source, 'sha256').hexdigest()
     args.output.mkdir(parents=True, exist_ok=False)
-    config = Settings(_env_file=None, debug=True, detection_backend='quality_yolo', inference_device='cuda',
-        face_model_path=args.models / 'yunet_face.onnx', plate_model_path=args.models / 'hyperlpr_plate.onnx',
-        egoblur_face_model_path=args.models / 'face.jit', egoblur_plate_model_path=args.models / 'license_plate.jit').model_dump(mode='json')
+    config = settings.model_dump(mode='json')
     config.update(detection_interval=3, tracking='flow', redaction_mode='solid')
     events, last = [], -100
 

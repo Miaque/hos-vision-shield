@@ -34,6 +34,7 @@ def test_child_model_timing_and_failure_have_no_success(tmp_path, monkeypatch, c
     if timings:
         assert timings[0]["model_load_seconds"] >= 0
     assert not any("result_ref" in event for event in events)
+    assert ('failure_at' in events[-1]) is debug
     assert "secret" not in output
 
 
@@ -186,7 +187,8 @@ def test_child_host_profile_is_opt_in_and_failure_does_not_publish_output(tmp_pa
     assert video.av.open is original
 
 
-@pytest.mark.parametrize('profile', [True, 'host', 'forward-detail-face'])
+@pytest.mark.parametrize('profile', [True, 'host', 'local-face', 'forward-primary-face',
+                                    'forward-primary-plate', 'forward-detail-face', 'forward-detail-plate'])
 def test_production_child_ignores_preexisting_profile_requests(tmp_path, monkeypatch, capsys, profile):
     from pathlib import Path
     from threading import Event

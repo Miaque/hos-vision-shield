@@ -125,7 +125,8 @@ async def test_named_model_trace_uses_validated_task_relative_path(tmp_path, mod
         assert (await client.get(url)).status_code == 409
 
 
-@pytest.mark.parametrize('mode', ['host', 'local-face'])
+@pytest.mark.parametrize('mode', ['1', 'host', 'local-face', 'forward-primary-face',
+                                 'forward-primary-plate', 'forward-detail-face', 'forward-detail-plate'])
 async def test_production_disables_diagnostics_and_profile_requests_before_io(tmp_path, mode):
     app = create_app(Settings(_env_file=None, media_root=tmp_path))
     async with app.router.lifespan_context(app), httpx.AsyncClient(

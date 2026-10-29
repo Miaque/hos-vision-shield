@@ -23,8 +23,8 @@ def vcl_digest(payload):
 class StreamMetrics:
     def __init__(self, *, started=None, debug=False):
         self.debug = debug
-        self.attempt_id = uuid4().hex
-        self.started = time.monotonic() if started is None else started
+        self.attempt_id = uuid4().hex if debug else None
+        self.started = (time.monotonic() if started is None else started) if debug else None
         self.pending, self.outputs = {}, deque(maxlen=512)
         self.frames = self.packets = self.unmatched = self.missing_receive = 0
         self.repairs = 0
@@ -62,7 +62,7 @@ class StreamMetrics:
             latency_seconds=None if received_at is None else now - received_at))
 
     def snapshot(self):
-        return dict(attempt_id=self.attempt_id, started_monotonic=self.started, sampled_monotonic=time.monotonic(),
+        return dict(attempt_id=self.attempt_id, started_monotonic=self.started, sampled_monotonic=time.monotonic() if self.debug else None,
             encoded_frames=self.frames, encoded_packets=self.packets, unmatched_packets=self.unmatched,
             missing_receive_frames=self.missing_receive, pending_encoder_frames=len(self.pending),
             timestamp_repairs=self.repairs,
