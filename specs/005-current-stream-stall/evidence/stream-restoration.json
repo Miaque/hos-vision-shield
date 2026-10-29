@@ -1,0 +1,88 @@
+{
+  "task": {
+    "sequence": 3,
+    "health": {
+      "observed_at": "2026-10-29 16:52:50",
+      "last_output_at": "2026-10-29 16:52:50",
+      "valid_until": "2026-10-29 16:53:10",
+      "lease_valid": true,
+      "generation": 1
+    },
+    "redaction_mode": "solid",
+    "id": "27c39007-0aee-4185-b8fa-9d1ece4de058",
+    "kind": "stream",
+    "state": "running",
+    "desired_state": "run",
+    "ready": true,
+    "created_at": "2026-10-29 16:52:42",
+    "updated_at": "2026-10-29 16:52:50",
+    "result_url": null,
+    "playback_url": "rtsp://192.168.1.104:8554/redacted/27c39007-0aee-4185-b8fa-9d1ece4de058",
+    "error": null
+  },
+  "decoded_frames": 20,
+  "decoder_probe_seconds": 3.1043368999999075,
+  "old_id_cannot_resume_via_api": true,
+  "failed_reuse_attempt": "050ea411-2248-494b-a1b8-0a4d65cc1350",
+  "failed_reuse_reason": "RTSP publisher HTTPUnauthorizedError 401",
+  "failed_reuse_attempt_stopped": true,
+  "latest_task": {
+    "sequence": 7,
+    "health": {
+      "observed_at": "2026-10-29 16:58:48",
+      "last_output_at": "2026-10-29 16:58:46",
+      "valid_until": "2026-10-29 16:59:08",
+      "lease_valid": true,
+      "generation": 1
+    },
+    "redaction_mode": "solid",
+    "id": "27c39007-0aee-4185-b8fa-9d1ece4de058",
+    "kind": "stream",
+    "state": "running",
+    "desired_state": "run",
+    "ready": true,
+    "created_at": "2026-10-29 16:52:42",
+    "updated_at": "2026-10-29 16:58:48",
+    "result_url": null,
+    "playback_url": "rtsp://192.168.1.104:8554/redacted/27c39007-0aee-4185-b8fa-9d1ece4de058",
+    "error": null
+  },
+  "latest_processed_frames": 11,
+  "latest_mux_options": {
+    "rtsp_transport": "tcp"
+  },
+  "latest_source_checks": {
+    "detection.egoblur": true,
+    "media.rtsp_observer": true,
+    "detection.timing": true,
+    "media.plate_lookahead": true,
+    "detection.cuda_detail": true,
+    "detection.quality": true,
+    "detection.yolo": true,
+    "redaction": true,
+    "detection.cpu": true,
+    "media.streams": true,
+    "media.live_diagnostics": true,
+    "media.cuda_frames": true,
+    "media.stream_pacing": true,
+    "media.video": true,
+    "detection.cuda_pixels": true,
+    "detection.host_profile": true,
+    "detection.plate_readability": true
+  },
+  "effective_config": {
+    "max_bitrate": null,
+    "audio_buffer_bytes": 4194304,
+    "rtsp_read_timeout": 10,
+    "redaction_mode": "solid",
+    "audio_buffer_seconds": 16,
+    "stream_output_pacing": true,
+    "audio_enabled": true,
+    "stream_diagnostics": true,
+    "frame_buffer_size": 2,
+    "rtsp_connect_timeout": 10,
+    "detection_interval": 3,
+    "tracking": "flow",
+    "debug": true
+  }
+}

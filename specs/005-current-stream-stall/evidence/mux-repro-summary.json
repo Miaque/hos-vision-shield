@@ -1,0 +1,31 @@
+[
+  {
+    "options": {
+      "rtsp_transport": "tcp"
+    },
+    "frames": 100,
+    "max_receive_gap_seconds": 1.0798372000008385,
+    "gaps_over_500ms": 1,
+    "errors": []
+  },
+  {
+    "options": {
+      "rtsp_transport": "tcp",
+      "flush_packets": "1"
+    },
+    "frames": 100,
+    "max_receive_gap_seconds": 1.0800261000003957,
+    "gaps_over_500ms": 1,
+    "errors": []
+  },
+  {
+    "options": {
+      "rtsp_transport": "tcp",
+      "max_interleave_delta": "100000"
+    },
+    "frames": 100,
+    "max_receive_gap_seconds": 0.1601408000005904,
+    "gaps_over_500ms": 0,
+    "errors": []
+  }
+]

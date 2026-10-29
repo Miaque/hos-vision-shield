@@ -1,0 +1,3472 @@
+{
+  "internal": {
+    "revision": "266f14d",
+    "source_fingerprints": {
+      "a05955949e28442dba7683b38e0a5663": {
+        "detection.egoblur": true,
+        "media.rtsp_observer": true,
+        "detection.timing": true,
+        "media.plate_lookahead": true,
+        "detection.cuda_detail": true,
+        "detection.quality": true,
+        "detection.yolo": true,
+        "redaction": true,
+        "detection.cpu": true,
+        "media.streams": true,
+        "media.live_diagnostics": true,
+        "media.cuda_frames": true,
+        "media.stream_pacing": true,
+        "media.video": true,
+        "detection.plate_readability": true,
+        "detection.host_profile": true,
+        "detection.cuda_pixels": true
+      },
+      "412d0da07dff421d8f9545366d5105d6": {
+        "detection.egoblur": true,
+        "media.rtsp_observer": true,
+        "detection.timing": true,
+        "media.plate_lookahead": true,
+        "detection.cuda_detail": true,
+        "detection.quality": true,
+        "detection.yolo": true,
+        "redaction": true,
+        "detection.cpu": true,
+        "media.streams": true,
+        "media.live_diagnostics": true,
+        "media.cuda_frames": true,
+        "media.stream_pacing": true,
+        "media.video": true,
+        "detection.plate_readability": true,
+        "detection.host_profile": true,
+        "detection.cuda_pixels": true
+      }
+    },
+    "status": "sampled",
+    "clock_verified": {
+      "boot_id": "35fb6945-03f7-48fa-b594-336ead489e3b",
+      "namespace_offsets": "monotonic           0         0\nboottime            0         0"
+    },
+    "server": {
+      "attempts": {
+        "a05955949e28442dba7683b38e0a5663": {
+          "frames": 3542,
+          "first_sequence": 1,
+          "last_sequence": 3542,
+          "capture_sequence_gaps": 0,
+          "wall_progress_seconds": 240.17793510016054,
+          "media_progress_seconds": 162.6036,
+          "accumulated_lateness_increase_seconds": 77.57433510016054
+        },
+        "412d0da07dff421d8f9545366d5105d6": {
+          "frames": 2179,
+          "first_sequence": 1,
+          "last_sequence": 2179,
+          "capture_sequence_gaps": 0,
+          "wall_progress_seconds": 146.57275979965925,
+          "media_progress_seconds": 90.73564444444445,
+          "accumulated_lateness_increase_seconds": 55.837115355214806
+        }
+      },
+      "mux_completion_intervals": {
+        "n": 5719,
+        "p50_ms": 40.29789939522743,
+        "p95_ms": 185.716520436108,
+        "p99_ms": 372.0355921424919,
+        "max_ms": 1010.8390999957919,
+        "over_ms": {
+          "100": 829,
+          "200": 245,
+          "500": 28,
+          "1000": 1
+        }
+      },
+      "app_read_intervals": {
+        "n": 5719,
+        "p50_ms": 43.788299895823,
+        "p95_ms": 175.1493204385041,
+        "p99_ms": 388.1130441837003,
+        "max_ms": 1794.9779005721211,
+        "over_ms": {
+          "100": 742,
+          "200": 228,
+          "500": 33,
+          "1000": 5
+        }
+      },
+      "decoded_to_process": {
+        "n": 5721,
+        "p50_ms": 141.46600011736155,
+        "p95_ms": 519.7903998196125,
+        "p99_ms": 860.3298202157034,
+        "max_ms": 1415.0856994092464,
+        "over_ms": {
+          "100": 5066,
+          "200": 1781,
+          "500": 315,
+          "1000": 26
+        }
+      },
+      "process_start_to_mux_completion": {
+        "n": 5721,
+        "p50_ms": 727.5128001347184,
+        "p95_ms": 987.5781005248427,
+        "p99_ms": 1146.3468398898847,
+        "max_ms": 1345.2980006113648,
+        "over_ms": {
+          "100": 5675,
+          "200": 5650,
+          "500": 5326,
+          "1000": 243
+        }
+      },
+      "media_intervals": {
+        "n": 5719,
+        "p50_ms": 40.0,
+        "p95_ms": 41.0,
+        "p99_ms": 42.0,
+        "max_ms": 5114.122222222222,
+        "over_ms": {
+          "100": 21,
+          "200": 21,
+          "500": 14,
+          "1000": 8
+        }
+      },
+      "timestamp_repaired_samples": 15,
+      "repeated_vcl_hashes": 509
+    },
+    "operations": {
+      "audio-mux": {
+        "n": 2,
+        "p50_ms": 134.23539465292998,
+        "p95_ms": 135.32150699756602,
+        "p99_ms": 135.4180503170892,
+        "max_ms": 135.44218614697002,
+        "over_ms": {
+          "100": 2,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "lookahead-expire": {
+        "n": 26,
+        "p50_ms": 139.29807720706,
+        "p95_ms": 222.15715469792502,
+        "p99_ms": 229.52423780225502,
+        "max_ms": 230.73150776327,
+        "over_ms": {
+          "100": 26,
+          "200": 3,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "lookahead-push": {
+        "n": 55,
+        "p50_ms": 138.33253271878,
+        "p95_ms": 231.16728775203188,
+        "p99_ms": 456.57990083098673,
+        "max_ms": 508.53554438799995,
+        "over_ms": {
+          "100": 55,
+          "200": 5,
+          "500": 1,
+          "1000": 0
+        }
+      },
+      "output-pacing": {
+        "n": 10,
+        "p50_ms": 279.651200398805,
+        "p95_ms": 445.6350038759389,
+        "p99_ms": 468.6767745576758,
+        "max_ms": 474.43721722811,
+        "over_ms": {
+          "100": 10,
+          "200": 6,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "process": {
+        "n": 5734,
+        "p50_ms": 39.339474402368,
+        "p95_ms": 98.83042005822038,
+        "p99_ms": 119.9312095437228,
+        "max_ms": 192.46134348214,
+        "over_ms": {
+          "100": 257,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "render": {
+        "n": 5721,
+        "p50_ms": 0.41792821139097003,
+        "p95_ms": 0.7799938321113601,
+        "p99_ms": 0.9803362190723399,
+        "max_ms": 1.3921465724707,
+        "over_ms": {
+          "100": 0,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "video-encode": {
+        "n": 2,
+        "p50_ms": 124.59618598223,
+        "p95_ms": 131.838134396825,
+        "p99_ms": 132.481863144789,
+        "max_ms": 132.64279533178,
+        "over_ms": {
+          "100": 2,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      }
+    },
+    "paired_frame_compute": {
+      "n": 5721,
+      "p50_ms": 39.74216338247052,
+      "p95_ms": 99.23339635133767,
+      "p99_ms": 120.34046556800351,
+      "max_ms": 192.87918135524123,
+      "over_ms": {
+        "100": 267,
+        "200": 0,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "internal_rtp_intervals": {
+      "n": 5712,
+      "p50_ms": 0.24632690474390984,
+      "p95_ms": 430.9188447427004,
+      "p99_ms": 859.930962929504,
+      "max_ms": 3030.627775937319,
+      "over_ms": {
+        "100": 1118,
+        "200": 690,
+        "500": 207,
+        "1000": 34
+      }
+    },
+    "mux_return_to_internal_receipt": {
+      "n": 5714,
+      "p50_ms": 163.4150594472885,
+      "p95_ms": 798.419963195919,
+      "p99_ms": 1374.9296036642045,
+      "max_ms": 3019.6047918871045,
+      "over_ms": {
+        "100": 3815,
+        "200": 2459,
+        "500": 693,
+        "1000": 152
+      }
+    },
+    "matched_internal_frames": 5714,
+    "raw_rtp": {
+      "frames": 10026,
+      "connections": 1,
+      "intervals": {
+        "n": 10025,
+        "p50_ms": 1.0440999994898448,
+        "p95_ms": 160.44788000108383,
+        "p99_ms": 200.78987999979293,
+        "max_ms": 3020.7728000004863,
+        "over_ms": {
+          "100": 2510,
+          "200": 105,
+          "500": 28,
+          "1000": 13
+        }
+      },
+      "errors": [],
+      "timestamp_discontinuities": [
+        {
+          "local_unix": 1793260964.892092,
+          "media_gap": 0.572,
+          "receipt_gap": 0.0001436000002286164
+        },
+        {
+          "local_unix": 1793260977.9684098,
+          "media_gap": 2.975,
+          "receipt_gap": 3.011341400000674
+        },
+        {
+          "local_unix": 1793260997.4107795,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5399161999994249
+        },
+        {
+          "local_unix": 1793261008.7111435,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8406174000010651
+        },
+        {
+          "local_unix": 1793261018.1586053,
+          "media_gap": 0.224,
+          "receipt_gap": 0.0005983999999443768
+        },
+        {
+          "local_unix": 1793261031.335817,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4265073999995366
+        },
+        {
+          "local_unix": 1793261056.824489,
+          "media_gap": 0.572,
+          "receipt_gap": 0.0001967999996850267
+        },
+        {
+          "local_unix": 1793261069.9125452,
+          "media_gap": 2.975,
+          "receipt_gap": 2.980768100000205
+        },
+        {
+          "local_unix": 1793261089.439175,
+          "media_gap": 0.334,
+          "receipt_gap": 0.3088469999984227
+        },
+        {
+          "local_unix": 1793261100.6700459,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8323137999996106
+        },
+        {
+          "local_unix": 1793261110.0435655,
+          "media_gap": 0.224,
+          "receipt_gap": 0.0001950999994733138
+        },
+        {
+          "local_unix": 1793261123.276396,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4314380999985588
+        },
+        {
+          "local_unix": 1793261148.7610054,
+          "media_gap": 0.572,
+          "receipt_gap": 0.0001754000004439149
+        },
+        {
+          "local_unix": 1793261161.8438358,
+          "media_gap": 2.975,
+          "receipt_gap": 2.9889948000000004
+        },
+        {
+          "local_unix": 1793261181.2863266,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5424355000013747
+        },
+        {
+          "local_unix": 1793261192.598921,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8456635999991704
+        },
+        {
+          "local_unix": 1793261202.0259461,
+          "media_gap": 0.224,
+          "receipt_gap": 0.040684900000997004
+        },
+        {
+          "local_unix": 1793261215.2133508,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4335492999998678
+        },
+        {
+          "local_unix": 1793261240.7090158,
+          "media_gap": 0.572,
+          "receipt_gap": 0.00013949999993201345
+        },
+        {
+          "local_unix": 1793261253.7836242,
+          "media_gap": 2.975,
+          "receipt_gap": 3.010413800000606
+        },
+        {
+          "local_unix": 1793261273.2237344,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5347366999994847
+        },
+        {
+          "local_unix": 1793261284.5186422,
+          "media_gap": 0.784,
+          "receipt_gap": 0.827915199999552
+        },
+        {
+          "local_unix": 1793261293.9256687,
+          "media_gap": 0.224,
+          "receipt_gap": 8.489999891025946e-05
+        },
+        {
+          "local_unix": 1793261307.1406953,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4342445000002044
+        },
+        {
+          "local_unix": 1793261332.6431715,
+          "media_gap": 0.572,
+          "receipt_gap": 0.00016250000044237822
+        },
+        {
+          "local_unix": 1793261345.7294457,
+          "media_gap": 2.975,
+          "receipt_gap": 3.0207728000004863
+        },
+        {
+          "local_unix": 1793261365.16092,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5330798000013601
+        },
+        {
+          "local_unix": 1793261376.4900343,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8634476000006543
+        }
+      ],
+      "max_rtp_sequence_gaps": 0
+    },
+    "remote_rtp": {
+      "frames": 5729,
+      "connections": 2,
+      "intervals": {
+        "n": 5727,
+        "p50_ms": 7.655000001250301,
+        "p95_ms": 410.01239999950474,
+        "p99_ms": 830.1391179996771,
+        "max_ms": 3007.2807999986253,
+        "over_ms": {
+          "100": 983,
+          "200": 633,
+          "500": 186,
+          "1000": 32
+        }
+      },
+      "errors": [
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 1,
+          "local_perf": 8285.1944557,
+          "local_unix": 1793260963.183773,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 2,
+          "local_perf": 8286.2224548,
+          "local_unix": 1793260964.21187,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 3,
+          "local_perf": 8287.2629858,
+          "local_unix": 1793260965.2518003,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 4,
+          "local_perf": 8288.2924509,
+          "local_unix": 1793260966.2822282,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 5,
+          "local_perf": 8289.3253883,
+          "local_unix": 1793260967.3151457,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 6,
+          "local_perf": 8290.3540712,
+          "local_unix": 1793260968.342825,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 7,
+          "local_perf": 8291.3828921,
+          "local_unix": 1793260969.3722334,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 8,
+          "local_perf": 8292.4118604,
+          "local_unix": 1793260970.4010468,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 9,
+          "local_perf": 8293.5004861,
+          "local_unix": 1793260971.489341,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 10,
+          "local_perf": 8294.591381,
+          "local_unix": 1793260972.5807397,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 11,
+          "local_perf": 8295.6201861,
+          "local_unix": 1793260973.601471,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 12,
+          "local_perf": 8296.6495463,
+          "local_unix": 1793260974.638815,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 13,
+          "local_perf": 8297.6773575,
+          "local_unix": 1793260975.666411,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 14,
+          "local_perf": 8298.708418,
+          "local_unix": 1793260976.6842303,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 15,
+          "local_perf": 8299.737746,
+          "local_unix": 1793260977.7267935,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 16,
+          "local_perf": 8300.7644983,
+          "local_unix": 1793260978.7536895,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 17,
+          "local_perf": 8301.7957431,
+          "local_unix": 1793260979.785407,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 18,
+          "local_perf": 8302.8205749,
+          "local_unix": 1793260980.8094983,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 19,
+          "local_perf": 8303.8478903,
+          "local_unix": 1793260981.8371508,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 20,
+          "local_perf": 8304.8768391,
+          "local_unix": 1793260982.8624623,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 21,
+          "local_perf": 8305.9030042,
+          "local_unix": 1793260983.8923142,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 22,
+          "local_perf": 8306.9327671,
+          "local_unix": 1793260984.9132574,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 23,
+          "local_perf": 8307.9594226,
+          "local_unix": 1793260985.9490523,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 24,
+          "local_perf": 8308.987862,
+          "local_unix": 1793260986.9772527,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 25,
+          "local_perf": 8310.0187905,
+          "local_unix": 1793260988.0076675,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 26,
+          "local_perf": 8311.0582265,
+          "local_unix": 1793260989.0470145,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 27,
+          "local_perf": 8312.0957068,
+          "local_unix": 1793260990.0820749,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 28,
+          "local_perf": 8313.124172,
+          "local_unix": 1793260991.1136463,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 29,
+          "local_perf": 8553.6721462,
+          "local_unix": 1793261231.661222,
+          "error_type": "EOFError",
+          "detail": "RTSP EOF"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 30,
+          "local_perf": 8554.7001068,
+          "local_unix": 1793261232.6898844,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 31,
+          "local_perf": 8555.7304504,
+          "local_unix": 1793261233.7199974,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 32,
+          "local_perf": 8556.762095,
+          "local_unix": 1793261234.7515235,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        }
+      ],
+      "timestamp_discontinuities": [
+        {
+          "local_unix": 1793261004.615006,
+          "media_gap": 0.334,
+          "receipt_gap": 0.4920332000001508
+        },
+        {
+          "local_unix": 1793261025.5962029,
+          "media_gap": 0.784,
+          "receipt_gap": 0.2852015999997093
+        },
+        {
+          "local_unix": 1793261045.3294308,
+          "media_gap": 0.224,
+          "receipt_gap": 0.005609899999399204
+        },
+        {
+          "local_unix": 1793261072.347346,
+          "media_gap": 1.199,
+          "receipt_gap": 0.3213488999990659
+        },
+        {
+          "local_unix": 1793261103.7238488,
+          "media_gap": 0.572,
+          "receipt_gap": 0.7193895000000339
+        },
+        {
+          "local_unix": 1793261116.11734,
+          "media_gap": 2.975,
+          "receipt_gap": 0.6029918000003818
+        },
+        {
+          "local_unix": 1793261128.7444847,
+          "media_gap": 0.481,
+          "receipt_gap": 1.0372382000005018
+        },
+        {
+          "local_unix": 1793261142.2224216,
+          "media_gap": 0.963,
+          "receipt_gap": 0.9671104000008199
+        },
+        {
+          "local_unix": 1793261147.3811269,
+          "media_gap": 0.334,
+          "receipt_gap": 0.3158002000000124
+        },
+        {
+          "local_unix": 1793261149.6520033,
+          "media_gap": 4.572,
+          "receipt_gap": 0.09661570000025677
+        },
+        {
+          "local_unix": 1793261158.070998,
+          "media_gap": 0.784,
+          "receipt_gap": 0.446546600000147
+        },
+        {
+          "local_unix": 1793261177.1191032,
+          "media_gap": 0.224,
+          "receipt_gap": 0.006051400001524598
+        },
+        {
+          "local_unix": 1793261204.6415021,
+          "media_gap": 1.199,
+          "receipt_gap": 0.28112119999968854
+        },
+        {
+          "local_unix": 1793261219.7066746,
+          "media_gap": 5.114122222222222,
+          "receipt_gap": 0.11209090000011201
+        },
+        {
+          "local_unix": 1793261228.2552822,
+          "media_gap": 4.543,
+          "receipt_gap": 0.014580400000340887
+        },
+        {
+          "local_unix": 1793261242.9084241,
+          "media_gap": 0.572,
+          "receipt_gap": 0.00045850000060454477
+        },
+        {
+          "local_unix": 1793261254.583709,
+          "media_gap": 2.975,
+          "receipt_gap": 0.10329699999965669
+        },
+        {
+          "local_unix": 1793261289.503555,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5693819000007352
+        },
+        {
+          "local_unix": 1793261310.6387098,
+          "media_gap": 0.784,
+          "receipt_gap": 0.4105743000000075
+        },
+        {
+          "local_unix": 1793261330.1125093,
+          "media_gap": 0.224,
+          "receipt_gap": 0.005000299999665003
+        },
+        {
+          "local_unix": 1793261357.3567884,
+          "media_gap": 1.199,
+          "receipt_gap": 0.3717707000014343
+        }
+      ],
+      "max_rtp_sequence_gaps": 0
+    },
+    "post_mux_severe_count": 189,
+    "source_attempt_ends": [
+      {
+        "returncode": 0,
+        "phase": "source_read",
+        "started_at_unix": 1793260988.1192,
+        "reason": "source_eof",
+        "ended_at_unix": 1793261230.0254,
+        "generation": 7,
+        "run_id": "fd63a8c22f3a4c63becda47e6f740548",
+        "started_monotonic": 5069702.5081049,
+        "ended_monotonic": 5069944.1695096,
+        "attempt_id": "a05955949e28442dba7683b38e0a5663"
+      }
+    ],
+    "supplement": {
+      "queues": {
+        "queue_frames": {
+          "n": 392,
+          "min": 0,
+          "p50": 2.0,
+          "p95": 2.0,
+          "p99": 2.0,
+          "max": 2,
+          "mean": 1.9591836734693877
+        },
+        "lookahead_frames": {
+          "n": 392,
+          "min": 0,
+          "p50": 11.0,
+          "p95": 13.0,
+          "p99": 16.0,
+          "max": 16,
+          "mean": 9.35204081632653
+        },
+        "audio_queue_bytes": {
+          "n": 392,
+          "min": 0,
+          "p50": 0.0,
+          "p95": 12409.55,
+          "p99": 13090.239999999996,
+          "max": 13701,
+          "mean": 1168.9260204081634
+        },
+        "pending_encoder_frames": {
+          "n": 392,
+          "min": 0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0,
+          "mean": 0.0
+        }
+      },
+      "ages": {
+        "oldest_input_age_seconds": {
+          "n": 385,
+          "min": 0.03860342502594,
+          "p50": 0.22972008399665,
+          "p95": 0.8036343393847338,
+          "p99": 1.098443948253948,
+          "max": 1.340407140553,
+          "mean": 0.315493657814895
+        },
+        "oldest_lookahead_wait_seconds": {
+          "n": 389,
+          "min": 3.1820498406887e-05,
+          "p50": 0.64896982163191,
+          "p95": 0.8413019990548478,
+          "p99": 0.9320027125999313,
+          "max": 1.0195641079918,
+          "mean": 0.6254917668264867
+        }
+      },
+      "counters": {
+        "a05955949e28442dba7683b38e0a5663": {
+          "input_frames": {
+            "first": 2,
+            "last": 3542
+          },
+          "encoded_frames": {
+            "first": 0,
+            "last": 3542
+          },
+          "unmatched_packets": {
+            "first": 0,
+            "last": 0
+          },
+          "missing_receive_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "failed_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "timestamp_repairs": {
+            "first": 0,
+            "last": 15
+          },
+          "dropped_frames": {
+            "first": 0,
+            "last": 0
+          }
+        },
+        "412d0da07dff421d8f9545366d5105d6": {
+          "input_frames": {
+            "first": 2,
+            "last": 2195
+          },
+          "encoded_frames": {
+            "first": 0,
+            "last": 2179
+          },
+          "unmatched_packets": {
+            "first": 0,
+            "last": 0
+          },
+          "missing_receive_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "failed_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "timestamp_repairs": {
+            "first": 0,
+            "last": 0
+          },
+          "dropped_frames": {
+            "first": 0,
+            "last": 0
+          }
+        }
+      },
+      "timing": {
+        "a05955949e28442dba7683b38e0a5663": {
+          "window_seconds": 240.88865230046213,
+          "output_frames": 3542,
+          "delta_seconds": {
+            "frame": 177.375423,
+            "inference": 157.10434700000002,
+            "encode": 4.439355,
+            "output-pacing": 53.746627000000004,
+            "candidate-primary": 97.23034599999998,
+            "candidate-detail": 34.764956999999995,
+            "prepare-primary": 4.676252000000001,
+            "prepare-detail": 11.979503000000001,
+            "forward-primary-face": 17.756618,
+            "forward-primary-plate": 94.697018,
+            "forward-detail-face": 11.021294000000001,
+            "forward-detail-plate": 36.229216,
+            "post-primary": 5.827201,
+            "post-detail": 9.801001,
+            "local-confirm": 53.37582999999999,
+            "input-copy": 0.575936,
+            "output-copy": 3.0443179999999996,
+            "explicit-sync": 2.496001,
+            "track-confirm": 11.099324000000001,
+            "track-update": 6.181296000000001,
+            "track-flow": 1.609128,
+            "track-probe": 12.460455,
+            "track-recheck": 58.020866000000005,
+            "track-face-recheck": 0.368605,
+            "color-convert": 4.345804,
+            "gray-copy": 2.3146899999999997,
+            "mask-gpu": 0.959986,
+            "source-read": 2.04352,
+            "source-decode": 1.300749,
+            "source-backpressure": 236.06445300000001,
+            "session-primary-face": 0.177022,
+            "session-detail-face": 0.057723000000000003,
+            "plate-work-check": 1.6762819999999998
+          }
+        },
+        "412d0da07dff421d8f9545366d5105d6": {
+          "window_seconds": 147.25100110005587,
+          "output_frames": 2179,
+          "delta_seconds": {
+            "frame": 107.724435,
+            "inference": 94.74953099999999,
+            "encode": 3.0842460000000003,
+            "output-pacing": 30.349083999999998,
+            "candidate-primary": 59.864527,
+            "candidate-detail": 22.267280000000003,
+            "prepare-primary": 2.781899,
+            "prepare-detail": 7.44111,
+            "forward-primary-face": 10.777004000000002,
+            "forward-primary-plate": 57.124424,
+            "forward-detail-face": 6.95886,
+            "forward-detail-plate": 22.362824,
+            "post-primary": 3.569689,
+            "post-detail": 6.036582999999999,
+            "local-confirm": 30.516061,
+            "input-copy": 0.33121,
+            "output-copy": 1.867441,
+            "explicit-sync": 1.559388,
+            "track-confirm": 7.330496,
+            "track-update": 3.9693069999999997,
+            "track-flow": 1.0873009999999999,
+            "track-probe": 8.437234,
+            "track-recheck": 33.565523999999996,
+            "track-face-recheck": 0.050761,
+            "color-convert": 2.6908049999999997,
+            "gray-copy": 1.493084,
+            "mask-gpu": 0.6207039999999999,
+            "source-read": 9.272299000000002,
+            "source-decode": 0.9788250000000001,
+            "source-backpressure": 136.51583,
+            "session-primary-face": 0.026395999999999996,
+            "session-detail-face": 0.036562,
+            "plate-work-check": 0.95273
+          }
+        }
+      },
+      "resources": {
+        "stream_worker_cpu_percent": {
+          "n": 260,
+          "min": 18.386417124828906,
+          "p50": 144.47163338798617,
+          "p95": 248.09014924516305,
+          "p99": 259.9900520843374,
+          "max": 277.91183419487766,
+          "mean": 164.1269449452667
+        },
+        "stream_worker_memory_bytes": {
+          "n": 260,
+          "min": 1874423808,
+          "p50": 2070362112.0,
+          "p95": 2113699430.4,
+          "p99": 2114581258.24,
+          "max": 2115403776,
+          "mean": 2071791411.2
+        },
+        "gpu_utilization_percent": {
+          "n": 520,
+          "min": 3.0,
+          "p50": 46.5,
+          "p95": 74.0,
+          "p99": 80.0,
+          "max": 84.0,
+          "mean": 46.41346153846154
+        },
+        "gpu_memory_bytes": {
+          "n": 520,
+          "min": 6492782592,
+          "p50": 6918504448.0,
+          "p95": 7413432320.0,
+          "p99": 7413432320.0,
+          "max": 7413432320,
+          "mean": 7081033728.0
+        }
+      },
+      "sample_count": 392,
+      "queue_full_fraction": 0.9770408163265306,
+      "raw_source_pts_deltas": {
+        "n": 5719,
+        "min": -4.502,
+        "p50": 0.04,
+        "p95": 0.041,
+        "p99": 0.042,
+        "max": 5.114122222222222,
+        "mean": 0.044297822074566263
+      },
+      "source_pts_nonpositive": 1,
+      "timestamp_repaired_frames": [
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3470,
+          "source_pts": "14009099/90000",
+          "timeline_pts": "14417879/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3471,
+          "source_pts": "14417789/90000",
+          "timeline_pts": "14421479/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3472,
+          "source_pts": "14421389/90000",
+          "timeline_pts": "14425079/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3473,
+          "source_pts": "14424989/90000",
+          "timeline_pts": "14428679/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3474,
+          "source_pts": "14428589/90000",
+          "timeline_pts": "14432279/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3475,
+          "source_pts": "14432189/90000",
+          "timeline_pts": "14435879/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3476,
+          "source_pts": "14435879/90000",
+          "timeline_pts": "14439479/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3477,
+          "source_pts": "14439479/90000",
+          "timeline_pts": "14443079/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3478,
+          "source_pts": "14443079/90000",
+          "timeline_pts": "14446679/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3479,
+          "source_pts": "14446679/90000",
+          "timeline_pts": "14450279/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3480,
+          "source_pts": "14450279/90000",
+          "timeline_pts": "14453879/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3481,
+          "source_pts": "14453879/90000",
+          "timeline_pts": "14457479/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3482,
+          "source_pts": "14457479/90000",
+          "timeline_pts": "14461079/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3483,
+          "source_pts": "14461079/90000",
+          "timeline_pts": "14464679/90000"
+        },
+        {
+          "attempt_id": "a05955949e28442dba7683b38e0a5663",
+          "sequence": 3484,
+          "source_pts": "14464679/90000",
+          "timeline_pts": "14468279/90000"
+        }
+      ],
+      "stage_operation_totals": {
+        "audio-mux": 0.26847078930586,
+        "lookahead-expire": 3.77096693962813,
+        "lookahead-push": 8.52847156487412,
+        "output-pacing": 2.54762295726686,
+        "process": 251.8599685346708,
+        "render": 2.5289911516010766,
+        "video-encode": 0.24919237196445998
+      },
+      "note": "only process/render operations are exhaustive; other operation totals contain samples >=100ms only"
+    },
+    "severe_per_1000_intervals": 36.239495798319325,
+    "post_mux_severe_per_1000_intervals": 33.088235294117645
+  },
+  "interleave-b": {
+    "revision": "dd3474e",
+    "source_fingerprints": {
+      "f823a261d48f4158bd88b287da9f12db": {
+        "detection.egoblur": true,
+        "media.rtsp_observer": true,
+        "detection.timing": true,
+        "media.plate_lookahead": true,
+        "detection.cuda_detail": true,
+        "detection.quality": true,
+        "detection.yolo": true,
+        "redaction": true,
+        "detection.cpu": true,
+        "media.streams": true,
+        "media.live_diagnostics": true,
+        "media.cuda_frames": true,
+        "media.stream_pacing": true,
+        "media.video": true,
+        "detection.cuda_pixels": true,
+        "detection.host_profile": true,
+        "detection.plate_readability": true
+      }
+    },
+    "status": "sampled",
+    "clock_verified": {
+      "boot_id": "35fb6945-03f7-48fa-b594-336ead489e3b",
+      "namespace_offsets": "monotonic           0         0\nboottime            0         0"
+    },
+    "server": {
+      "attempts": {
+        "f823a261d48f4158bd88b287da9f12db": {
+          "frames": 3813,
+          "first_sequence": 1,
+          "last_sequence": 3813,
+          "capture_sequence_gaps": 0,
+          "wall_progress_seconds": 239.63808050006628,
+          "media_progress_seconds": 158.72626666666667,
+          "accumulated_lateness_increase_seconds": 80.9118138333996
+        }
+      },
+      "mux_completion_intervals": {
+        "n": 3812,
+        "p50_ms": 40.299850050359964,
+        "p95_ms": 172.61089007370174,
+        "p99_ms": 316.3044363632797,
+        "max_ms": 811.3479996100068,
+        "over_ms": {
+          "100": 493,
+          "200": 135,
+          "500": 11,
+          "1000": 0
+        }
+      },
+      "app_read_intervals": {
+        "n": 3812,
+        "p50_ms": 41.287099942564964,
+        "p95_ms": 165.30156973749396,
+        "p99_ms": 381.02113808505214,
+        "max_ms": 748.6127000302076,
+        "over_ms": {
+          "100": 411,
+          "200": 129,
+          "500": 19,
+          "1000": 0
+        }
+      },
+      "decoded_to_process": {
+        "n": 3813,
+        "p50_ms": 121.75290007144213,
+        "p95_ms": 489.03250042349015,
+        "p99_ms": 784.6272115781903,
+        "max_ms": 1243.05360019207,
+        "over_ms": {
+          "100": 3451,
+          "200": 1031,
+          "500": 182,
+          "1000": 8
+        }
+      },
+      "process_start_to_mux_completion": {
+        "n": 3813,
+        "p50_ms": 598.590400069952,
+        "p95_ms": 967.3813199624418,
+        "p99_ms": 1093.90500407666,
+        "max_ms": 1260.3631000965834,
+        "over_ms": {
+          "100": 3784,
+          "200": 3768,
+          "500": 3572,
+          "1000": 124
+        }
+      },
+      "media_intervals": {
+        "n": 3812,
+        "p50_ms": 40.0,
+        "p95_ms": 41.0,
+        "p99_ms": 42.0,
+        "max_ms": 2975.0,
+        "over_ms": {
+          "100": 10,
+          "200": 10,
+          "500": 7,
+          "1000": 4
+        }
+      },
+      "timestamp_repaired_samples": 0,
+      "repeated_vcl_hashes": 0
+    },
+    "operations": {
+      "audio-mux": {
+        "n": 1,
+        "p50_ms": 130.65105583519,
+        "p95_ms": 130.65105583519,
+        "p99_ms": 130.65105583519,
+        "max_ms": 130.65105583519,
+        "over_ms": {
+          "100": 1,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "lookahead-expire": {
+        "n": 10,
+        "p50_ms": 142.61779328808,
+        "p95_ms": 155.3735507652175,
+        "p99_ms": 155.66578950733148,
+        "max_ms": 155.73884919286,
+        "over_ms": {
+          "100": 10,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "lookahead-push": {
+        "n": 38,
+        "p50_ms": 135.800488758835,
+        "p95_ms": 187.18851432204198,
+        "p99_ms": 270.59668634087024,
+        "max_ms": 317.12211109698,
+        "over_ms": {
+          "100": 38,
+          "200": 1,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "output-pacing": {
+        "n": 4,
+        "p50_ms": 362.71660355851,
+        "p95_ms": 410.090128518645,
+        "p99_ms": 412.701660878961,
+        "max_ms": 413.35454396904,
+        "over_ms": {
+          "100": 4,
+          "200": 4,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "process": {
+        "n": 3826,
+        "p50_ms": 36.8045610375705,
+        "p95_ms": 97.53082762472326,
+        "p99_ms": 122.279150178655,
+        "max_ms": 317.29580368847,
+        "over_ms": {
+          "100": 171,
+          "200": 3,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "render": {
+        "n": 3813,
+        "p50_ms": 0.41911844164133,
+        "p95_ms": 0.75327940285206,
+        "p99_ms": 0.9774533286690714,
+        "max_ms": 1.9372506067157,
+        "over_ms": {
+          "100": 0,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      }
+    },
+    "paired_frame_compute": {
+      "n": 3813,
+      "p50_ms": 37.169931456447024,
+      "p95_ms": 97.95993063598851,
+      "p99_ms": 122.72978305816612,
+      "max_ms": 317.7796863019501,
+      "over_ms": {
+        "100": 174,
+        "200": 3,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "internal_rtp_intervals": {
+      "n": 3803,
+      "p50_ms": 40.234360843896866,
+      "p95_ms": 184.04429247602818,
+      "p99_ms": 369.83936784788966,
+      "max_ms": 1711.1705588176847,
+      "over_ms": {
+        "100": 563,
+        "200": 154,
+        "500": 14,
+        "1000": 2
+      }
+    },
+    "mux_return_to_internal_receipt": {
+      "n": 3804,
+      "p50_ms": 126.15155801177025,
+      "p95_ms": 526.2050227262077,
+      "p99_ms": 1459.1837357543407,
+      "max_ms": 1814.7450117394328,
+      "over_ms": {
+        "100": 3605,
+        "200": 1154,
+        "500": 220,
+        "1000": 66
+      }
+    },
+    "matched_internal_frames": 3804,
+    "raw_rtp": {
+      "frames": 7918,
+      "connections": 1,
+      "intervals": {
+        "n": 7917,
+        "p50_ms": 0.32160000046133064,
+        "p95_ms": 160.60159999942698,
+        "p99_ms": 192.89686800118943,
+        "max_ms": 3050.9975999993912,
+        "over_ms": {
+          "100": 2083,
+          "200": 63,
+          "500": 21,
+          "1000": 11
+        }
+      },
+      "errors": [],
+      "timestamp_discontinuities": [
+        {
+          "local_unix": 1793261608.477923,
+          "media_gap": 0.572,
+          "receipt_gap": 0.012425599999914994
+        },
+        {
+          "local_unix": 1793261621.5400202,
+          "media_gap": 2.975,
+          "receipt_gap": 3.011263999998846
+        },
+        {
+          "local_unix": 1793261640.9798841,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5337956999992457
+        },
+        {
+          "local_unix": 1793261652.2674792,
+          "media_gap": 0.784,
+          "receipt_gap": 0.7849733999992168
+        },
+        {
+          "local_unix": 1793261661.7512786,
+          "media_gap": 0.224,
+          "receipt_gap": 0.002273599999170983
+        },
+        {
+          "local_unix": 1793261674.905078,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4347192000004725
+        },
+        {
+          "local_unix": 1793261700.3985984,
+          "media_gap": 0.572,
+          "receipt_gap": 0.00020489999951678328
+        },
+        {
+          "local_unix": 1793261713.485895,
+          "media_gap": 2.975,
+          "receipt_gap": 3.0211431000006996
+        },
+        {
+          "local_unix": 1793261732.9175057,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5348514000015712
+        },
+        {
+          "local_unix": 1793261744.2121036,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8262619999986782
+        },
+        {
+          "local_unix": 1793261753.6279867,
+          "media_gap": 0.224,
+          "receipt_gap": 0.002447500000926084
+        },
+        {
+          "local_unix": 1793261766.8574002,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4391218999990087
+        },
+        {
+          "local_unix": 1793261792.33843,
+          "media_gap": 0.572,
+          "receipt_gap": 0.00022629999875789508
+        },
+        {
+          "local_unix": 1793261805.4500744,
+          "media_gap": 2.975,
+          "receipt_gap": 3.0509975999993912
+        },
+        {
+          "local_unix": 1793261824.8538723,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5335728999998537
+        },
+        {
+          "local_unix": 1793261836.1461208,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8258597000003647
+        },
+        {
+          "local_unix": 1793261845.5708342,
+          "media_gap": 0.224,
+          "receipt_gap": 0.00013719999878958333
+        },
+        {
+          "local_unix": 1793261858.85472,
+          "media_gap": 1.199,
+          "receipt_gap": 1.5059657999991032
+        },
+        {
+          "local_unix": 1793261884.2822115,
+          "media_gap": 0.572,
+          "receipt_gap": 0.0006042000004526926
+        },
+        {
+          "local_unix": 1793261897.367226,
+          "media_gap": 2.975,
+          "receipt_gap": 3.0226397999995243
+        }
+      ],
+      "max_rtp_sequence_gaps": 0
+    },
+    "remote_rtp": {
+      "frames": 3823,
+      "connections": 1,
+      "intervals": {
+        "n": 3822,
+        "p50_ms": 40.298949999851175,
+        "p95_ms": 188.19919999987172,
+        "p99_ms": 352.5897560002338,
+        "max_ms": 1711.6532000000007,
+        "over_ms": {
+          "100": 632,
+          "200": 169,
+          "500": 16,
+          "1000": 2
+        }
+      },
+      "errors": [
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 1,
+          "local_perf": 8903.5758284,
+          "local_unix": 1793261581.558158,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 2,
+          "local_perf": 8904.6123882,
+          "local_unix": 1793261582.5953746,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 3,
+          "local_perf": 8905.6425323,
+          "local_unix": 1793261583.6238372,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 4,
+          "local_perf": 8906.7414687,
+          "local_unix": 1793261584.7311003,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 5,
+          "local_perf": 8907.8130034,
+          "local_unix": 1793261585.8025427,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 6,
+          "local_perf": 8908.848404,
+          "local_unix": 1793261586.8371644,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 7,
+          "local_perf": 8909.9099021,
+          "local_unix": 1793261587.8995543,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 8,
+          "local_perf": 8910.9512475,
+          "local_unix": 1793261588.9342196,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 9,
+          "local_perf": 8911.9852747,
+          "local_unix": 1793261589.9748077,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 10,
+          "local_perf": 8913.0197032,
+          "local_unix": 1793261591.0093133,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 11,
+          "local_perf": 8914.0479551,
+          "local_unix": 1793261592.0371659,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 12,
+          "local_perf": 8915.0772859,
+          "local_unix": 1793261593.0660331,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 13,
+          "local_perf": 8916.1077222,
+          "local_unix": 1793261594.0968983,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 14,
+          "local_perf": 8917.1368838,
+          "local_unix": 1793261595.1257865,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 15,
+          "local_perf": 8918.1700403,
+          "local_unix": 1793261596.159547,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 16,
+          "local_perf": 8919.2110568,
+          "local_unix": 1793261597.1872709,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 17,
+          "local_perf": 8920.24285,
+          "local_unix": 1793261598.2323658,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 18,
+          "local_perf": 8921.281234,
+          "local_unix": 1793261599.2707448,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 19,
+          "local_perf": 8922.3117845,
+          "local_unix": 1793261600.301324,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 20,
+          "local_perf": 8923.3483305,
+          "local_unix": 1793261601.3345227,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 21,
+          "local_perf": 8924.3841341,
+          "local_unix": 1793261602.3731735,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 22,
+          "local_perf": 8925.4175467,
+          "local_unix": 1793261603.4070697,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 23,
+          "local_perf": 8926.4472361,
+          "local_unix": 1793261604.4367883,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 24,
+          "local_perf": 8927.4872037,
+          "local_unix": 1793261605.4765563,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 25,
+          "local_perf": 8928.5146602,
+          "local_unix": 1793261606.5044281,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 26,
+          "local_perf": 8929.5429837,
+          "local_unix": 1793261607.5317645,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 27,
+          "local_perf": 8930.5787799,
+          "local_unix": 1793261608.5683134,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 28,
+          "local_perf": 8931.6063971,
+          "local_unix": 1793261609.595666,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 29,
+          "local_perf": 8932.6338139,
+          "local_unix": 1793261610.623005,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 30,
+          "local_perf": 8933.7419538,
+          "local_unix": 1793261611.7283504,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 31,
+          "local_perf": 8934.8100577,
+          "local_unix": 1793261612.7989147,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 32,
+          "local_perf": 8935.8387795,
+          "local_unix": 1793261613.827801,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 33,
+          "local_perf": 8936.8756075,
+          "local_unix": 1793261614.8649201,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 34,
+          "local_perf": 8937.903323,
+          "local_unix": 1793261615.8923178,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 35,
+          "local_perf": 8938.9319055,
+          "local_unix": 1793261616.9210982,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 36,
+          "local_perf": 8939.9596872,
+          "local_unix": 1793261617.9484987,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 37,
+          "local_perf": 8940.9894845,
+          "local_unix": 1793261618.9793167,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 38,
+          "local_perf": 8942.0248439,
+          "local_unix": 1793261620.0134127,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 39,
+          "local_perf": 8943.0653375,
+          "local_unix": 1793261621.0542605,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 40,
+          "local_perf": 8944.0939288,
+          "local_unix": 1793261622.0836594,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 41,
+          "local_perf": 8945.1320219,
+          "local_unix": 1793261623.121555,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 42,
+          "local_perf": 8946.1626946,
+          "local_unix": 1793261624.1520846,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 43,
+          "local_perf": 8947.1905481,
+          "local_unix": 1793261625.1799312,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 44,
+          "local_perf": 8948.2188547,
+          "local_unix": 1793261626.2078493,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 45,
+          "local_perf": 8949.2488791,
+          "local_unix": 1793261627.2384238,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 46,
+          "local_perf": 8950.2750111,
+          "local_unix": 1793261628.2641048,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 47,
+          "local_perf": 8951.3019731,
+          "local_unix": 1793261629.284882,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 48,
+          "local_perf": 8952.3424333,
+          "local_unix": 1793261630.318964,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 49,
+          "local_perf": 8953.3768881,
+          "local_unix": 1793261631.366,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 50,
+          "local_perf": 8954.4135271,
+          "local_unix": 1793261632.4031615,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 51,
+          "local_perf": 8955.4453404,
+          "local_unix": 1793261633.4346356,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 52,
+          "local_perf": 8956.4735317,
+          "local_unix": 1793261634.4631948,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 53,
+          "local_perf": 8957.5027498,
+          "local_unix": 1793261635.4925067,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 54,
+          "local_perf": 8958.5303633,
+          "local_unix": 1793261636.51953,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 55,
+          "local_perf": 8959.5678465,
+          "local_unix": 1793261637.5562546,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 56,
+          "local_perf": 8960.5977816,
+          "local_unix": 1793261638.5808086,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 57,
+          "local_perf": 8961.6264473,
+          "local_unix": 1793261639.6145873,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 58,
+          "local_perf": 8962.7408163,
+          "local_unix": 1793261640.7304764,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 59,
+          "local_perf": 8963.8122423,
+          "local_unix": 1793261641.801699,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 60,
+          "local_perf": 8964.8401547,
+          "local_unix": 1793261642.8297467,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 61,
+          "local_perf": 8965.8682494,
+          "local_unix": 1793261643.8577893,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 62,
+          "local_perf": 8966.907381,
+          "local_unix": 1793261644.8931355,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 63,
+          "local_perf": 8967.9401681,
+          "local_unix": 1793261645.918341,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 64,
+          "local_perf": 8968.9672613,
+          "local_unix": 1793261646.9564087,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 65,
+          "local_perf": 8969.9952636,
+          "local_unix": 1793261647.9841092,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 66,
+          "local_perf": 8971.0330412,
+          "local_unix": 1793261649.0217261,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 67,
+          "local_perf": 8972.0618395,
+          "local_unix": 1793261650.0513306,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 68,
+          "local_perf": 8973.0958764,
+          "local_unix": 1793261651.0855076,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 69,
+          "local_perf": 8974.1321813,
+          "local_unix": 1793261652.1219652,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 70,
+          "local_perf": 8975.1708644,
+          "local_unix": 1793261653.160433,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 71,
+          "local_perf": 8976.1989738,
+          "local_unix": 1793261654.1767278,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 72,
+          "local_perf": 8977.2342174,
+          "local_unix": 1793261655.2111006,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 73,
+          "local_perf": 8978.2660213,
+          "local_unix": 1793261656.2555993,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 74,
+          "local_perf": 8979.2946893,
+          "local_unix": 1793261657.2843318,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 75,
+          "local_perf": 8980.32202,
+          "local_unix": 1793261658.2976425,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 76,
+          "local_perf": 8981.4804158,
+          "local_unix": 1793261659.4689054,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 77,
+          "local_perf": 8982.5101466,
+          "local_unix": 1793261660.4993675,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 78,
+          "local_perf": 8983.5409901,
+          "local_unix": 1793261661.5247326,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 79,
+          "local_perf": 8984.5783583,
+          "local_unix": 1793261662.5681767,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 80,
+          "local_perf": 8985.6106897,
+          "local_unix": 1793261663.599255,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 81,
+          "local_perf": 8986.6500012,
+          "local_unix": 1793261664.639534,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 82,
+          "local_perf": 8987.7480557,
+          "local_unix": 1793261665.7373643,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 83,
+          "local_perf": 8988.8239108,
+          "local_unix": 1793261666.812744,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 84,
+          "local_perf": 8989.8624632,
+          "local_unix": 1793261667.851221,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 85,
+          "local_perf": 8990.897658,
+          "local_unix": 1793261668.8869426,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 86,
+          "local_perf": 8991.934789,
+          "local_unix": 1793261669.9241636,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        }
+      ],
+      "timestamp_discontinuities": [
+        {
+          "local_unix": 1793261680.7613125,
+          "media_gap": 1.199,
+          "receipt_gap": 0.17391769999994722
+        },
+        {
+          "local_unix": 1793261712.3590791,
+          "media_gap": 0.572,
+          "receipt_gap": 0.2295457999989594
+        },
+        {
+          "local_unix": 1793261724.7607658,
+          "media_gap": 2.975,
+          "receipt_gap": 0.7918629999985569
+        },
+        {
+          "local_unix": 1793261757.7422562,
+          "media_gap": 0.334,
+          "receipt_gap": 0.44783300000017334
+        },
+        {
+          "local_unix": 1793261780.0447698,
+          "media_gap": 0.784,
+          "receipt_gap": 0.2963135999998485
+        },
+        {
+          "local_unix": 1793261799.4756484,
+          "media_gap": 0.224,
+          "receipt_gap": 0.6224323999995249
+        },
+        {
+          "local_unix": 1793261826.5091453,
+          "media_gap": 1.199,
+          "receipt_gap": 0.2841534999988653
+        },
+        {
+          "local_unix": 1793261857.4771883,
+          "media_gap": 0.572,
+          "receipt_gap": 0.3425454999996873
+        },
+        {
+          "local_unix": 1793261869.9701793,
+          "media_gap": 2.975,
+          "receipt_gap": 0.749076399999467
+        },
+        {
+          "local_unix": 1793261903.6320457,
+          "media_gap": 0.334,
+          "receipt_gap": 0.4764362000005349
+        }
+      ],
+      "max_rtp_sequence_gaps": 0
+    },
+    "post_mux_severe_count": 11,
+    "source_attempt_ends": [],
+    "supplement": {
+      "queues": {
+        "queue_frames": {
+          "n": 241,
+          "min": 2,
+          "p50": 2.0,
+          "p95": 2.0,
+          "p99": 2.0,
+          "max": 2,
+          "mean": 2.0
+        },
+        "lookahead_frames": {
+          "n": 241,
+          "min": 1,
+          "p50": 11.0,
+          "p95": 13.0,
+          "p99": 16.0,
+          "max": 16,
+          "mean": 9.643153526970954
+        },
+        "audio_queue_bytes": {
+          "n": 241,
+          "min": 0,
+          "p50": 0.0,
+          "p95": 660.0,
+          "p99": 686.0,
+          "max": 732,
+          "mean": 91.08713692946058
+        },
+        "pending_encoder_frames": {
+          "n": 241,
+          "min": 0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0,
+          "mean": 0.0
+        }
+      },
+      "ages": {
+        "oldest_input_age_seconds": {
+          "n": 241,
+          "min": 0.045792819000781,
+          "p50": 0.20464984793216,
+          "p95": 0.75405084434897,
+          "p99": 0.86002981159836,
+          "max": 1.1376752145588,
+          "mean": 0.2805258159359521
+        },
+        "oldest_lookahead_wait_seconds": {
+          "n": 241,
+          "min": 4.1021034121513e-05,
+          "p50": 0.59495189692825,
+          "p95": 0.82532765716314,
+          "p99": 0.9097773907706139,
+          "max": 1.017006768845,
+          "mean": 0.6035434873349559
+        }
+      },
+      "counters": {
+        "f823a261d48f4158bd88b287da9f12db": {
+          "input_frames": {
+            "first": 4,
+            "last": 3829
+          },
+          "encoded_frames": {
+            "first": 0,
+            "last": 3813
+          },
+          "unmatched_packets": {
+            "first": 0,
+            "last": 0
+          },
+          "missing_receive_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "failed_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "timestamp_repairs": {
+            "first": 0,
+            "last": 0
+          },
+          "dropped_frames": {
+            "first": 0,
+            "last": 0
+          }
+        }
+      },
+      "timing": {
+        "f823a261d48f4158bd88b287da9f12db": {
+          "window_seconds": 240.58094719983637,
+          "output_frames": 3813,
+          "delta_seconds": {
+            "frame": 173.06868699999998,
+            "inference": 151.730432,
+            "encode": 5.118323999999999,
+            "output-pacing": 56.830811000000004,
+            "candidate-primary": 97.791121,
+            "candidate-detail": 38.562785,
+            "prepare-primary": 4.781168,
+            "prepare-detail": 12.536986,
+            "forward-primary-face": 19.634236,
+            "forward-primary-plate": 89.333687,
+            "forward-detail-face": 12.150670999999999,
+            "forward-detail-plate": 37.005407000000005,
+            "post-primary": 5.575626,
+            "post-detail": 10.012777999999999,
+            "local-confirm": 46.457803000000006,
+            "input-copy": 0.50473,
+            "output-copy": 3.012851,
+            "explicit-sync": 2.7261550000000003,
+            "track-confirm": 11.360674999999999,
+            "track-update": 5.740474,
+            "track-flow": 1.622265,
+            "track-probe": 16.291916,
+            "track-recheck": 49.693265,
+            "track-face-recheck": 0.084685,
+            "color-convert": 4.846693,
+            "gray-copy": 2.6436,
+            "mask-gpu": 1.011315,
+            "source-read": 1.616854,
+            "source-decode": 1.741931,
+            "source-backpressure": 236.484322,
+            "session-primary-face": 0.21910000000000002,
+            "session-detail-face": 0.063442,
+            "plate-work-check": 1.404188
+          }
+        }
+      },
+      "resources": {
+        "stream_worker_cpu_percent": {
+          "n": 160,
+          "min": 96.37914992245359,
+          "p50": 141.64229856724668,
+          "p95": 252.52360805693763,
+          "p99": 265.7328980645228,
+          "max": 279.4305626443741,
+          "mean": 162.2190484573607
+        },
+        "stream_worker_memory_bytes": {
+          "n": 160,
+          "min": 1961746432,
+          "p50": 2131908608.0,
+          "p95": 2164749721.6,
+          "p99": 2165870755.84,
+          "max": 2166001664,
+          "mean": 2124382156.8
+        },
+        "gpu_utilization_percent": {
+          "n": 320,
+          "min": 8.0,
+          "p50": 46.0,
+          "p95": 71.0,
+          "p99": 80.86000000000001,
+          "max": 82.0,
+          "mean": 44.196875
+        },
+        "gpu_memory_bytes": {
+          "n": 320,
+          "min": 7417626624,
+          "p50": 7451181056.0,
+          "p95": 7551844352.0,
+          "p99": 7580806021.12,
+          "max": 7581204480,
+          "mean": 7487605964.8
+        }
+      },
+      "sample_count": 241,
+      "queue_full_fraction": 1.0,
+      "raw_source_pts_deltas": {
+        "n": 3812,
+        "min": 5.555555555555556e-05,
+        "p50": 0.04,
+        "p95": 0.041,
+        "p99": 0.042,
+        "max": 2.975,
+        "mean": 0.04163857992305002
+      },
+      "source_pts_nonpositive": 0,
+      "timestamp_repaired_frames": [],
+      "stage_operation_totals": {
+        "audio-mux": 0.13065105583519,
+        "lookahead-expire": 1.35768552869558,
+        "lookahead-push": 5.37825600709769,
+        "output-pacing": 1.45753327943385,
+        "process": 154.8427285347134,
+        "render": 1.66484971717
+      },
+      "note": "only process/render operations are exhaustive; other operation totals contain samples >=100ms only"
+    },
+    "severe_per_1000_intervals": 3.6813042334998687,
+    "post_mux_severe_per_1000_intervals": 2.8924533263213252
+  },
+  "restored-a": {
+    "revision": "77f98a9",
+    "source_fingerprints": {
+      "3b0e406fdeb246af92ea1870e4bf5a37": {
+        "detection.egoblur": true,
+        "media.rtsp_observer": true,
+        "detection.timing": true,
+        "media.plate_lookahead": true,
+        "detection.cuda_detail": true,
+        "detection.quality": true,
+        "detection.yolo": true,
+        "redaction": true,
+        "detection.cpu": true,
+        "media.streams": true,
+        "media.live_diagnostics": true,
+        "media.cuda_frames": true,
+        "media.stream_pacing": true,
+        "media.video": true,
+        "detection.plate_readability": true,
+        "detection.host_profile": true,
+        "detection.cuda_pixels": true
+      },
+      "9d8f73b5b1344a2488a27dbb2752927b": {
+        "detection.egoblur": true,
+        "media.rtsp_observer": true,
+        "detection.timing": true,
+        "media.plate_lookahead": true,
+        "detection.cuda_detail": true,
+        "detection.quality": true,
+        "detection.yolo": true,
+        "redaction": true,
+        "detection.cpu": true,
+        "media.streams": true,
+        "media.live_diagnostics": true,
+        "media.cuda_frames": true,
+        "media.stream_pacing": true,
+        "media.video": true,
+        "detection.plate_readability": true,
+        "detection.host_profile": true,
+        "detection.cuda_pixels": true
+      }
+    },
+    "status": "sampled",
+    "clock_verified": {
+      "boot_id": "35fb6945-03f7-48fa-b594-336ead489e3b",
+      "namespace_offsets": "monotonic           0         0\nboottime            0         0"
+    },
+    "server": {
+      "attempts": {
+        "3b0e406fdeb246af92ea1870e4bf5a37": {
+          "frames": 4164,
+          "first_sequence": 1,
+          "last_sequence": 4164,
+          "capture_sequence_gaps": 0,
+          "wall_progress_seconds": 276.8887312998995,
+          "media_progress_seconds": 183.19623333333334,
+          "accumulated_lateness_increase_seconds": 93.69249796656618
+        },
+        "9d8f73b5b1344a2488a27dbb2752927b": {
+          "frames": 111,
+          "first_sequence": 1,
+          "last_sequence": 111,
+          "capture_sequence_gaps": 0,
+          "wall_progress_seconds": 4.412673399783671,
+          "media_progress_seconds": 4.4101,
+          "accumulated_lateness_increase_seconds": 0.002573399783670993
+        }
+      },
+      "mux_completion_intervals": {
+        "n": 4273,
+        "p50_ms": 40.14799930155277,
+        "p95_ms": 176.93371977657057,
+        "p99_ms": 374.65526778250637,
+        "max_ms": 819.5772003382444,
+        "over_ms": {
+          "100": 554,
+          "200": 161,
+          "500": 24,
+          "1000": 0
+        }
+      },
+      "app_read_intervals": {
+        "n": 4273,
+        "p50_ms": 41.76810011267662,
+        "p95_ms": 165.2413401752709,
+        "p99_ms": 422.71742004900995,
+        "max_ms": 1710.313900373876,
+        "over_ms": {
+          "100": 510,
+          "200": 157,
+          "500": 24,
+          "1000": 3
+        }
+      },
+      "decoded_to_process": {
+        "n": 4275,
+        "p50_ms": 128.45300044864416,
+        "p95_ms": 508.3772399462756,
+        "p99_ms": 807.26286761463,
+        "max_ms": 1487.0001003146172,
+        "over_ms": {
+          "100": 3830,
+          "200": 1277,
+          "500": 227,
+          "1000": 16
+        }
+      },
+      "process_start_to_mux_completion": {
+        "n": 4275,
+        "p50_ms": 672.3116999492049,
+        "p95_ms": 978.2102599740025,
+        "p99_ms": 1135.4519014619295,
+        "max_ms": 1423.0795996263623,
+        "over_ms": {
+          "100": 4245,
+          "200": 4228,
+          "500": 4007,
+          "1000": 164
+        }
+      },
+      "media_intervals": {
+        "n": 4273,
+        "p50_ms": 40.0,
+        "p95_ms": 41.0,
+        "p99_ms": 42.0,
+        "max_ms": 4532.0,
+        "over_ms": {
+          "100": 17,
+          "200": 17,
+          "500": 13,
+          "1000": 8
+        }
+      },
+      "timestamp_repaired_samples": 0,
+      "repeated_vcl_hashes": 12
+    },
+    "operations": {
+      "audio-mux": {
+        "n": 1,
+        "p50_ms": 137.97742407769002,
+        "p95_ms": 137.97742407769002,
+        "p99_ms": 137.97742407769002,
+        "max_ms": 137.97742407769002,
+        "over_ms": {
+          "100": 1,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "lookahead-expire": {
+        "n": 15,
+        "p50_ms": 151.45573113114,
+        "p95_ms": 190.25393668561995,
+        "p99_ms": 217.684731818732,
+        "max_ms": 224.54243060201,
+        "over_ms": {
+          "100": 15,
+          "200": 1,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "lookahead-flush": {
+        "n": 1,
+        "p50_ms": 167.4525346607,
+        "p95_ms": 167.4525346607,
+        "p99_ms": 167.4525346607,
+        "max_ms": 167.4525346607,
+        "over_ms": {
+          "100": 1,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "lookahead-push": {
+        "n": 40,
+        "p50_ms": 135.11285837740002,
+        "p95_ms": 244.3471502978353,
+        "p99_ms": 350.42229264043567,
+        "max_ms": 377.73432210088,
+        "over_ms": {
+          "100": 40,
+          "200": 4,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "output-pacing": {
+        "n": 7,
+        "p50_ms": 351.42407380044,
+        "p95_ms": 471.52239708230195,
+        "p99_ms": 492.32515221462035,
+        "max_ms": 497.52584099769996,
+        "over_ms": {
+          "100": 7,
+          "200": 6,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "process": {
+        "n": 4288,
+        "p50_ms": 38.190911523998004,
+        "p95_ms": 96.94622447714201,
+        "p99_ms": 122.30704732239072,
+        "max_ms": 381.63817301393,
+        "over_ms": {
+          "100": 179,
+          "200": 3,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "render": {
+        "n": 4275,
+        "p50_ms": 0.43128989636897996,
+        "p95_ms": 0.799797754734753,
+        "p99_ms": 1.0175115615129586,
+        "max_ms": 1.4842674136162,
+        "over_ms": {
+          "100": 0,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      },
+      "video-encode": {
+        "n": 2,
+        "p50_ms": 132.97319645062,
+        "p95_ms": 154.193735728039,
+        "p99_ms": 156.08000588603178,
+        "max_ms": 156.55157342553,
+        "over_ms": {
+          "100": 2,
+          "200": 0,
+          "500": 0,
+          "1000": 0
+        }
+      }
+    },
+    "paired_frame_compute": {
+      "n": 4275,
+      "p50_ms": 38.58178574591914,
+      "p95_ms": 97.75589592754822,
+      "p99_ms": 122.89666576311056,
+      "max_ms": 381.8786842748567,
+      "over_ms": {
+        "100": 185,
+        "200": 3,
+        "500": 0,
+        "1000": 0
+      }
+    },
+    "internal_rtp_intervals": {
+      "n": 4273,
+      "p50_ms": 0.22673048079013824,
+      "p95_ms": 434.5506601035586,
+      "p99_ms": 849.7782674059246,
+      "max_ms": 2251.7009479925036,
+      "over_ms": {
+        "100": 700,
+        "200": 610,
+        "500": 155,
+        "1000": 27
+      }
+    },
+    "mux_return_to_internal_receipt": {
+      "n": 4275,
+      "p50_ms": 335.28029453009367,
+      "p95_ms": 1263.00548305735,
+      "p99_ms": 2096.8955346755756,
+      "max_ms": 2699.2500806227326,
+      "over_ms": {
+        "100": 4003,
+        "200": 3356,
+        "500": 1235,
+        "1000": 363
+      }
+    },
+    "matched_internal_frames": 4275,
+    "raw_rtp": {
+      "frames": 7139,
+      "connections": 1,
+      "intervals": {
+        "n": 7138,
+        "p50_ms": 1.0313499997209874,
+        "p95_ms": 160.5163849998462,
+        "p99_ms": 206.11065399974908,
+        "max_ms": 3050.8190999989893,
+        "over_ms": {
+          "100": 1793,
+          "200": 80,
+          "500": 20,
+          "1000": 11
+        }
+      },
+      "errors": [],
+      "timestamp_discontinuities": [
+        {
+          "local_unix": 1793262527.8596075,
+          "media_gap": 0.572,
+          "receipt_gap": 0.0001350999991700519
+        },
+        {
+          "local_unix": 1793262540.9834466,
+          "media_gap": 2.975,
+          "receipt_gap": 3.0508190999989893
+        },
+        {
+          "local_unix": 1793262560.4281654,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5868523999997706
+        },
+        {
+          "local_unix": 1793262571.66875,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8093967000004341
+        },
+        {
+          "local_unix": 1793262581.0798354,
+          "media_gap": 0.224,
+          "receipt_gap": 0.002585999998700572
+        },
+        {
+          "local_unix": 1793262594.3050277,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4340243000006012
+        },
+        {
+          "local_unix": 1793262619.803529,
+          "media_gap": 0.572,
+          "receipt_gap": 0.0007485000005544862
+        },
+        {
+          "local_unix": 1793262632.8773243,
+          "media_gap": 2.975,
+          "receipt_gap": 3.009764599999471
+        },
+        {
+          "local_unix": 1793262652.3574977,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5683625999990909
+        },
+        {
+          "local_unix": 1793262663.606485,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8158939000004466
+        },
+        {
+          "local_unix": 1793262673.0210986,
+          "media_gap": 0.224,
+          "receipt_gap": 0.0012901999998575775
+        },
+        {
+          "local_unix": 1793262686.2754426,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4640603000007104
+        },
+        {
+          "local_unix": 1793262711.7432823,
+          "media_gap": 0.572,
+          "receipt_gap": 0.0007621000004292
+        },
+        {
+          "local_unix": 1793262724.8179727,
+          "media_gap": 2.975,
+          "receipt_gap": 3.0100691999996343
+        },
+        {
+          "local_unix": 1793262744.2891479,
+          "media_gap": 0.334,
+          "receipt_gap": 0.5518253999998706
+        },
+        {
+          "local_unix": 1793262755.544298,
+          "media_gap": 0.784,
+          "receipt_gap": 0.8158024999993359
+        },
+        {
+          "local_unix": 1793262764.965916,
+          "media_gap": 0.224,
+          "receipt_gap": 0.0037443000001076143
+        },
+        {
+          "local_unix": 1793262778.1902142,
+          "media_gap": 1.199,
+          "receipt_gap": 1.4289372000002913
+        },
+        {
+          "local_unix": 1793262803.7434545,
+          "media_gap": 0.572,
+          "receipt_gap": 0.003287100000306964
+        },
+        {
+          "local_unix": 1793262816.7619545,
+          "media_gap": 2.975,
+          "receipt_gap": 3.0103612000002613
+        }
+      ],
+      "max_rtp_sequence_gaps": 0
+    },
+    "remote_rtp": {
+      "frames": 4495,
+      "connections": 2,
+      "intervals": {
+        "n": 4493,
+        "p50_ms": 6.388799998603645,
+        "p95_ms": 397.34220000027557,
+        "p99_ms": 810.2219679996048,
+        "max_ms": 2383.558900000935,
+        "over_ms": {
+          "100": 686,
+          "200": 560,
+          "500": 139,
+          "1000": 24
+        }
+      },
+      "errors": [
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 1,
+          "local_perf": 9845.3754091,
+          "local_unix": 1793262523.3649514,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 2,
+          "local_perf": 9846.4031288,
+          "local_unix": 1793262524.3923867,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 3,
+          "local_perf": 9847.4363675,
+          "local_unix": 1793262525.4258173,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 4,
+          "local_perf": 9848.4702207,
+          "local_unix": 1793262526.4599652,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 5,
+          "local_perf": 10126.0908843,
+          "local_unix": 1793262804.0803912,
+          "error_type": "EOFError",
+          "detail": "RTSP EOF"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 6,
+          "local_perf": 10127.1183409,
+          "local_unix": 1793262805.1068866,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        },
+        {
+          "kind": "error",
+          "role": "output",
+          "connection": 7,
+          "local_perf": 10128.1568079,
+          "local_unix": 1793262806.1457803,
+          "error_type": "ValueError",
+          "detail": "RTSP response RTSP/1.0 404 Not Found"
+        }
+      ],
+      "timestamp_discontinuities": [
+        {
+          "local_unix": 1793262530.0076065,
+          "media_gap": 0.572,
+          "receipt_gap": 0.0011157000008097384
+        },
+        {
+          "local_unix": 1793262541.8358302,
+          "media_gap": 2.975,
+          "receipt_gap": 0.2021866000013688
+        },
+        {
+          "local_unix": 1793262575.988772,
+          "media_gap": 0.334,
+          "receipt_gap": 0.004275700001016958
+        },
+        {
+          "local_unix": 1793262598.169046,
+          "media_gap": 0.784,
+          "receipt_gap": 0.7493106000001717
+        },
+        {
+          "local_unix": 1793262618.417019,
+          "media_gap": 0.224,
+          "receipt_gap": 0.007050700000036159
+        },
+        {
+          "local_unix": 1793262645.578534,
+          "media_gap": 1.199,
+          "receipt_gap": 0.003090199999860488
+        },
+        {
+          "local_unix": 1793262677.9342127,
+          "media_gap": 0.572,
+          "receipt_gap": 0.005101700000523124
+        },
+        {
+          "local_unix": 1793262689.291975,
+          "media_gap": 2.975,
+          "receipt_gap": 0.9635712999988755
+        },
+        {
+          "local_unix": 1793262695.1852748,
+          "media_gap": 1.284,
+          "receipt_gap": 0.4549946999995882
+        },
+        {
+          "local_unix": 1793262708.8867106,
+          "media_gap": 4.532,
+          "receipt_gap": 0.4482519000011962
+        },
+        {
+          "local_unix": 1793262712.647141,
+          "media_gap": 0.334,
+          "receipt_gap": 0.008477499999571592
+        },
+        {
+          "local_unix": 1793262733.8761506,
+          "media_gap": 0.784,
+          "receipt_gap": 0.36104379999960656
+        },
+        {
+          "local_unix": 1793262749.065283,
+          "media_gap": 2.166,
+          "receipt_gap": 1.505347399999664
+        },
+        {
+          "local_unix": 1793262749.5088027,
+          "media_gap": 0.224,
+          "receipt_gap": 0.022860699999000644
+        },
+        {
+          "local_unix": 1793262763.3175957,
+          "media_gap": 1.083,
+          "receipt_gap": 0.7466024999994261
+        },
+        {
+          "local_unix": 1793262775.1041706,
+          "media_gap": 1.199011111111111,
+          "receipt_gap": 0.01124820000040927
+        },
+        {
+          "local_unix": 1793262798.961092,
+          "media_gap": 0.557,
+          "receipt_gap": 0.23023259999899892
+        },
+        {
+          "local_unix": 1793262817.6318653,
+          "media_gap": 2.974988888888889,
+          "receipt_gap": 0.15492660000018077
+        }
+      ],
+      "max_rtp_sequence_gaps": 0
+    },
+    "post_mux_severe_count": 140,
+    "source_attempt_ends": [
+      {
+        "returncode": 0,
+        "phase": "source_read",
+        "started_at_unix": 1793262523.2198,
+        "reason": "source_eof",
+        "attempt_id": "3b0e406fdeb246af92ea1870e4bf5a37",
+        "generation": 9,
+        "run_id": "c3491604c3314f9b9ec965766e1f9f49",
+        "started_monotonic": 5071237.6086998,
+        "ended_monotonic": 5071516.5749693,
+        "ended_at_unix": 1793262802.3438
+      }
+    ],
+    "supplement": {
+      "queues": {
+        "queue_frames": {
+          "n": 286,
+          "min": 0,
+          "p50": 2.0,
+          "p95": 2.0,
+          "p99": 2.0,
+          "max": 2,
+          "mean": 1.9545454545454546
+        },
+        "lookahead_frames": {
+          "n": 286,
+          "min": 0,
+          "p50": 11.0,
+          "p95": 13.0,
+          "p99": 16.0,
+          "max": 16,
+          "mean": 9.5
+        },
+        "audio_queue_bytes": {
+          "n": 286,
+          "min": 0,
+          "p50": 0.0,
+          "p95": 680.75,
+          "p99": 710.7499999999994,
+          "max": 1774,
+          "mean": 133.41958041958043
+        },
+        "pending_encoder_frames": {
+          "n": 286,
+          "min": 0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0,
+          "mean": 0.0
+        }
+      },
+      "ages": {
+        "oldest_input_age_seconds": {
+          "n": 282,
+          "min": 0.010126415640116,
+          "p50": 0.23924602987245,
+          "p95": 0.8128320629242834,
+          "p99": 1.1545918333716898,
+          "max": 1.5170603683218,
+          "mean": 0.3122221090672336
+        },
+        "oldest_lookahead_wait_seconds": {
+          "n": 285,
+          "min": 4.8818066716194e-05,
+          "p50": 0.63357186689973,
+          "p95": 0.8096019493415941,
+          "p99": 0.8682819555699796,
+          "max": 1.1781306881458,
+          "mean": 0.5992783179604696
+        }
+      },
+      "counters": {
+        "3b0e406fdeb246af92ea1870e4bf5a37": {
+          "input_frames": {
+            "first": 4,
+            "last": 4164
+          },
+          "encoded_frames": {
+            "first": 0,
+            "last": 4164
+          },
+          "unmatched_packets": {
+            "first": 0,
+            "last": 0
+          },
+          "missing_receive_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "failed_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "timestamp_repairs": {
+            "first": 0,
+            "last": 0
+          },
+          "dropped_frames": {
+            "first": 0,
+            "last": 0
+          }
+        },
+        "9d8f73b5b1344a2488a27dbb2752927b": {
+          "input_frames": {
+            "first": 2,
+            "last": 127
+          },
+          "encoded_frames": {
+            "first": 0,
+            "last": 111
+          },
+          "unmatched_packets": {
+            "first": 0,
+            "last": 0
+          },
+          "missing_receive_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "failed_frames": {
+            "first": 0,
+            "last": 0
+          },
+          "timestamp_repairs": {
+            "first": 0,
+            "last": 0
+          },
+          "dropped_frames": {
+            "first": 0,
+            "last": 0
+          }
+        }
+      },
+      "timing": {
+        "3b0e406fdeb246af92ea1870e4bf5a37": {
+          "window_seconds": 277.7819214994088,
+          "output_frames": 4164,
+          "delta_seconds": {
+            "frame": 200.61375399999997,
+            "inference": 175.969146,
+            "encode": 5.284225999999999,
+            "output-pacing": 63.180285000000005,
+            "candidate-primary": 111.39661199999999,
+            "candidate-detail": 41.269188,
+            "prepare-primary": 5.35643,
+            "prepare-detail": 14.017789,
+            "forward-primary-face": 20.461789,
+            "forward-primary-plate": 104.548692,
+            "forward-detail-face": 13.073073,
+            "forward-detail-plate": 40.344757,
+            "post-primary": 7.843312999999999,
+            "post-detail": 11.577979000000001,
+            "local-confirm": 56.588728,
+            "input-copy": 0.593853,
+            "output-copy": 3.7460790000000004,
+            "explicit-sync": 3.236305,
+            "track-confirm": 13.343431,
+            "track-update": 7.40662,
+            "track-flow": 1.8448209999999998,
+            "track-probe": 15.937073,
+            "track-recheck": 62.4228,
+            "track-face-recheck": 0.08733199999999999,
+            "color-convert": 5.227019,
+            "gray-copy": 2.925989,
+            "mask-gpu": 1.135086,
+            "source-read": 6.643454,
+            "source-decode": 1.545507,
+            "source-backpressure": 268.23551799999996,
+            "session-primary-face": 0.20003799999999997,
+            "session-detail-face": 0.06937900000000004,
+            "plate-work-check": 1.753767
+          }
+        },
+        "9d8f73b5b1344a2488a27dbb2752927b": {
+          "window_seconds": 5.084153899922967,
+          "output_frames": 111,
+          "delta_seconds": {
+            "frame": 2.9316690000000003,
+            "inference": 2.4222189999999997,
+            "encode": 0.298371,
+            "output-pacing": 1.554706,
+            "candidate-primary": 2.039951,
+            "candidate-detail": 1.2884099999999998,
+            "prepare-primary": 0.125276,
+            "prepare-detail": 0.37206300000000003,
+            "forward-primary-face": 0.6453010000000001,
+            "forward-primary-plate": 1.074645,
+            "forward-detail-face": 0.40465999999999996,
+            "forward-detail-plate": 0.836949,
+            "post-primary": 0.072359,
+            "post-detail": 0.246529,
+            "local-confirm": 0.052319000000000004,
+            "input-copy": 0.0,
+            "output-copy": 0.053943,
+            "explicit-sync": 0.079846,
+            "track-confirm": 0.0,
+            "track-update": 0.0,
+            "track-flow": 0.0,
+            "track-probe": 0.863515,
+            "track-recheck": 0.0,
+            "track-face-recheck": 0.003887,
+            "color-convert": 0.18266200000000002,
+            "gray-copy": 0.10793499999999999,
+            "mask-gpu": 0.028797,
+            "source-read": 1.139182,
+            "source-decode": 0.059116999999999996,
+            "source-backpressure": 3.832088,
+            "session-primary-face": 0.001612,
+            "session-detail-face": 0.002139,
+            "plate-work-check": 0.000212
+          }
+        }
+      },
+      "resources": {
+        "stream_worker_cpu_percent": {
+          "n": 190,
+          "min": 22.41932670103491,
+          "p50": 158.97985959492274,
+          "p95": 251.98416147826288,
+          "p99": 264.99656173048567,
+          "max": 273.81647466779253,
+          "mean": 171.45224543892326
+        },
+        "stream_worker_memory_bytes": {
+          "n": 190,
+          "min": 1871937536,
+          "p50": 2061733888.0,
+          "p95": 2105666560.0,
+          "p99": 2106732011.52,
+          "max": 2106916864,
+          "mean": 2059569863.4105263
+        },
+        "gpu_utilization_percent": {
+          "n": 380,
+          "min": 12.0,
+          "p50": 68.0,
+          "p95": 83.05000000000001,
+          "p99": 85.0,
+          "max": 86.0,
+          "mean": 63.37894736842105
+        },
+        "gpu_memory_bytes": {
+          "n": 380,
+          "min": 6429868032,
+          "p50": 6935281664.0,
+          "p95": 7084179456.0,
+          "p99": 7101942333.44,
+          "max": 7113539584,
+          "mean": 6939531156.210526
+        }
+      },
+      "sample_count": 286,
+      "queue_full_fraction": 0.9755244755244755,
+      "raw_source_pts_deltas": {
+        "n": 4273,
+        "min": 5.555555555555556e-05,
+        "p50": 0.04,
+        "p95": 0.041,
+        "p99": 0.042,
+        "max": 4.532,
+        "mean": 0.0439050627974101
+      },
+      "source_pts_nonpositive": 0,
+      "timestamp_repaired_frames": [],
+      "stage_operation_totals": {
+        "audio-mux": 0.13797742407769,
+        "lookahead-expire": 2.3018188206479,
+        "lookahead-flush": 0.1674525346607,
+        "lookahead-push": 5.99327273014932,
+        "output-pacing": 2.44372385460882,
+        "process": 181.71157884504638,
+        "render": 1.9544945647940042,
+        "video-encode": 0.26594639290124
+      },
+      "note": "only process/render operations are exhaustive; other operation totals contain samples >=100ms only"
+    },
+    "severe_per_1000_intervals": 36.27428036508308,
+    "post_mux_severe_per_1000_intervals": 32.76386613620407
+  }
+}

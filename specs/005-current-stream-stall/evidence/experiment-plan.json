@@ -1,0 +1,20 @@
+{
+  "authorized_temporary_change": "RTSP max_interleave_delta=100000 microseconds",
+  "b_commit": "dd3474e",
+  "must_restore_after_sampling": true,
+  "restore_writer_options": {
+    "rtsp_transport": "tcp"
+  },
+  "preserve": [
+    "models",
+    "tracking",
+    "lookahead",
+    "PTS",
+    "frame sequence",
+    "SSH permissions"
+  ],
+  "current_phase": "A/B/A sampling completed; default RTSP options restored",
+  "restored_commit": "77f98a9",
+  "production_main": "969f9f6",
+  "restoration_source_fingerprints_verified": 17
+}

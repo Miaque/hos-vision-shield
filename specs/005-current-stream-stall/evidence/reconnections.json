@@ -1,0 +1,18 @@
+[
+  {
+    "phase": "internal",
+    "previous_attempt": "a05955949e28442dba7683b38e0a5663",
+    "next_attempt": "412d0da07dff421d8f9545366d5105d6",
+    "last_mux_monotonic": 5069944.1672965,
+    "first_mux_monotonic": 5069947.8826078,
+    "mux_progress_gap_seconds": 3.715311300009489
+  },
+  {
+    "phase": "restored-a",
+    "previous_attempt": "3b0e406fdeb246af92ea1870e4bf5a37",
+    "next_attempt": "9d8f73b5b1344a2488a27dbb2752927b",
+    "last_mux_monotonic": 5071516.5712337,
+    "first_mux_monotonic": 5071519.3880591,
+    "mux_progress_gap_seconds": 2.816825400106609
+  }
+]
