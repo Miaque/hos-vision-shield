@@ -79,7 +79,6 @@ def instrument_ort_nodes(model, collector):
     options.enable_profiling = True
     options.profile_file_prefix = str(collector.directory / 'ort-local-face')
     providers = [('CUDAExecutionProvider', model.face.get_provider_options()['CUDAExecutionProvider'])]
-    providers[0][1]['cudnn_conv_algo_search'] = 'DEFAULT'
     model.face = ort.InferenceSession(model.face_model, sess_options=options, providers=providers)
     model.face.disable_fallback()
     collector.ort_session = model.face

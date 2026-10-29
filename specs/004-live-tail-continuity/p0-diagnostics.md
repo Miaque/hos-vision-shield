@@ -52,8 +52,8 @@ P0 B 尚未修改；P1/P2 按用户规定等待 P0 独立验证，P3 及 RTX 30 
 
 `local-face` 独立诊断额外建立一份相同模型、会话选项和 CUDA provider 选项的局部动态会话，只开启 ORT 原生 profiling。最多记录前 64 次局部调用，结束后检查 32 MiB 文件预算，按实际 `run` 序号把采样调用关联到 ORT 的 `model_run`，每次最多返回 8 个最慢算子。超过 64 次后出现的 CUDA 样本可能没有节点详情；`host` 和普通处理不启用此机制。
 
-P0 B 的临时对照仅在这份诊断副本中将 `cudnn_conv_algo_search` 改为 `DEFAULT`；权重、输入、CUDA provider、TF32 禁用设置均不变。常规处理仍使用 HEURISTIC。该实验尚待 RTX 输出等价及慢节点耗时验证，不是已采纳的性能修复。
+P0 B 曾在这份诊断副本中将 `cudnn_conv_algo_search` 临时改为 `DEFAULT`，并让 host 使用同一副本，分别排除 CUDA profiler 和 ORT 本体耗时。实验标签保留这些对照，不把采样 FPS 当性能收益。
 
-临时 host 对照同样使用该诊断副本与原生节点计时，但关闭 CUDA profiler，以排除逐次 CUPTI 启停造成的秒级观察开销。对照结果不得混入原始 HEURISTIC host 基线。
+当前候选撤回诊断中的算法覆盖及 host 会话重建：host 再次仅记录墙钟，local-face 按实际会话的选项建立副本。常规 NumPy 动态人脸会话在计算能力主版本 >=8 使用 DEFAULT；旧 GPU、固定形状 Tensor 会话和车牌会话保持 HEURISTIC。权重、输入、CUDA provider、TF32 禁用设置、阈值及复核规则保持原样。该候选需通过无 profiling 的 RTX 对照才可采纳。
 
 这是算子的主机墙钟时间，包含准备、提交和等待，不能当作纯 GPU 时间。API 既有 trace 仍为 CUDA 事件，节点摘要位于 `device_samples[].ort_top_nodes`。依据 [ORT profiling 文档](https://onnxruntime.ai/docs/performance/tune-performance/profiling-tools.html)，profiling 必须在创建会话前启用，因此诊断会话保持新建；不把额外采样实验的 FPS 当性能收益。
