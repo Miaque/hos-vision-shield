@@ -119,7 +119,13 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
     monkeypatch.setattr(streams, "masked_frame", software_mask)
     paced = []
     wait = streams.StreamPacer.wait
-    monkeypatch.setattr(streams.StreamPacer, 'wait', lambda self, moment: paced.append(moment) or wait(self, moment))
+    def paced_wait(self, moment):
+        paced.append(moment)
+        if fault == 'stop':
+            self.stop.set()
+            return False
+        return wait(self, moment)
+    monkeypatch.setattr(streams.StreamPacer, 'wait', paced_wait)
     config = {**Settings(_env_file=None, debug=debug).model_dump(), "inference_device": "cuda",
               "detection_interval": 3, "tracking": "flow", "stream_output_pacing": pacing}
     if default_schedule:
@@ -134,7 +140,7 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
         streams.process_stream("rtmp://camera/input" if muted or with_audio else "rtsp://camera/input",
                                "rtsp://output/test", object(), config, stop, events.append)
 
-    if fault:
+    if fault and fault != 'stop':
         with pytest.raises(RuntimeError, match=f"{fault} failed"):
             process()
         assert not encoded and not any(event.get("output") for event in events)
@@ -143,6 +149,11 @@ def test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(monkeypatch
             assert events[-1]['stats']['stream']['encoded_frames'] == 0
     else:
         process()
+        if fault == 'stop':
+            assert not encoded and not any(event.get('output') for event in events)
+            assert events[-1]['stats']['stream']['encoded_frames'] == 0
+            assert stop.is_set() and closed.is_set()
+            return
         assert masked == [900000, 903600, 907200]
         assert encoded == [0, 3600, 7200]
         assert len(paced) == (3 if pacing else 0)
@@ -181,6 +192,11 @@ def test_live_pacing_can_be_disabled_without_changing_masked_output(monkeypatch)
 def test_slow_encoder_does_not_squeeze_following_final_packets_together(monkeypatch):
     test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
         monkeypatch, None, False, False, True, slow_first=True)
+
+
+def test_stop_during_pacing_does_not_report_an_unwritten_packet_as_output(monkeypatch):
+    test_cuda_stream_keeps_device_path_order_clocks_and_fails_closed(
+        monkeypatch, 'stop', False, False, True)
 
 
 def test_muted_rtmp_with_audio_repairs_video_clock_on_cuda_path(monkeypatch):
