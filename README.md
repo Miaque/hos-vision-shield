@@ -91,23 +91,24 @@ bash scripts/deploy-server.sh --tag exp-20261023-b-deploy-02
 
 GPU 镜像按 [研究记录中的生成命令](specs/002-compose-cpu-gpu/research.md)使用 `deploy/requirements-cu126.txt`，共同依赖沿用根锁版本；根声明变更时重新生成，禁止手工改 pin。CPU 使用根 uv.lock，Windows 安装方式保持不变。初次交付证据与未运行项见 [实施记录](specs/002-compose-cpu-gpu/validation/gates.md)，后续服务器分阶段实测见 [时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)；这些记录不代表完整部署验收已通过。
 
-### 两路录像实时回放
+### 三路录像实时回放
 
-`video-replay` 必须显式启动，上述普通 Compose 命令及 `deploy-server.sh` 不启动或更新该服务，也不要求准备回放录像。单个容器内运行 MediaMTX 和两个 FFmpeg 回放进程，不使用 GPU。两段录像按原时间节奏无限循环，视频及音频直接复制码流；回放源允许匿名读取，只开放 `replay/rfm-01` 和 `replay/rfm-02` 两条路径。
+`video-replay` 必须显式启动，上述普通 Compose 命令及 `deploy-server.sh` 不启动或更新该服务，也不要求准备回放录像。单个容器内运行 MediaMTX 和三个 FFmpeg 回放进程，不使用 GPU。三段录像按原时间节奏无限循环，视频及音频直接复制码流；回放源允许匿名读取，只开放 `replay/rfm-01`、`replay/rfm-02` 和 `replay/rfm-03` 三条路径。
 
-首次启动回放前，将两段未脱敏的录像放到服务器同一目录，分别命名为 `rfm-01.mp4`、`rfm-02.mp4`，并在 `.env.compose` 设置该绝对目录：
+首次启动回放前，将三段未脱敏的录像放到服务器同一目录，分别命名为 `rfm-01.mp4`、`rfm-02.mp4`、`rfm-03.mp4`，并在 `.env.compose` 设置该绝对目录：
 
 ```dotenv
 REPLAY_MEDIA_DIR=/home/meiya/vision-shield-replay/media
 ```
 
-本次对应本地 `data/recordings/rfm-live-20261027-150312/rfm-original-preview.mp4` 和 `data/recordings/rfm-live-20261027-150915/rfm-original-preview.mp4`。录像不提交 Git、不打进镜像，只读挂载；未指定目录时使用仓库下的 `data/replay/`。目录缺失会拒绝启动，视频缺失或任一路不可读取会令回放容器的健康检查失败。
+前两段对应本地 `data/recordings/rfm-live-20261027-150312/rfm-original-preview.mp4` 和 `data/recordings/rfm-live-20261027-150915/rfm-original-preview.mp4`；第三段使用同一挂载目录中的 `rfm-03.mp4`。录像不提交 Git、不打进镜像，只读挂载；未指定目录时使用仓库下的 `data/replay/`。目录缺失会拒绝启动，视频缺失或任一路不可读取会令回放容器的健康检查失败。
 
 实时任务使用以下输入地址，按服务器的 `BIND_ADDRESS` 替换 IP：
 
 ```text
 rtsp://192.168.1.104:8555/replay/rfm-01
 rtsp://192.168.1.104:8555/replay/rfm-02
+rtsp://192.168.1.104:8555/replay/rfm-03
 ```
 
 在 `SOURCE_ALLOWLIST` 原列表中保留已有条目并追加服务器 IP `192.168.1.104`，随后按原部署方式重新创建应用容器。测试任务显式使用 `X-Detection-Interval: 3`、`X-Tracking-Mode: flow`，以保持文件复测的调度条件。循环拼接点会发生画面跳变，分析跟踪失败与卡顿时需单独标记。
@@ -117,6 +118,8 @@ rtsp://192.168.1.104:8555/replay/rfm-02
 ```bash
 docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.replay.yaml up -d --build --wait video-replay
 ```
+
+从两路升级为三路时，同步 `deploy/mediamtx.replay.yml` 和 `compose.replay.yaml` 后执行上述命令，健康检查变更会触发回放容器重建，已有回放连接会短暂中断。新增回放源不会自动替换脱敏任务：先确认第三路可读取，再通过 `PATCH /v1/tasks/{id}` 提交 `{"desired_state":"stopped"}`，等待旧任务进入 `stopped`，最后通过 `POST /v1/stream-tasks` 使用第三路地址创建新任务。默认脱敏播放地址随新任务 ID 改变。
 
 检查和临时停止回放使用同一文件组合：
 

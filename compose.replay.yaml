@@ -25,8 +25,9 @@ services:
         - CMD-SHELL
         - >-
           ffprobe -v error -rtsp_transport tcp -timeout 5000000 -show_entries stream=codec_name -of csv=p=0 rtsp://127.0.0.1:8554/replay/rfm-01 >/dev/null &&
-          ffprobe -v error -rtsp_transport tcp -timeout 5000000 -show_entries stream=codec_name -of csv=p=0 rtsp://127.0.0.1:8554/replay/rfm-02 >/dev/null
+          ffprobe -v error -rtsp_transport tcp -timeout 5000000 -show_entries stream=codec_name -of csv=p=0 rtsp://127.0.0.1:8554/replay/rfm-02 >/dev/null &&
+          ffprobe -v error -rtsp_transport tcp -timeout 5000000 -show_entries stream=codec_name -of csv=p=0 rtsp://127.0.0.1:8554/replay/rfm-03 >/dev/null
       interval: 30s
-      timeout: 20s
+      timeout: 30s
       retries: 3
       start_period: 30s
