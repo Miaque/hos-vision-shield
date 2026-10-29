@@ -24,6 +24,8 @@ class FinalFrame:
 
 class FinalPublisher:
     def __init__(self, publish, *, capacity=4, budget=.5):
+        if not 1 <= capacity <= 4 or not 0 < budget <= .5:
+            raise ValueError('Prototype requires 1-4 frames and at most 0.5 seconds')
         self.publish, self.budget = publish, budget
         self.queue, self.stop = Queue(maxsize=capacity), Event()
         self.error = None
@@ -86,6 +88,12 @@ class FinalPublisher:
 def self_check():
     def frame(index, **kwargs):
         return FinalFrame(index, Fraction(index, 25), bytes([64]) * 12, **kwargs)
+
+    try:
+        FinalPublisher(lambda value: None, capacity=0)
+        raise AssertionError('An unbounded queue was accepted')
+    except ValueError:
+        pass
 
     outputs, progressed = [], Event()
 
