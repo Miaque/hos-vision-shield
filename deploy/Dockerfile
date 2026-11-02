@@ -7,7 +7,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY deploy/requirements-cu126.txt ./deploy/requirements-cu126.txt
 # 源码和 README 不进入依赖层；缓存挂载在依赖变更时仍可复用下载。
-RUN --mount=type=cache,target=/root/.cache/uv \
+# 串行使用共享缓存，避免 CPU/GPU 并行构建等待 uv 文件锁超时。
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     case "$TORCH_BACKEND" in \
       cpu) uv sync --locked --no-dev --no-editable --no-install-project ;; \
       cu126) uv venv /opt/venv \
@@ -18,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM dependencies AS builder
 COPY src/ ./src/
 COPY README.md ./
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv build --wheel --out-dir /dist
 
 FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258
