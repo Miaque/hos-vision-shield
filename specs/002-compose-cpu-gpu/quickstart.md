@@ -222,7 +222,11 @@ git status --short
 
 ### 后续日常更新
 
-GPU 服务器使用 `scripts/deploy-server.sh [远程分支]` 或 `scripts/deploy-server.sh --tag 标签`。前提是当前目录已经接入 Git，保留原 `.env.compose`，且原部署项目名为 `vision-shield`。推荐 tag 固定每次对照及回退版本。不传参数会从当前分支或 detached HEAD 安全切换到 `main`，并部署最新的 `origin/main`；显式传入分支时允许安全切换到该分支。脚本可从任意目录以实际脚本路径调用，会自动进入仓库根目录。旧脚本若限制无参数调用时的当前分支，可先显式传 `main` 更新到新版。
+GPU 服务器使用 `scripts/deploy-server.sh [--env test|prod] [远程分支 | --tag 标签]`，`--env` 须放在分支或 `--tag` 参数前。默认更新测试环境：读取 `.env.compose.test`，项目名为 `vision-shield-test`，在原 GPU 文件组合后追加 `compose.test.yaml`，使用独立测试镜像标签。显式传 `--env prod` 才操作正式环境，沿用 `.env.compose`、项目名 `vision-shield` 和原 GPU 文件组合。缺少所选环境配置时停止，不回退或自动复制另一套配置。
+
+前提是当前目录已经接入 Git，并已准备所选环境的配置。测试配置可从 `deploy/compose.env.example` 复制为 `.env.compose.test`，指定测试 GPU（如 `GPU_DEVICE_ID=5`，推荐完整 UUID），隔离 API/RTSP/HLS 端口、`RTSP_PUBLIC_BASE_URL`、Redis 数据库和媒体目录；模型目录可只读共享，通知保持关闭或使用独立测试目标。Redis 队列名固定，两套环境不能共用同一个 Redis 数据库。配置文件权限设为 `600`。
+
+推荐 tag 固定每次对照及回退版本。未指定分支或 tag 时会从当前分支或 detached HEAD 安全切换到 `main`，并部署最新的 `origin/main`；显式传入分支时允许安全切换到该分支。脚本可从任意目录以实际脚本路径调用，会自动进入仓库根目录。
 
 开发机先提交并推送变更；第一次使用时，在服务器仓库根目录获取脚本：
 
@@ -233,30 +237,34 @@ git -c http.version=HTTP/1.1 pull --ff-only origin main
 成功后，以后每次更新只需执行：
 
 ```bash
+# 默认更新测试环境的 origin/main
 bash scripts/deploy-server.sh
-# 同一服务器依次部署实验分支；首次必须先同步新版脚本
+# 测试环境的实验分支
 bash scripts/deploy-server.sh feature/gpu-throughput-optimization
-# 精确复现及回退到已推送 tag
-bash scripts/deploy-server.sh --tag exp-20261023-b-deploy-02
+# 测试环境固定版本：替换为已推送且包含 compose.test.yaml 的 tag
+bash scripts/deploy-server.sh --tag YOUR_TEST_TAG
+# 正式环境必须显式指定
+bash scripts/deploy-server.sh --env prod
+bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 ```
 
-旧版脚本忽略参数，不能直接向旧版传实验分支；须先同步本次新版脚本。新脚本依次验证参数及 Git/配置前提、使用 HTTP/1.1 fetch 指定远程分支、检查目标本地分支可快进后切换并更新到刚获取的提交，再静默校验 Compose 配置、构建 CPU/GPU 镜像、更新容器并等待服务运行及 API 健康（最多 240 秒）。沿用原 API `/health/ready` 和 worker 预检机制，成功后显示服务状态、部署分支及提交号；HTTP/1.1 不保证网络可用，拉取失败时直接停止。
+首次使用须先同步支持 `--env` 的新版脚本，旧版无参数调用仍可能操作正式环境，不能用旧入口代替测试环境部署。新脚本依次验证环境及版本参数、Git/配置前提，使用 HTTP/1.1 fetch 指定远程分支，检查目标本地分支可快进后切换并更新到刚获取的提交，再静默校验所选环境的 Compose 配置、构建 CPU/GPU 镜像、更新容器并等待服务运行及 API 健康（最多 240 秒）。沿用原 API `/health/ready` 和 worker 预检机制，成功后显示服务状态、部署环境、分支或 tag 及提交号；HTTP/1.1 不保证网络可用，拉取失败时直接停止。
 
-`--tag` 显式拉取 `refs/tags/标签` 并以 detached HEAD 切换到其提交，不受同名分支干扰，也不快进到后续分支版本。轻量 tag 和附注 tag 均支持；远程同名 tag 被替换时拒绝覆盖本地 tag。完成输出包含 tag 及提交号。回退也传原 tag，不移动标签或强制重置分支。部署旧版本后，工作区脚本也会恢复为该版本；若旧脚本不支持 `--tag`，再次更新前须同步新版入口。
+`--tag` 显式拉取 `refs/tags/标签` 并以 detached HEAD 切换到其提交，不受同名分支干扰，也不快进到后续分支版本。轻量 tag 和附注 tag 均支持；远程同名 tag 被替换时拒绝覆盖本地 tag。完成输出包含 tag 及提交号。回退也传原 tag，不移动标签或强制重置分支。测试部署的目标版本须包含 `compose.test.yaml`。部署旧版本后，工作区脚本也会恢复为该版本；旧版可能仍默认操作正式环境，再次更新前须同步支持环境选择的新版入口。
 
 脚本拒绝未提交的跟踪文件修改、目标分支分叉或本地额外提交，不自动 stash、强制重置、备份或回滚，不输出包含凭据的展开配置。目标不存在时停止；切换与未跟踪文件冲突时由 Git 拒绝覆盖。只更新显式选择的目标分支，不合并到其他分支。配置、媒体和权重继续保留。脚本更新自身时，本次执行使用启动时已解析的脚本内容。验证使用真实 Bash 和临时 Git 仓库、替代 Compose 命令；没有执行真实 Docker 构建或服务器部署。
 
-CPU 部署仍可使用手动命令；GPU 模式的手动命令与脚本主体对应如下：
+CPU 部署仍可使用手动命令；测试环境 GPU 模式的手动命令与脚本主体对应如下，正式环境改用 `.env.compose`、`-p vision-shield` 并移除 `-f compose.test.yaml`：
 
 ```bash
-dc=(docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml)
+dc=(docker-compose --env-file .env.compose.test -p vision-shield-test -f compose.yaml -f compose.gpu.yaml -f compose.test.yaml)
 git pull --ff-only origin main &&
 "${dc[@]}" config --quiet &&
 "${dc[@]}" build &&
 "${dc[@]}" up -d --no-build --wait --wait-timeout 240
 ```
 
-`--ff-only` 在服务器分支产生分叉时停止更新，不自动合并。服务器的环境差异保存在 `.env.compose`，代码变更在开发机提交；遇到本地修改冲突时先核对，不通过强制重置覆盖。开发机仅提交还不够，必须先推送到远程，服务器才能拉到该提交。
+`--ff-only` 在服务器分支产生分叉时停止更新，不自动合并。服务器的环境差异分别保存在 `.env.compose.test` 和 `.env.compose`，代码变更在开发机提交；遇到本地修改冲突时先核对，不通过强制重置覆盖。开发机仅提交还不够，必须先推送到远程，服务器才能拉到该提交。
 
 构建时旧容器继续运行，构建失败不会进入 `up`；修复后重新执行即可。`up` 会依据镜像及配置变化重建所需容器；仅执行 `restart` 不会切换到新镜像。日常更新不先 `down`、不删除卷或数据、不使用 `--no-cache`。依赖及构建指令未变化、构建缓存仍可用时，只改源码可复用 PyTorch/CUDA 依赖层。
 
@@ -266,10 +274,10 @@ git pull --ff-only origin main &&
 
 ```bash
 git log -1 --oneline
-docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml ps
-docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml logs --tail 100 api file-worker stream-worker
-# 替换为服务器实际绑定的 API 地址；worker 预检完成后应返回 200。
-curl --fail http://192.168.1.104:8000/health/ready
+"${dc[@]}" ps
+"${dc[@]}" logs --tail 100 api file-worker stream-worker
+# 替换为所选环境实际绑定的 API 地址；worker 预检完成后应返回 200。
+curl --fail http://192.168.1.104:18001/health/ready
 ```
 
 Git 提交号仅标识当前源码，不能单独证明容器已经切换或业务验收通过。以上流程在本地仅核对文档和现有构建配置，服务器实际更新后仍需执行上述检查。

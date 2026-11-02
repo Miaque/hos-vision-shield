@@ -78,14 +78,22 @@ docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compo
 日常更新可直接使用 Git 工作目录；从源码包切换可克隆新目录，或在原目录接入 Git，步骤见[Git 更新与重新构建](specs/002-compose-cpu-gpu/quickstart.md#7-git-更新与重新构建)。GPU 服务器在仓库根目录执行：
 
 ```bash
+# 默认更新测试环境的 origin/main
 bash scripts/deploy-server.sh
-# 实验分支：必须先同步支持分支参数的新版脚本
+# 测试环境的实验分支
 bash scripts/deploy-server.sh feature/gpu-throughput-optimization
-# 固定版本部署及回退：推荐使用已推送的不可变 tag
-bash scripts/deploy-server.sh --tag exp-20261023-b-deploy-02
+# 测试环境固定版本部署及回退：替换为已推送且包含 compose.test.yaml 的 tag
+bash scripts/deploy-server.sh --tag YOUR_TEST_TAG
+# 正式环境必须显式指定，--env 放在分支或 --tag 参数前
+bash scripts/deploy-server.sh --env prod
+bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 ```
 
-代码须先从开发机提交并推送到指定远程分支或 tag。推荐 `--tag 标签`：拉取准确 tag 并以 detached HEAD 部署，不移动本地分支；已有同名 tag 指向不同版本时拒绝覆盖。不传参数会从当前分支或 detached HEAD 安全切换到 `main`，并部署最新的 `origin/main`；显式传分支时安全切换并快进到该分支，保留其他分支。首次使用须先同步新版脚本，旧版可先显式传 `main` 完成更新。脚本固定使用 GPU 文件组合、项目名 `vision-shield` 和现有 `.env.compose`，依次拉取代码、检查配置、构建、更新容器并等待就绪（最多 240 秒），成功后输出版本标识和提交号。未提交的跟踪文件修改、目标分支分叉或本地额外提交均会停止部署；未跟踪文件与目标版本冲突时也会停止，不覆盖本地文件。脚本不备份、不强制重置、不自动回滚，网络或构建失败时不会进入容器更新步骤。
+脚本默认 `--env test`：读取 `.env.compose.test`，使用项目名 `vision-shield-test`，组合 `compose.yaml`、`compose.gpu.yaml` 和 `compose.test.yaml`，测试镜像使用 `vision-shield-test:cpu/cu126`。`--env prod` 沿用 `.env.compose`、项目名 `vision-shield` 和原有 GPU 文件组合，不追加测试覆盖文件。缺少所选环境配置时直接停止，不回退到另一套环境。
+
+首次使用须先同步支持 `--env` 的新版脚本，旧版无参数调用仍可能操作正式环境。测试环境配置可从 `deploy/compose.env.example` 复制为 `.env.compose.test`，指定测试 GPU（如 `GPU_DEVICE_ID=5`，推荐使用完整 UUID），并单独设置 API/RTSP/HLS 端口、`RTSP_PUBLIC_BASE_URL`、Redis 数据库和媒体目录；模型目录可只读共享。测试通知须使用独立目标，或保持 `NOTIFICATION_TARGETS=[]`。脚本不自动生成环境配置。
+
+代码须先从开发机提交并推送到指定远程分支或 tag。推荐 `--tag 标签`：拉取准确 tag 并以 detached HEAD 部署，不移动本地分支；已有同名 tag 指向不同版本时拒绝覆盖。未指定分支或 tag 时会从当前分支或 detached HEAD 安全切换到 `main`，并部署最新的 `origin/main`；显式传分支时安全切换并快进到该分支，保留其他分支。脚本依次拉取代码、检查配置、构建、更新容器并等待就绪（最多 240 秒），成功后输出环境、版本标识和提交号。未提交的跟踪文件修改、目标分支分叉或本地额外提交均会停止部署；未跟踪文件与目标版本冲突时也会停止，不覆盖本地文件。脚本不备份、不强制重置、不自动回滚，网络或构建失败时不会进入容器更新步骤。
 
 日常更新不先执行 `down`，构建成功后才替换容器。重建期间旧容器继续服务，替换时会短暂中断；正在执行的文件任务不会续跑，流任务会尝试恢复。当前 Dockerfile 已分离依赖层与应用层，构建缓存可用且依赖未变时，源码修改可复用已安装的 PyTorch/CUDA 依赖；不要在日常更新中使用 `--no-cache`。
 

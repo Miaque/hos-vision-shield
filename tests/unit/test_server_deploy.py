@@ -34,12 +34,13 @@ def deployment(tmp_path):
     (remote / "scripts").mkdir()
     (remote / "scripts/deploy-server.sh").write_bytes((root / "scripts/deploy-server.sh").read_bytes())
     (remote / ".gitattributes").write_text("*.sh text eol=lf\n", encoding="utf-8")
-    (remote / ".gitignore").write_text(".env.compose\ndata/\nmodels/*.jit\n", encoding="utf-8")
+    (remote / ".gitignore").write_text(".env.compose\n.env.compose.test\ndata/\nmodels/*.jit\n", encoding="utf-8")
     (remote / "app.txt").write_text("old", encoding="utf-8")
     commit(remote)
     server = tmp_path / "server"
     git("clone", str(remote), str(server), cwd=tmp_path)
     (server / ".env.compose").write_text("server settings", encoding="utf-8")
+    (server / ".env.compose.test").write_text("test settings", encoding="utf-8")
     (server / "data").mkdir()
     (server / "data/result.bin").write_bytes(b"media")
     (server / "models").mkdir()
@@ -71,20 +72,76 @@ def deployment(tmp_path):
                            git=git, commit=commit, run=run)
 
 
-def test_server_deployment_pulls_builds_and_waits_without_touching_data(deployment):
+@pytest.mark.parametrize("args,environment,env_file,project,extra_file", [
+    ((), "test", ".env.compose.test", "vision-shield-test", " -f compose.test.yaml"),
+    (("--env", "test"), "test", ".env.compose.test", "vision-shield-test", " -f compose.test.yaml"),
+    (("--env", "prod"), "prod", ".env.compose", "vision-shield", ""),
+])
+def test_server_deployment_pulls_builds_and_waits_without_touching_data(
+    deployment, args, environment, env_file, project, extra_file,
+):
     d = deployment
-    result = d.run()
+    result = d.run(*args)
     assert result.returncode == 0, result.stdout + result.stderr
     assert d.git("rev-parse", "HEAD", cwd=d.server) == d.git("rev-parse", "HEAD", cwd=d.remote)
     assert (d.server / "app.txt").read_text("utf-8") == "latest"
     assert (d.server / ".env.compose").read_text("utf-8") == "server settings"
+    assert (d.server / ".env.compose.test").read_text("utf-8") == "test settings"
     assert (d.server / "data/result.bin").read_bytes() == b"media"
     assert (d.server / "models/face.jit").read_bytes() == b"weights"
     commands = d.log.read_text("utf-8").splitlines()
-    assert commands[1].endswith("-f compose.gpu.yaml config --quiet")
+    prefix = f"--env-file {env_file} -p {project} -f compose.yaml -f compose.gpu.yaml{extra_file}"
+    assert all(command.startswith(prefix + " ") for command in commands[1:])
+    assert commands[1].endswith(" config --quiet")
     assert commands[2].endswith(" build")
     assert commands[3].endswith(" up -d --no-build --wait --wait-timeout 240")
     assert "部署完成" in result.stdout
+    assert f"环境：{environment}" in result.stdout
+
+
+@pytest.mark.parametrize("args,env_file", [
+    ((), ".env.compose.test"),
+    (("--env", "prod"), ".env.compose"),
+])
+def test_server_deployment_requires_the_selected_environment_file(deployment, args, env_file):
+    d = deployment
+    (d.server / env_file).unlink()
+    original_head = d.git("rev-parse", "HEAD", cwd=d.server)
+
+    result = d.run(*args)
+
+    assert result.returncode != 0
+    assert env_file in result.stderr
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == original_head
+    assert not d.log.exists()
+
+
+@pytest.mark.parametrize("args,other_file", [
+    ((), ".env.compose"),
+    (("--env", "prod"), ".env.compose.test"),
+])
+def test_server_deployment_does_not_require_the_other_environment_file(deployment, args, other_file):
+    d = deployment
+    (d.server / other_file).unlink()
+
+    result = d.run(*args)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("args", [
+    ("--env",), ("--env", ""), ("--env", "staging"),
+    ("--env", "test", "--env", "prod"), ("--env", "prod", "main", "extra"),
+])
+def test_server_deployment_rejects_invalid_environment_arguments(deployment, args):
+    d = deployment
+    original_head = d.git("rev-parse", "HEAD", cwd=d.server)
+
+    result = d.run(*args)
+
+    assert result.returncode != 0
+    assert d.git("rev-parse", "HEAD", cwd=d.server) == original_head
+    assert not d.log.exists()
 
 
 @pytest.mark.parametrize("failure,forbidden", [("config", " build"), ("build", " up "), ("up", " ps")])
@@ -142,7 +199,8 @@ def test_server_deployment_survives_updating_its_own_script(deployment):
 
 
 @pytest.mark.parametrize("existing_branch", [False, True])
-def test_server_deployment_selects_and_fast_forwards_an_explicit_branch(deployment, existing_branch):
+@pytest.mark.parametrize("env_args", [(), ("--env", "test"), ("--env", "prod")])
+def test_server_deployment_selects_and_fast_forwards_an_explicit_branch(deployment, existing_branch, env_args):
     d = deployment
     branch = "feature/gpu-throughput-optimization"
     d.git("switch", "-c", branch, cwd=d.remote)
@@ -153,7 +211,7 @@ def test_server_deployment_selects_and_fast_forwards_an_explicit_branch(deployme
     d.commit(d.remote)
     original_main = d.git("rev-parse", "main", cwd=d.server)
 
-    result = d.run(branch)
+    result = d.run(*env_args, branch)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert d.git("branch", "--show-current", cwd=d.server) == branch
@@ -166,7 +224,7 @@ def test_server_deployment_selects_and_fast_forwards_an_explicit_branch(deployme
     assert branch in result.stdout
 
     experiment_head = d.git("rev-parse", branch, cwd=d.server)
-    result = d.run("main")
+    result = d.run(*env_args, "main")
     assert result.returncode == 0, result.stdout + result.stderr
     assert d.git("branch", "--show-current", cwd=d.server) == "main"
     assert d.git("rev-parse", "HEAD", cwd=d.server) == d.git("rev-parse", "main", cwd=d.remote)
@@ -218,7 +276,8 @@ def test_server_deployment_rejects_unknown_or_invalid_branch(deployment, args):
 
 
 @pytest.mark.parametrize("annotated", [False, True])
-def test_server_deployment_selects_an_exact_tag_without_moving_branches(deployment, annotated):
+@pytest.mark.parametrize("env_args", [(), ("--env", "test"), ("--env", "prod")])
+def test_server_deployment_selects_an_exact_tag_without_moving_branches(deployment, annotated, env_args):
     d = deployment
     tag = "exp-test-p0-01"
     if annotated:
@@ -228,7 +287,7 @@ def test_server_deployment_selects_an_exact_tag_without_moving_branches(deployme
         d.git("tag", tag, cwd=d.remote)
     original_main = d.git("rev-parse", "main", cwd=d.server)
 
-    result = d.run("--tag", tag)
+    result = d.run(*env_args, "--tag", tag)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert d.git("branch", "--show-current", cwd=d.server) == ""
@@ -243,7 +302,7 @@ def test_server_deployment_selects_an_exact_tag_without_moving_branches(deployme
     fixed_commit = d.git("rev-parse", "HEAD", cwd=d.server)
     (d.remote / "app.txt").write_text("next release", encoding="utf-8")
     d.commit(d.remote)
-    result = d.run("--tag", tag)
+    result = d.run(*env_args, "--tag", tag)
     assert result.returncode == 0, result.stdout + result.stderr
     assert d.git("rev-parse", "HEAD", cwd=d.server) == fixed_commit
     result = d.run()

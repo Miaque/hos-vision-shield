@@ -1,0 +1,11 @@
+services:
+  api:
+    image: vision-shield-test:cpu
+  reconciler:
+    image: vision-shield-test:cpu
+  notifier:
+    image: vision-shield-test:cpu
+  file-worker:
+    image: vision-shield-test:cu126
+  stream-worker:
+    image: vision-shield-test:cu126
