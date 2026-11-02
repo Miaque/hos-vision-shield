@@ -7,5 +7,9 @@ services:
     image: vision-shield-test:cpu
   file-worker:
     image: vision-shield-test:cu126
+    group_add:
+      - "1022"
   stream-worker:
     image: vision-shield-test:cu126
+    group_add:
+      - "1022"
