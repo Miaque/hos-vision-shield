@@ -8,7 +8,7 @@
 | --- | --- |
 | `compose.yaml` | 五服务 CPU 部署，复用现有带密码 Redis，不预留 GPU |
 | `compose.gpu.yaml` | 覆盖两类 worker 的镜像、构建参数、检测后端、设备设置、每池两个副本及同一张 GPU 预留 |
-| `compose.test.yaml` | 测试环境独立镜像标签；两个 worker 使用 cu130 构建及测试机 GPU 设备附加组 1022 |
+| `compose.test.yaml` | 测试环境独立镜像标签；两个 worker 使用 cu130 构建及测试机 GPU 设备附加组 1022；流 worker 包含 NVIDIA 580 NVDEC 兼容配置 |
 | `deploy/Dockerfile` | 一个构建定义，生成 CPU、cu126 与测试用 cu130 应用镜像 |
 | `deploy/requirements-cu126.txt` | 从根声明与原锁共同版本约束生成的带哈希 GPU 锁，不改变本机默认依赖 |
 | `deploy/requirements-cu130.in` / `deploy/requirements-cu130.txt` | 测试环境 CUDA 13 的依赖覆盖声明及生成锁，不改变正式环境 cu126 锁 |
@@ -43,7 +43,7 @@ docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compo
 | `API_PORT` / `RTSP_PORT` | 默认 `8000` / `8554` | 宿主发布端口 |
 | `RTSP_PUBLIC_BASE_URL` | 必填 `rtsp://<客户端可达地址>:<RTSP_PORT>` | 仅用于既有响应中的 `playback_url` |
 | `SOURCE_ALLOWLIST` | 默认 `[]`，远程媒体须填授权主机/IP/CIDR 的 JSON 数组 | 保留现有来源校验 |
-| `GPU_DEVICE_ID` | GPU 模式必填一个卡号或 UUID；不允许空值、`all` 或列表 | 两类 worker 预留同一设备 |
+| `GPU_DEVICE_ID` | GPU 模式必填一个卡号或 UUID；不允许空值、`all` 或列表 | 两类 worker 使用同一计算设备；测试流 worker 的映射例外见下文 |
 
 两种应用镜像固定 `WORKDIR=/app`，并在镜像 ENV 设置 `FACE_MODEL_PATH=/models/yunet_face.onnx`、`PLATE_MODEL_PATH=/models/hyperlpr_plate.onnx`、`EGOBLUR_FACE_MODEL_PATH=/models/face.jit`、`EGOBLUR_PLATE_MODEL_PATH=/models/license_plate.jit`，使独立预检与 Compose 使用同一绝对路径。Compose 从 `.env.compose` 读取 `REDIS_URL`，示例为 `redis://:URL编码后的密码@192.168.1.104:6378/6`。`MEDIA_ROOT=/data`、`MEDIAMTX_CONTROL_URL=http://mediamtx:9997` 保持固定。默认 `DETECTION_BACKEND=quality`、`DETECTION_MAX_SIDE=1280`、`DETECTION_BOX_PADDING=0.15`，继承既有限流和缓冲参数。
 
@@ -56,6 +56,8 @@ CPU 基础配置对应用角色显式设置 `INFERENCE_DEVICE=cpu`；GPU 覆盖�
 使用 `deploy.resources.reservations.devices`，设置 `driver: nvidia`、`capabilities: [gpu]`、单元素 `device_ids`；不同时设置 `count`，不使用需要 Compose 2.30.0 的 `services.gpus`。卡号/UUID 由部署人员通过 `nvidia-smi` 确认；目标卡在容器内作为唯一可见设备供既有 `cuda` 使用。
 
 GPU 覆盖将相同 `GPU_DEVICE_ID` 同时注入两个 worker 的环境。probe 在该部署变量存在时校验它是单个非负卡号或完整 GPU UUID，并确认仅一张 CUDA 设备可见；拒绝空值、all 与列表，不增加新的 Settings 设备选项。原生 Windows 未设置该部署变量时保留既有设备选择规则。
+
+测试环境例外：`compose.test.yaml` 仅对 `stream-worker` 用 `devices: !override` 和 `count: all` 替换单卡预留，兼容 NVIDIA 580 驱动在多卡宿主机中的 NVDEC 初始化故障；`CUDA_VISIBLE_DEVICES=${GPU_DEVICE_ID}` 使 CUDA 仍只看到选定计算卡，推荐完整 UUID。测试流容器实际可访问全部 GPU，不提供单卡设备隔离。文件 worker 与正式环境保持原单卡预留；`deploy-server.sh` 的测试文件组合自动携带此配置，无需额外临时覆盖。驱动修复后移除此例外。
 
 GPU Compose 的文件池和流池各启动两个 worker 副本，每个副本同时处理一个任务，共用所选卡。后端为 quality_yolo：YOLO 人脸与 YuNet/HyperLPR 使用 ONNX Runtime CUDA，EgoBlur 车牌使用 PyTorch CUDA；CUDA 离线视频使用 NVENC，解码、图像预处理、后处理、跟踪和遮挡仍使用 CPU，实时流仍用 libx264。选择不提供独占保证，不做多卡调度，不据单任务推理成功承诺并发显存容量。无效设备、CUDA 不可用或算子失败均不得改用 CPU 或其他卡。
 

@@ -91,6 +91,8 @@ bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 
 脚本默认 `--env test`：读取 `.env.compose.test`，使用项目名 `vision-shield-test`，组合 `compose.yaml`、`compose.gpu.yaml` 和 `compose.test.yaml`，测试镜像使用 `vision-shield-test:cpu/cu130`。测试 GPU 镜像为 RTX 5090 使用 PyTorch CUDA 13.0 和 ONNX Runtime 1.31.1，并保留测试机 NVIDIA 设备附加组 `1022`。`--env prod` 沿用 `.env.compose`、项目名 `vision-shield` 和原有 cu126 GPU 文件组合，不追加测试覆盖文件。缺少所选环境配置时直接停止，不回退到另一套环境。
 
+测试流 worker 包含 NVIDIA 580 多卡宿主机的 NVDEC 临时兼容配置：用 `!override` 将设备预留替换为 `count: all`，并用 `CUDA_VISIBLE_DEVICES=${GPU_DEVICE_ID}` 固定应用计算卡，推荐填写完整 GPU UUID。这会赋予测试流容器全部 GPU 的访问权限，环境变量不提供设备隔离；文件 worker 和正式环境仍使用单卡预留。配置已纳入 `compose.test.yaml`，正常测试更新无需再加载服务器 `.tools/nvdec-workaround/` 中的临时覆盖文件；驱动修复后应移除此兼容配置并恢复单卡映射。
+
 首次使用须先同步支持 `--env` 的新版脚本，旧版无参数调用仍可能操作正式环境。测试环境配置可从 `deploy/compose.env.example` 复制为 `.env.compose.test`，指定测试 GPU（如 `GPU_DEVICE_ID=5`，推荐使用完整 UUID），并单独设置 API/RTSP/HLS 端口、`RTSP_PUBLIC_BASE_URL`、Redis 数据库和媒体目录；模型目录可只读共享。测试通知须使用独立目标，或保持 `NOTIFICATION_TARGETS=[]`。脚本不自动生成环境配置。
 
 代码须先从开发机提交并推送到指定远程分支或 tag。推荐 `--tag 标签`：拉取准确 tag 并以 detached HEAD 部署，不移动本地分支；已有同名 tag 指向不同版本时拒绝覆盖。未指定分支或 tag 时会从当前分支或 detached HEAD 安全切换到 `main`，并部署最新的 `origin/main`；显式传分支时安全切换并快进到该分支，保留其他分支。脚本依次拉取代码、检查配置、构建、更新容器并等待就绪（最多 240 秒），成功后输出环境、版本标识和提交号。未提交的跟踪文件修改、目标分支分叉或本地额外提交均会停止部署；未跟踪文件与目标版本冲突时也会停止，不覆盖本地文件。脚本不备份、不强制重置、不自动回滚，网络或构建失败时不会进入容器更新步骤。

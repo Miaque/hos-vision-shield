@@ -17,5 +17,15 @@ services:
     build:
       args:
         TORCH_BACKEND: cu130
+    environment:
+      CUDA_VISIBLE_DEVICES: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
     group_add:
       - "1022"
+    deploy:
+      resources:
+        reservations:
+          # shortcut: NVIDIA 580 单卡容器硬解失败，驱动修复后恢复单卡映射。
+          devices: !override
+            - driver: nvidia
+              capabilities: [gpu]
+              count: all
