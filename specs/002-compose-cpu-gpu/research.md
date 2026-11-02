@@ -74,6 +74,16 @@ uv pip compile pyproject.toml --no-sources --torch-backend cu126 --constraint co
 
 实施已生成 `deploy/requirements-cu126.txt`，并重新执行共同版本检查及安装 dry-run；没有安装或替换本机依赖。生成时附加 `--no-annotate --emit-index-annotation --custom-compile-command '<仓库相对路径的生成命令>'`，省去注释中的本机临时目录。维护者从仓库根目录导出共同约束到临时目录，将上述 compile 的输入设为根 pyproject.toml、约束设为临时文件、输出设为 deploy/requirements-cu126.txt；服务器正常部署直接使用交付锁，不需要在宿主安装 uv。
 
+2026-11-02 测试环境补充：测试机 RTX 5090 的计算能力为 sm_120，用户提供的 `torch 2.14.1+cu126` 架构列表最多为 sm_90，实际在模型参数转 FP16 时抛出 `no kernel image is available for execution on the device`。仅测试覆盖文件将两个 worker 的镜像和构建参数改为 cu130；正式环境及 Windows 仍沿用 cu126。
+
+官方 [cu130 torch 索引](https://download.pytorch.org/whl/cu130/torch/)和 [torchvision 索引](https://download.pytorch.org/whl/cu130/torchvision/)均提供相同版本的 cp312/manylinux_2_28_x86_64 wheel。测试锁保留共同依赖版本，通过 `deploy/requirements-cu130.in` 将 ONNX Runtime 改为提供 CUDA 13 运行依赖的 [1.31.1](https://pypi.org/pypi/onnxruntime-gpu/1.31.1/json)，并限制 CUDA bindings 和 nvJitLink 在 13.0 系列；不修改根声明。用户报告的驱动 580.173.02 高于 [CUDA 13.0 Update 3 对应的 580.126.20](https://docs.nvidia.com/cuda/archive/13.0.3/cuda-toolkit-release-notes/index.html)。这些元数据及版本关系不代替目标 GPU 实际预检。
+
+测试锁的共同约束由 cu126 锁中的 pin 生成，排除 torch、torchvision、onnxruntime-gpu、cuda-bindings、cuda-toolkit 及 nvidia-*，其余版本保持不变。将约束写入临时的 `common-constraints.txt` 后执行：
+
+```bash
+uv pip compile pyproject.toml --extra cuda --no-sources --torch-backend cu130 --constraint common-constraints.txt --overrides deploy/requirements-cu130.in --generate-hashes --python-version 3.12 --python-platform x86_64-unknown-linux-gnu --no-build --no-annotate --emit-index-annotation --output-file deploy/requirements-cu130.txt
+```
+
 CPU 依赖层使用 `uv sync --locked --no-dev --no-editable --no-install-project`；GPU 依赖层在空 `/opt/venv` 执行 `uv pip sync --python /opt/venv/bin/python --require-hashes --torch-backend cu126 --no-build deploy/requirements-cu126.txt`。独立 builder 阶段复制源码与 README 后通过 `uv build --wheel` 构建应用；运行镜像先复制依赖层的虚拟环境，再用临时挂载的 uv 以 `uv pip install --no-deps` 安装该 wheel。这样源码变化不会使依赖安装层及最终镜像中的大依赖复制层失效。项目构建依赖继续遵循已有 build-system 范围。两类运行入口统一使用安装后的 Python 包，运行镜像不执行 uv sync，避免将 CUDA 构建换回根规则中的 CPU 构建。
 
 **比较方案**：直接把 torch 移到互斥 extras 会使原有默认 Windows 安装缺少模型依赖。保留主依赖再叠加 GPU extra 的隔离实验出现索引冲突；使用 extra 反向 marker 又使默认解析错误选择 CUDA，不能采用。默认 dependency group 虽可运行却改变正式包元数据；uv.toml 不支持 sources。生成一份 GPU 部署锁的影响局限于部署，比改动本机安装或先装 CPU 再覆盖更小。

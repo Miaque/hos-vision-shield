@@ -8,8 +8,10 @@
 | --- | --- |
 | `compose.yaml` | 五服务 CPU 部署，复用现有带密码 Redis，不预留 GPU |
 | `compose.gpu.yaml` | 覆盖两类 worker 的镜像、构建参数、检测后端、设备设置、每池两个副本及同一张 GPU 预留 |
-| `deploy/Dockerfile` | 一个构建定义，生成 CPU 与 cu126 两种应用镜像 |
+| `compose.test.yaml` | 测试环境独立镜像标签；两个 worker 使用 cu130 构建及测试机 GPU 设备附加组 1022 |
+| `deploy/Dockerfile` | 一个构建定义，生成 CPU、cu126 与测试用 cu130 应用镜像 |
 | `deploy/requirements-cu126.txt` | 从根声明与原锁共同版本约束生成的带哈希 GPU 锁，不改变本机默认依赖 |
+| `deploy/requirements-cu130.in` / `deploy/requirements-cu130.txt` | 测试环境 CUDA 13 的依赖覆盖声明及生成锁，不改变正式环境 cu126 锁 |
 | `deploy/compose.env.example` | 服务器配置示例，复制为根目录 `.env.compose` |
 | `scripts/deploy-server.sh [远程分支]` / `--tag 标签` | GPU 服务器按分支快进或按固定 tag 部署、构建镜像、更新容器并等待就绪，复用现有配置及项目名 |
 | `deploy/mediamtx.compose.yml` | 内部控制接口、RTSP TCP、指向 API 服务的发布鉴权回调 |
@@ -26,7 +28,7 @@ docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compo
 
 切换模式前使用当前模式的同一文件组合执行 `down`，保留数据；不得以删卷作为切换步骤。镜像构建和拉取可以联网，但模型由本地目录提供；运行容器直接调用已安装的 Python，启动时不执行依赖同步或模型下载。
 
-应用镜像名固定为 `vision-shield:cpu` 与 `vision-shield:cu126`，Dockerfile 构建参数 `TORCH_BACKEND` 仅接受 cpu/cu126；API/reconciler 始终使用前者。基础镜像和依赖选择见 [研究记录](../research.md)，CPU 按根 uv.lock 安装，GPU 按生成锁一次安装，再无依赖安装同一应用包。
+正式环境应用镜像名固定为 `vision-shield:cpu` 与 `vision-shield:cu126`，测试环境使用 `vision-shield-test:cpu` 与 `vision-shield-test:cu130`。Dockerfile 构建参数 `TORCH_BACKEND` 接受 cpu/cu126/cu130；cu130 仅由测试覆盖文件选择，API/reconciler 始终使用各环境的 CPU 镜像。基础镜像和依赖选择见 [研究记录](../research.md)，CPU 按根 uv.lock 安装，GPU 按对应 CUDA 版本的生成锁一次安装，再无依赖安装同一应用包。
 
 `compose.yaml` 为四个应用服务显式设置 `build.args.TORCH_BACKEND: cpu`。`compose.gpu.yaml` 必须同时将 `file-worker`、`stream-worker` 的 `image` 覆盖为 `vision-shield:cu126`，并将各自的 `build.args.TORCH_BACKEND` 覆盖为 `cu126`；仅修改镜像名不会切换 Dockerfile 构建分支。合并后 API/reconciler 的镜像和构建参数仍为 CPU。
 

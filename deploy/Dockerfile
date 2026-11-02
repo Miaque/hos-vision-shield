@@ -5,15 +5,15 @@ ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv
 ARG TORCH_BACKEND=cpu
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-COPY deploy/requirements-cu126.txt ./deploy/requirements-cu126.txt
+COPY deploy/requirements-cu126.txt deploy/requirements-cu130.txt ./deploy/
 # 源码和 README 不进入依赖层；缓存挂载在依赖变更时仍可复用下载。
 # 串行使用共享缓存，避免 CPU/GPU 并行构建等待 uv 文件锁超时。
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     case "$TORCH_BACKEND" in \
       cpu) uv sync --locked --no-dev --no-editable --no-install-project ;; \
-      cu126) uv venv /opt/venv \
-        && uv pip sync --python /opt/venv/bin/python --require-hashes --torch-backend cu126 --no-build deploy/requirements-cu126.txt ;; \
-      *) printf '%s\n' 'TORCH_BACKEND 仅支持 cpu/cu126' >&2; exit 2 ;; \
+      cu126|cu130) uv venv /opt/venv \
+        && uv pip sync --python /opt/venv/bin/python --require-hashes --torch-backend "$TORCH_BACKEND" --no-build "deploy/requirements-$TORCH_BACKEND.txt" ;; \
+      *) printf '%s\n' 'TORCH_BACKEND 仅支持 cpu/cu126/cu130' >&2; exit 2 ;; \
     esac
 
 FROM dependencies AS builder

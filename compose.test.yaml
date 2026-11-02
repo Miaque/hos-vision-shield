@@ -6,10 +6,16 @@ services:
   notifier:
     image: vision-shield-test:cpu
   file-worker:
-    image: vision-shield-test:cu126
+    image: vision-shield-test:cu130
+    build:
+      args:
+        TORCH_BACKEND: cu130
     group_add:
       - "1022"
   stream-worker:
-    image: vision-shield-test:cu126
+    image: vision-shield-test:cu130
+    build:
+      args:
+        TORCH_BACKEND: cu130
     group_add:
       - "1022"

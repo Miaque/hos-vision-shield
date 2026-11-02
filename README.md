@@ -89,7 +89,7 @@ bash scripts/deploy-server.sh --env prod
 bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 ```
 
-脚本默认 `--env test`：读取 `.env.compose.test`，使用项目名 `vision-shield-test`，组合 `compose.yaml`、`compose.gpu.yaml` 和 `compose.test.yaml`，测试镜像使用 `vision-shield-test:cpu/cu126`。`--env prod` 沿用 `.env.compose`、项目名 `vision-shield` 和原有 GPU 文件组合，不追加测试覆盖文件。缺少所选环境配置时直接停止，不回退到另一套环境。
+脚本默认 `--env test`：读取 `.env.compose.test`，使用项目名 `vision-shield-test`，组合 `compose.yaml`、`compose.gpu.yaml` 和 `compose.test.yaml`，测试镜像使用 `vision-shield-test:cpu/cu130`。测试 GPU 镜像为 RTX 5090 使用 PyTorch CUDA 13.0 和 ONNX Runtime 1.31.1，并保留测试机 NVIDIA 设备附加组 `1022`。`--env prod` 沿用 `.env.compose`、项目名 `vision-shield` 和原有 cu126 GPU 文件组合，不追加测试覆盖文件。缺少所选环境配置时直接停止，不回退到另一套环境。
 
 首次使用须先同步支持 `--env` 的新版脚本，旧版无参数调用仍可能操作正式环境。测试环境配置可从 `deploy/compose.env.example` 复制为 `.env.compose.test`，指定测试 GPU（如 `GPU_DEVICE_ID=5`，推荐使用完整 UUID），并单独设置 API/RTSP/HLS 端口、`RTSP_PUBLIC_BASE_URL`、Redis 数据库和媒体目录；模型目录可只读共享。测试通知须使用独立目标，或保持 `NOTIFICATION_TARGETS=[]`。脚本不自动生成环境配置。
 
@@ -103,7 +103,7 @@ bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 
 镜像构建可以联网安装依赖，`models/` 中的模型必须事先离线提供并只读挂载；quality_yolo 的 YOLO 权重随应用包交付，启动及推理不下载模型。worker 先在有 120 秒总超时的子进程中核验清单/哈希、实际推理及 NMS，成功后才接单并发布心跳；故障后的旧心跳最多有默认 20 秒租约窗口。`RTSP_PUBLISH_BASE_URL` 仅控制容器内部推流，对外仍返回公开播放地址。
 
-GPU 镜像按 [研究记录中的生成命令](specs/002-compose-cpu-gpu/research.md)使用 `deploy/requirements-cu126.txt`，共同依赖沿用根锁版本；根声明变更时重新生成，禁止手工改 pin。CPU 使用根 uv.lock，Windows 安装方式保持不变。初次交付证据与未运行项见 [实施记录](specs/002-compose-cpu-gpu/validation/gates.md)，后续服务器分阶段实测见 [时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)；这些记录不代表完整部署验收已通过。
+GPU 镜像按 [研究记录中的生成命令](specs/002-compose-cpu-gpu/research.md)分别使用正式环境的 `deploy/requirements-cu126.txt` 和测试环境的 `deploy/requirements-cu130.txt`。测试锁通过 `deploy/requirements-cu130.in` 覆盖 CUDA 13 版 ONNX Runtime 及绑定/JIT 的版本范围；除 CUDA 组件和 ONNX Runtime 外，共同依赖沿用根锁版本。根声明变更时重新生成，禁止手工改生成锁中的 pin。CPU 使用根 uv.lock，Windows 安装方式保持不变。初次交付证据与未运行项见 [实施记录](specs/002-compose-cpu-gpu/validation/gates.md)，后续服务器分阶段实测见 [时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)；这些记录不代表完整部署验收已通过。
 
 ### 三路录像实时回放
 

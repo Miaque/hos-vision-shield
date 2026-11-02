@@ -1,0 +1,5 @@
+# 测试机 Blackwell 使用 CUDA 13，覆盖根声明中 CUDA 12 版的 ONNX Runtime。
+onnxruntime-gpu==1.31.1
+# 保持 CUDA 13.0 组件，避免绑定和 JIT 库随索引升级到更新的 Toolkit。
+cuda-bindings>=13.0.3,<13.1
+nvidia-nvjitlink>=13.0,<13.1
