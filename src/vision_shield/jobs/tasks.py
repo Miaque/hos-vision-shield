@@ -213,6 +213,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                                          stream_attempts_discarded=discarded)
             ending, phase, finish_error = {}, "source_validate", None
             first_output = None
+            sustained_output = False
             try:
                 boundary('source_validation_started')
                 original, address = await validate_source(record["source_ref"], settings.source_allowlist, ("rtsp", "rtmp"))
@@ -224,7 +225,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                 await store.update_owned(task_id, owner, generation, state="connecting", ready=False)
 
                 async def event_received(event):
-                    nonlocal retry, first_output
+                    nonlocal retry, first_output, sustained_output
                     if settings.debug:
                         log_model_timing(event, task_id, generation)
                     if event.get("failure_type"):
@@ -255,6 +256,7 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                             first_output = event["output_monotonic"]
                         elif event["output_monotonic"] - first_output >= settings.heartbeat_seconds:
                             retry = 0
+                            sustained_output = True
                         values.update(state="running", ready=True, error=None)
                     values.update(progress_fields(event, settings.debug))
                     if values:
@@ -321,7 +323,9 @@ async def run_stream(record, store, settings, cancel, owner, generation, *, canc
                                             "message": "Stream reconnect pending"})
             with contextlib.suppress(TimeoutError):
                 boundary('retry_wait_started')
-                await asyncio.wait_for(cancel.wait(), min(30, 2 ** min(retry, 5)))
+                # Healthy input interruptions get one immediate reconnect; failed attempts still back off.
+                delay = 0 if sustained_output and ending.get('phase') in ('source_read', 'source_decode') else min(30, 2 ** min(retry, 5))
+                await asyncio.wait_for(cancel.wait(), delay)
             boundary('retry_wait_completed')
             if e0_enabled:
                 await store.update_owned(task_id, owner, generation, stream_attempts=history,
