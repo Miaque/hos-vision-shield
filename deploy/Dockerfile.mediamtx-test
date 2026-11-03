@@ -6,7 +6,11 @@ RUN mkdir mediamtx gortsplib \
     && tar -xzf /tmp/mediamtx.tar.gz -C mediamtx --strip-components=1 \
     && tar -xzf /tmp/gortsplib.tar.gz -C gortsplib --strip-components=1
 COPY deploy/mediamtx-test/rtp-info.patch deploy/mediamtx-test/delayed_test.go ./
-RUN cd gortsplib && patch -p1 < /build/rtp-info.patch \
+RUN cd gortsplib \
+    && echo 'd8e5db9ef0d397d21d9fa1be77dec9160e3e01190b133e067e80e04210ac1f95  server_stream_format.go' | sha256sum -c - \
+    && awk '/\/\/ sequence number of the first packet of the stream/ { print "\t// Delayed live media cannot use wall-clock extrapolation as its join timestamp.\n\tif age := now.Sub(ssf.lastNTP); age > time.Second || age < -time.Second {\n\t\treturn nil\n\t}\n" } { print }' server_stream_format.go > /tmp/server_stream_format.go \
+    && mv /tmp/server_stream_format.go server_stream_format.go \
+    && echo '1b665a16e0d2bd608b937e7250c7902e6456e435e8f15df4f852e80d2c152e93  server_stream_format.go' | sha256sum -c - \
     && cp /build/delayed_test.go server_stream_delayed_test.go
 ENV CGO_ENABLED=0 GOMAXPROCS=4
 RUN cd gortsplib && go test -p 4 -run TestDelayedMediaRTPInfo -count 1 .
