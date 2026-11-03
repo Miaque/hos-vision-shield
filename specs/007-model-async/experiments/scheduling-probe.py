@@ -36,6 +36,8 @@ if __name__=='__main__':
     # Only the input upload is moved outside the comparison in both arms; model preparations remain.
     detector = load_detector(Settings(_env_file=None, debug=True, detection_backend='quality_yolo',
                                       inference_device='cuda').model_dump(mode='json'))
+    if not hasattr(detector, '_pool'):
+        raise RuntimeError('This comparison requires the pre-serial detector; use its pinned commit.')
     parallel, inline = detector._pool, InlinePool()
     baseline = [repr(detector.detect_regions(frame)) for frame in frames]
     results = []

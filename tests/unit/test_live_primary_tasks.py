@@ -115,11 +115,13 @@ def test_live_observer_preserves_both_quality_routes_inputs_results_and_failures
         except ValueError as error:
             outcome=str(error)
         finally:
-            owner._pool.shutdown();diagnostics.close()
+            diagnostics.close()
         assert (pixels==180).all()
         outcomes.append((outcome,Counter(calls)))
         if enabled:
-            assert diagnostics.e0.snapshot()['primary_task_totals']['completed']==1
+            state = diagnostics.e0.snapshot()
+            assert state['primary_task_totals'] == {}
+            assert state['scope_counts']['stage:forward-primary-face'] >= 1
     assert outcomes[0]==outcomes[1]
 
 
