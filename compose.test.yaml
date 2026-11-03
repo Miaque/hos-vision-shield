@@ -12,20 +12,27 @@ services:
     image: vision-shield-test:cpu
     build:
       target: rtsp-test
+      args:
+        FFMPEG_SOURCE_URL: ${FFMPEG_SOURCE_URL:-https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2}
   reconciler:
     image: vision-shield-test:cpu
     build:
       target: rtsp-test
+      args:
+        FFMPEG_SOURCE_URL: ${FFMPEG_SOURCE_URL:-https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2}
   notifier:
     image: vision-shield-test:cpu
     build:
       target: rtsp-test
+      args:
+        FFMPEG_SOURCE_URL: ${FFMPEG_SOURCE_URL:-https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2}
   file-worker:
     image: vision-shield-test:cu130
     build:
       target: rtsp-test
       args:
         TORCH_BACKEND: cu130
+        FFMPEG_SOURCE_URL: ${FFMPEG_SOURCE_URL:-https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2}
     group_add:
       - "1022"
   stream-worker:
@@ -34,6 +41,7 @@ services:
       target: rtsp-test
       args:
         TORCH_BACKEND: cu130
+        FFMPEG_SOURCE_URL: ${FFMPEG_SOURCE_URL:-https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2}
     environment:
       CUDA_VISIBLE_DEVICES: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
     group_add:
