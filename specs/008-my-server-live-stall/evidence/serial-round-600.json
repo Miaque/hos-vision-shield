@@ -1,0 +1,761 @@
+{
+  "runtime": {
+    "commit": "4de6dd939d47a20756650964aabaac529b974356",
+    "at": "2026-11-03T16:23:47.838942",
+    "containers": [
+      {
+        "name": "vision-shield-test-api-1",
+        "image": "sha256:90e530d939a9c0b9a974ec5b848016538c9d8201fb8db2acde55764ab4802381",
+        "created": "2026-11-03T08:18:06.521458021Z",
+        "env": {
+          "DEBUG": "false",
+          "INFERENCE_DEVICE": "cpu",
+          "DETECTION_BACKEND": "quality",
+          "FACE_MODEL_PATH": "/models/yunet_face.onnx",
+          "PLATE_MODEL_PATH": "/models/hyperlpr_plate.onnx",
+          "EGOBLUR_FACE_MODEL_PATH": "/models/face.jit",
+          "EGOBLUR_PLATE_MODEL_PATH": "/models/license_plate.jit"
+        },
+        "installed_modules": 48,
+        "mismatches": [],
+        "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+        "flush_mux": true,
+        "av": "19.0.1",
+        "ffmpeg": "9.0.2"
+      },
+      {
+        "name": "vision-shield-test-stream-worker-1",
+        "image": "sha256:d0a29080961878c9da0ac072ad75fef4babe34090b674bb0283b3d86da1bfad7",
+        "created": "2026-11-03T08:18:07.229947768Z",
+        "env": {
+          "DEBUG": "false",
+          "CUDA_VISIBLE_DEVICES": "GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9",
+          "INFERENCE_DEVICE": "cuda",
+          "DETECTION_BACKEND": "quality_yolo",
+          "FACE_MODEL_PATH": "/models/yunet_face.onnx",
+          "PLATE_MODEL_PATH": "/models/hyperlpr_plate.onnx",
+          "EGOBLUR_FACE_MODEL_PATH": "/models/face.jit",
+          "EGOBLUR_PLATE_MODEL_PATH": "/models/license_plate.jit"
+        },
+        "installed_modules": 48,
+        "mismatches": [],
+        "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+        "flush_mux": true,
+        "av": "19.0.1",
+        "ffmpeg": "9.0.2"
+      },
+      {
+        "name": "vision-shield-test-stream-worker-2",
+        "image": "sha256:d0a29080961878c9da0ac072ad75fef4babe34090b674bb0283b3d86da1bfad7",
+        "created": "2026-11-03T08:18:07.229750346Z",
+        "env": {
+          "DEBUG": "false",
+          "CUDA_VISIBLE_DEVICES": "GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9",
+          "INFERENCE_DEVICE": "cuda",
+          "DETECTION_BACKEND": "quality_yolo",
+          "FACE_MODEL_PATH": "/models/yunet_face.onnx",
+          "PLATE_MODEL_PATH": "/models/hyperlpr_plate.onnx",
+          "EGOBLUR_FACE_MODEL_PATH": "/models/face.jit",
+          "EGOBLUR_PLATE_MODEL_PATH": "/models/license_plate.jit"
+        },
+        "installed_modules": 48,
+        "mismatches": [],
+        "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+        "flush_mux": true,
+        "av": "19.0.1",
+        "ffmpeg": "9.0.2"
+      },
+      {
+        "name": "vision-shield-test-stream-worker-3",
+        "image": "sha256:d0a29080961878c9da0ac072ad75fef4babe34090b674bb0283b3d86da1bfad7",
+        "created": "2026-11-03T08:18:07.230669255Z",
+        "env": {
+          "DEBUG": "false",
+          "CUDA_VISIBLE_DEVICES": "GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9",
+          "INFERENCE_DEVICE": "cuda",
+          "DETECTION_BACKEND": "quality_yolo",
+          "FACE_MODEL_PATH": "/models/yunet_face.onnx",
+          "PLATE_MODEL_PATH": "/models/hyperlpr_plate.onnx",
+          "EGOBLUR_FACE_MODEL_PATH": "/models/face.jit",
+          "EGOBLUR_PLATE_MODEL_PATH": "/models/license_plate.jit"
+        },
+        "installed_modules": 48,
+        "mismatches": [],
+        "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+        "flush_mux": true,
+        "av": "19.0.1",
+        "ffmpeg": "9.0.2"
+      }
+    ]
+  },
+  "campaign": {
+    "unix": 1793693930.5444465,
+    "monotonic": 3134649.025248614,
+    "seconds": 600,
+    "commit": "4de6dd939d47a20756650964aabaac529b974356",
+    "debug": false,
+    "rtp_started_unix": 1793694129.150143,
+    "deadline_unix": 1793694530.5444465
+  },
+  "end": {
+    "unix": 1793694530.5444465,
+    "stopped_at_unix": 1793694530.5910995,
+    "original_start_unix": 1793693930.5444465,
+    "effective_seconds": 600,
+    "stopped": [
+      {
+        "pid": "1931428",
+        "state": "terminated",
+        "unix": 1793694530.5905704
+      },
+      {
+        "pid": "1931429",
+        "state": "terminated",
+        "unix": 1793694530.5907118
+      },
+      {
+        "pid": "1940826",
+        "state": "terminated",
+        "unix": 1793694530.59083
+      },
+      {
+        "pid": "1940827",
+        "state": "terminated",
+        "unix": 1793694530.5909233
+      },
+      {
+        "pid": "1940828",
+        "state": "terminated",
+        "unix": 1793694530.5910108
+      },
+      {
+        "pid": "1940829",
+        "state": "terminated",
+        "unix": 1793694530.5910962
+      }
+    ]
+  },
+  "rtp": {
+    "serial-formal-rfm01/raw": {
+      "frames": 9699,
+      "seconds": 401.1329817492515,
+      "gaps": {
+        "p50": 0.00022495212033391,
+        "p95": 0.15972973825410008,
+        "p99": 0.16131239430978894,
+        "max": 3.0211869101040065,
+        "min": 2.9855873435735703e-05,
+        "count": 9698
+      },
+      "stalls": {
+        "0.2": 29,
+        "0.5": 25,
+        "1": 13
+      },
+      "window_fps": {
+        "1": {
+          "p50": 25.0,
+          "p95": 26.0,
+          "p99": 83.0,
+          "max": 86.0,
+          "min": 0.0,
+          "count": 4003
+        },
+        "5": {
+          "p50": 24.8,
+          "p95": 36.4,
+          "p99": 37.0,
+          "max": 37.6,
+          "min": 9.8,
+          "count": 3963
+        }
+      },
+      "errors": 0,
+      "observation_seconds": 401.39430356025696,
+      "first_frame_wait_seconds": 0.17477154731750488,
+      "tail_without_picture_seconds": 0.08655166625976562
+    },
+    "serial-formal-rfm01/output": {
+      "frames": 7353,
+      "seconds": 401.226406048052,
+      "gaps": {
+        "p50": 0.025914470199495554,
+        "p95": 0.16863873321563005,
+        "p99": 0.3250506320036948,
+        "max": 8.00618349807337,
+        "min": 0.00013954099267721176,
+        "count": 7352
+      },
+      "stalls": {
+        "0.2": 268,
+        "0.5": 23,
+        "1": 1
+      },
+      "window_fps": {
+        "1": {
+          "p50": 14.0,
+          "p95": 37.0,
+          "p99": 38.0,
+          "max": 40.0,
+          "min": 0.0,
+          "count": 4003
+        },
+        "5": {
+          "p50": 13.4,
+          "p95": 36.0,
+          "p99": 36.6,
+          "max": 37.8,
+          "min": 0.0,
+          "count": 3963
+        }
+      },
+      "errors": 3,
+      "observation_seconds": 401.39430356025696,
+      "first_frame_wait_seconds": 0.16289877891540527,
+      "tail_without_picture_seconds": 0.004998922348022461
+    },
+    "serial-formal-rfm02/raw": {
+      "frames": 9981,
+      "seconds": 401.1842094277963,
+      "gaps": {
+        "p50": 0.0002301461063325405,
+        "p95": 0.16038678865879774,
+        "p99": 0.1614000890403986,
+        "max": 0.8864062242209911,
+        "min": 2.2904016077518463e-05,
+        "count": 9980
+      },
+      "stalls": {
+        "0.2": 18,
+        "0.5": 13,
+        "1": 0
+      },
+      "window_fps": {
+        "1": {
+          "p50": 25.0,
+          "p95": 26.0,
+          "p99": 38.0,
+          "max": 45.0,
+          "min": 3.0,
+          "count": 4003
+        },
+        "5": {
+          "p50": 24.8,
+          "p95": 27.4,
+          "p99": 27.6,
+          "max": 28.6,
+          "min": 21.0,
+          "count": 3963
+        }
+      },
+      "errors": 0,
+      "observation_seconds": 401.39430356025696,
+      "first_frame_wait_seconds": 0.1690535545349121,
+      "tail_without_picture_seconds": 0.041040897369384766
+    },
+    "serial-formal-rfm02/output": {
+      "frames": 5574,
+      "seconds": 401.2272417899221,
+      "gaps": {
+        "p50": 0.05441144714131951,
+        "p95": 0.18134627817198634,
+        "p99": 0.2895689560100436,
+        "max": 8.390980534255505,
+        "min": 0.0003208019770681858,
+        "count": 5573
+      },
+      "stalls": {
+        "0.2": 209,
+        "0.5": 9,
+        "1": 2
+      },
+      "window_fps": {
+        "1": {
+          "p50": 13.0,
+          "p95": 27.0,
+          "p99": 35.0,
+          "max": 38.0,
+          "min": 0.0,
+          "count": 4003
+        },
+        "5": {
+          "p50": 12.4,
+          "p95": 25.0,
+          "p99": 29.6,
+          "max": 32.0,
+          "min": 0.0,
+          "count": 3963
+        }
+      },
+      "errors": 7,
+      "observation_seconds": 401.39430356025696,
+      "first_frame_wait_seconds": 0.1422717571258545,
+      "tail_without_picture_seconds": 0.024789810180664062
+    }
+  },
+  "rtcp": {
+    "serial-formal-rfm01/raw": [
+      {
+        "connection": 1,
+        "ssrc": 2567780818,
+        "channel": 3,
+        "reports": 41,
+        "affine_residual_seconds": {
+          "p50": 4.2839050292897696e-05,
+          "p95": 0.00010943222045867174,
+          "p99": 0.00011445236206064635,
+          "max": 0.00011445236206064635,
+          "min": 4.089355469361067e-06,
+          "count": 40
+        }
+      },
+      {
+        "connection": 1,
+        "ssrc": 4133832262,
+        "channel": 1,
+        "reports": 41,
+        "affine_residual_seconds": {
+          "p50": 3.387790256326184e-06,
+          "p95": 9.000481499654711e-06,
+          "p99": 1.0550604926606866e-05,
+          "max": 1.0550604926606866e-05,
+          "min": 1.9243028503979076e-08,
+          "count": 40
+        }
+      }
+    ],
+    "serial-formal-rfm01/output": [
+      {
+        "connection": 1,
+        "ssrc": 3857163709,
+        "channel": 1,
+        "reports": 19,
+        "affine_residual_seconds": {
+          "p50": 3.615654839528304e-06,
+          "p95": 8.243391248718979e-06,
+          "p99": 8.243391248718979e-06,
+          "max": 8.243391248718979e-06,
+          "min": 3.6875406728142934e-08,
+          "count": 18
+        }
+      },
+      {
+        "connection": 1,
+        "ssrc": 265807003,
+        "channel": 3,
+        "reports": 19,
+        "affine_residual_seconds": {
+          "p50": 2.169799804718764e-05,
+          "p95": 8.900451660132092e-05,
+          "p99": 8.900451660132092e-05,
+          "max": 8.900451660132092e-05,
+          "min": 6.10351564844791e-08,
+          "count": 18
+        }
+      },
+      {
+        "connection": 4,
+        "ssrc": 1983850150,
+        "channel": 3,
+        "reports": 22,
+        "affine_residual_seconds": {
+          "p50": 4.030990600600859e-05,
+          "p95": 8.622741699326752e-05,
+          "p99": 9.654998779318191e-05,
+          "max": 9.654998779318191e-05,
+          "min": 6.961822509587989e-06,
+          "count": 21
+        }
+      },
+      {
+        "connection": 4,
+        "ssrc": 1984824364,
+        "channel": 1,
+        "reports": 22,
+        "affine_residual_seconds": {
+          "p50": 2.4645487464169946e-06,
+          "p95": 7.817162407164346e-06,
+          "p99": 8.573235405151536e-06,
+          "max": 8.573235405151536e-06,
+          "min": 4.1097005176737866e-07,
+          "count": 21
+        }
+      }
+    ],
+    "serial-formal-rfm02/raw": [
+      {
+        "connection": 1,
+        "ssrc": 370665155,
+        "channel": 3,
+        "reports": 41,
+        "affine_residual_seconds": {
+          "p50": 4.9716949462208504e-05,
+          "p95": 0.00010612106323293347,
+          "p99": 0.00012089157104533399,
+          "max": 0.00012089157104533399,
+          "min": 1.8234252934234974e-06,
+          "count": 40
+        }
+      },
+      {
+        "connection": 1,
+        "ssrc": 3303080307,
+        "channel": 1,
+        "reports": 41,
+        "affine_residual_seconds": {
+          "p50": 3.832838270767525e-06,
+          "p95": 9.41407945376227e-06,
+          "p99": 1.0557640923281042e-05,
+          "max": 1.0557640923281042e-05,
+          "min": 1.3393826492347216e-08,
+          "count": 40
+        }
+      }
+    ],
+    "serial-formal-rfm02/output": [
+      {
+        "connection": 1,
+        "ssrc": 2962921819,
+        "channel": 3,
+        "reports": 5,
+        "affine_residual_seconds": {
+          "p50": 3.314208984406264e-05,
+          "p95": 6.426620483424017e-05,
+          "p99": 6.426620483424017e-05,
+          "max": 6.426620483424017e-05,
+          "min": 1.9859313963976888e-05,
+          "count": 4
+        }
+      },
+      {
+        "connection": 1,
+        "ssrc": 2007072473,
+        "channel": 1,
+        "reports": 5,
+        "affine_residual_seconds": {
+          "p50": 1.180267334532914e-06,
+          "p95": 8.0856323245726e-06,
+          "p99": 8.0856323245726e-06,
+          "max": 8.0856323245726e-06,
+          "min": 5.332099028976245e-08,
+          "count": 4
+        }
+      },
+      {
+        "connection": 5,
+        "ssrc": 4279887027,
+        "channel": 3,
+        "reports": 22,
+        "affine_residual_seconds": {
+          "p50": 3.419494628875697e-05,
+          "p95": 7.965087890582367e-05,
+          "p99": 9.561920166056836e-05,
+          "max": 9.561920166056836e-05,
+          "min": 4.577636758540393e-08,
+          "count": 21
+        }
+      },
+      {
+        "connection": 5,
+        "ssrc": 3223505147,
+        "channel": 1,
+        "reports": 22,
+        "affine_residual_seconds": {
+          "p50": 6.11402723516008e-06,
+          "p95": 9.370846218104134e-06,
+          "p99": 9.427981906284799e-06,
+          "max": 9.427981906284799e-06,
+          "min": 5.984836182193476e-08,
+          "count": 21
+        }
+      },
+      {
+        "connection": 8,
+        "ssrc": 3061514399,
+        "channel": 3,
+        "reports": 13,
+        "affine_residual_seconds": {
+          "p50": 3.768539428783413e-05,
+          "p95": 9.806060790928939e-05,
+          "p99": 9.806060790928939e-05,
+          "max": 9.806060790928939e-05,
+          "min": 1.5789031982293977e-05,
+          "count": 12
+        }
+      },
+      {
+        "connection": 8,
+        "ssrc": 1200841183,
+        "channel": 1,
+        "reports": 13,
+        "affine_residual_seconds": {
+          "p50": 4.656219481979917e-06,
+          "p95": 8.898925781153366e-06,
+          "p99": 8.898925781153366e-06,
+          "max": 8.898925781153366e-06,
+          "min": 4.027472604306581e-07,
+          "count": 12
+        }
+      }
+    ]
+  },
+  "resources": {
+    "first_unix": 1793693930.626197,
+    "last_unix": 1793694525.8969512,
+    "gpu_util_percent": {
+      "p50": 88.0,
+      "p95": 93.0,
+      "p99": 94.0,
+      "max": 94.0,
+      "min": 18.0,
+      "count": 120
+    },
+    "cpu_percent": {
+      "vision-shield-test-stream-worker-1": {
+        "p50": 231.12,
+        "p95": 278.24,
+        "p99": 288.91,
+        "max": 298.37,
+        "min": 122.68,
+        "count": 120
+      },
+      "vision-shield-test-stream-worker-2": {
+        "p50": 0.36,
+        "p95": 0.49,
+        "p99": 0.52,
+        "max": 15.06,
+        "min": 0.21,
+        "count": 120
+      },
+      "vision-shield-test-stream-worker-3": {
+        "p50": 228.85,
+        "p95": 259.43,
+        "p99": 273.77,
+        "max": 275.2,
+        "min": 117.61,
+        "count": 120
+      }
+    }
+  },
+  "task_transitions": {
+    "1aed319f-e680-4f52-ad70-cd9b0be0a220": [
+      {
+        "unix": 1793693930.6975951,
+        "state": "running",
+        "ready": true
+      },
+      {
+        "unix": 1793694311.0516589,
+        "state": "recovering",
+        "ready": false
+      },
+      {
+        "unix": 1793694311.4589877,
+        "state": "connecting",
+        "ready": false
+      },
+      {
+        "unix": 1793694313.4605014,
+        "state": "running",
+        "ready": true
+      }
+    ],
+    "e9d6a3ab-3843-48f4-8083-7dc8f89759b1": [
+      {
+        "unix": 1793693930.6975951,
+        "state": "running",
+        "ready": true
+      },
+      {
+        "unix": 1793694173.8934853,
+        "state": "connecting",
+        "ready": false
+      },
+      {
+        "unix": 1793694176.9109411,
+        "state": "running",
+        "ready": true
+      },
+      {
+        "unix": 1793694398.1229305,
+        "state": "connecting",
+        "ready": false
+      },
+      {
+        "unix": 1793694400.5401578,
+        "state": "running",
+        "ready": true
+      }
+    ]
+  },
+  "tasks_after_stop": [
+    {
+      "id": "1aed319f-e680-4f52-ad70-cd9b0be0a220",
+      "state": "running",
+      "ready": true
+    },
+    {
+      "id": "e9d6a3ab-3843-48f4-8083-7dc8f89759b1",
+      "state": "running",
+      "ready": true
+    }
+  ],
+  "evidence": {
+    "serial-formal-rfm01/receive-import-failure.log": {
+      "bytes": 289,
+      "sha256": "5681ecfc6af007869300da6e0ec14ea9789feb1fd02f66431e72c577b8921ae4"
+    },
+    "serial-formal-rfm01/cutoff.log": {
+      "bytes": 574,
+      "sha256": "13953fd679dec72d7ba20570c3cd0d4d6caaa52e4b3f7f0081b7bda264cab5ea"
+    },
+    "serial-formal-rfm01/processes.json": {
+      "bytes": 87,
+      "sha256": "197157a787961b5831e214001d6f4ada2b7aae291712263c3f8ae411db79bd7b"
+    },
+    "serial-formal-rfm01/end.json": {
+      "bytes": 757,
+      "sha256": "cb8d67778e75e2c16e5b1d88233a613618a747a2cad855bcfc98da86b504f3c1"
+    },
+    "serial-formal-rfm01/metadata.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-formal-rfm01/resources.jsonl": {
+      "bytes": 120627,
+      "sha256": "5ff941c907f90e1299f82e2a2789b9e6f0e8ae165cc1a31f34ac332e07d437f5"
+    },
+    "serial-formal-rfm01/start.json": {
+      "bytes": 222,
+      "sha256": "fef5b556f35fd7c4d710a2e7396bed4475587333793935f7bc3ea119accc4262"
+    },
+    "serial-formal-rfm01/resources-tail.jsonl": {
+      "bytes": 80338,
+      "sha256": "54dcf3d64977b9ca29dd1015483385efdcfb28735948641206e281ae5c8e42fb"
+    },
+    "serial-formal-rfm01/receive.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-formal-rfm01/metadata-tail.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-formal-rfm01/raw.jsonl": {
+      "bytes": 2827731,
+      "sha256": "49df8039a580c45861318aadd6ec990f742e49770dd2eb87e8fb5b642357b3ed"
+    },
+    "serial-formal-rfm01/start-rtp-original.json": {
+      "bytes": 146,
+      "sha256": "9de0514b1c7369ca1234e6ac570b15ae24482962574c93a250e4dd4bdb727614"
+    },
+    "serial-formal-rfm01/cutoff.json": {
+      "bytes": 673,
+      "sha256": "20f289b435d37ce851ec4eadb1935a1b0ae20b6c0ceb582831cf8a80116065ff"
+    },
+    "serial-formal-rfm01/resources-tail.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-formal-rfm01/output.jsonl": {
+      "bytes": 2145185,
+      "sha256": "6b6772b9c1868f5dbdb9084f9789994e8a8051c704a35d2c661ca94a75b72266"
+    },
+    "serial-formal-rfm01/live.jsonl": {
+      "bytes": 775678,
+      "sha256": "d3cbe5c1c9f3ea9fe5443e6999459b3249b8a3a74c07d2738313da2fa974b708"
+    },
+    "serial-formal-rfm01/start-failed-launch.json": {
+      "bytes": 147,
+      "sha256": "a16699a1292fdfb543b9ede464bce7e0f1fd8004eb4a5c2ddd07265df8f381cb"
+    },
+    "serial-formal-rfm01/resources.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-formal-rfm02/receive-import-failure.log": {
+      "bytes": 289,
+      "sha256": "5681ecfc6af007869300da6e0ec14ea9789feb1fd02f66431e72c577b8921ae4"
+    },
+    "serial-formal-rfm02/end.json": {
+      "bytes": 757,
+      "sha256": "cb8d67778e75e2c16e5b1d88233a613618a747a2cad855bcfc98da86b504f3c1"
+    },
+    "serial-formal-rfm02/start.json": {
+      "bytes": 222,
+      "sha256": "fef5b556f35fd7c4d710a2e7396bed4475587333793935f7bc3ea119accc4262"
+    },
+    "serial-formal-rfm02/receive.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-formal-rfm02/raw.jsonl": {
+      "bytes": 2893706,
+      "sha256": "69798b145565f670ba464a8a43df045d6cf4425de0d49adfa12baa91e4b056a3"
+    },
+    "serial-formal-rfm02/start-rtp-original.json": {
+      "bytes": 146,
+      "sha256": "9de0514b1c7369ca1234e6ac570b15ae24482962574c93a250e4dd4bdb727614"
+    },
+    "serial-formal-rfm02/output.jsonl": {
+      "bytes": 1625412,
+      "sha256": "8b87a4a079a6e755343b3d24d7672f5a3c3d06cd4d55899b38f12e5d241f0442"
+    },
+    "serial-formal-rfm02/start-failed-launch.json": {
+      "bytes": 147,
+      "sha256": "a16699a1292fdfb543b9ede464bce7e0f1fd8004eb4a5c2ddd07265df8f381cb"
+    },
+    "serial-diagnostic/rtp-02.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-diagnostic/wire-3.jsonl": {
+      "bytes": 2960410,
+      "sha256": "5a1574d908e2916b08aa8f3adca3c83f8eaa002f7edf676f92db6b79aef2e1a3"
+    },
+    "serial-diagnostic/wire-2.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-diagnostic/wire-1.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-diagnostic/metadata.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-diagnostic/start.json": {
+      "bytes": 180,
+      "sha256": "8fff6b49c39552afe17c0bda2940423828f9a0ac58b6cb2cd43c92b229e4453e"
+    },
+    "serial-diagnostic/wire-2.jsonl": {
+      "bytes": 4389989,
+      "sha256": "0155a6546e152977f8797e762f3616f9fbe9480e7b1906c1fe76c0eb86c15df8"
+    },
+    "serial-diagnostic/raw.jsonl": {
+      "bytes": 852338,
+      "sha256": "b6ab5d91c035bcbb51745abb4e5c3f5ed139a6208b775e411ed5f2cf22bfe8db"
+    },
+    "serial-diagnostic/output.jsonl": {
+      "bytes": 577338,
+      "sha256": "22e2fe879336304fddf4ceea6cfd85b324d0b814fc215470cdf6dce403bbbd2b"
+    },
+    "serial-diagnostic/live.jsonl": {
+      "bytes": 64276778,
+      "sha256": "b795f99e2f8f4caff815a05c323a7c52789aa3a9047ee9575dfe7dc8b32a0986"
+    },
+    "serial-diagnostic/rtp-01.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-diagnostic/wire-3.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "serial-diagnostic/wire-1.jsonl": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}
