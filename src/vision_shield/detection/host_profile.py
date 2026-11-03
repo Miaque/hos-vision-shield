@@ -478,8 +478,7 @@ def instrument(stack, collector):
 
     original_open = av.open
     stack.enter_context(patch.object(av, "open", lambda *args, **kwargs: TimedContainer(original_open(*args, **kwargs), collector)))
-    for module in (quality, cpu):
-        stack.enter_context(patch.object(module, "ThreadPoolExecutor", ContextPool))
+    stack.enter_context(patch.object(cpu, "ThreadPoolExecutor", ContextPool))
     if collector.async_tasks:
         from vision_shield.detection.async_profile import instrument as instrument_tasks
         instrument_tasks(stack, collector.async_tasks)
