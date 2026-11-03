@@ -3,6 +3,7 @@
 from collections import deque
 from fractions import Fraction
 from math import floor
+import hashlib
 import threading
 import time
 from collections.abc import Callable
@@ -277,7 +278,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 if packet.stream.type == "video":
                     packet_clock = trace.media_clock(packet) if trace else None
                     if trace:
-                        trace.video_packet(packet_clock)
+                        trace.video_packet(packet_clock, vcl_sha256=vcl_digest(bytes(packet))
+                                           if isinstance(packet, av.Packet) else None)
                     if trace and getattr(packet, 'size', None) == 0:
                         trace.event('decoder_drain_packet')
                     if debug and packet.pts is not None and packet.time_base is not None:
@@ -312,7 +314,9 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                             av_clock.audio_packet(packet)
                     finally:
                         if trace:
-                            trace.audio_clock(raw_audio_clock, trace.media_clock(packet))
+                            trace.audio_clock(raw_audio_clock, trace.media_clock(packet),
+                                              sha256=hashlib.sha256(bytes(packet)).hexdigest()
+                                              if isinstance(packet, av.Packet) else None)
                     phase = "input_audio_buffer"
                     buffer.audio_packet(packet)
         except Exception as error:
