@@ -7,6 +7,7 @@ import urllib.request
 
 
 def capture(root, seconds, api, ids):
+    assert 0 < seconds <= 600
     root.mkdir(parents=True, exist_ok=True)
     deadline, written = time.monotonic() + seconds, 0
     with (root / 'live.jsonl').open('w', encoding='utf-8') as target:
@@ -31,7 +32,7 @@ def capture(root, seconds, api, ids):
                 line = json.dumps(dict(endpoint=endpoint, unix=time.time(), monotonic=time.monotonic(),
                                        value=value), separators=(',', ':')) + '\n'
                 written += len(line.encode())
-                assert written <= 96 * 1024 * 1024, 'capture budget exceeded'
+                assert written <= 192 * 1024 * 1024, 'capture budget exceeded'
                 target.write(line)
             target.flush()
             time.sleep(max(0, min(1 - (time.monotonic() - started), deadline - time.monotonic())))

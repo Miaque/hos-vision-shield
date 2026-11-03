@@ -15,10 +15,19 @@ RUN cd gortsplib \
     && cp /build/delayed_test.go server_stream_delayed_test.go
 ARG GOPROXY=https://proxy.golang.org,direct
 ENV CGO_ENABLED=0 GOMAXPROCS=4 GOPROXY=${GOPROXY}
-RUN cd gortsplib && go test -p 4 -run TestDelayedMediaRTPInfo -count 1 .
+COPY deploy/mediamtx-test/patch_early_sr.go deploy/mediamtx-test/early_sr.go deploy/mediamtx-test/early_sr_test.go deploy/mediamtx-test/early_sr_wire_test.go /build/
+RUN cd gortsplib \
+    && echo '457c0fb29982b9acaf7308b87da0c5e94a81ee4b0ebc014a73b2e2b0b16e2337  server_session_media.go' | sha256sum -c - \
+    && echo '7470ada94e09ca183bb80c43906919bdf8139e552b253d17ac43a1397001c05e  server_session_format.go' | sha256sum -c - \
+    && go run /build/patch_early_sr.go \
+    && cp /build/early_sr.go server_session_early_sr.go \
+    && cp /build/early_sr_test.go server_session_early_sr_test.go \
+    && cp /build/early_sr_wire_test.go server_session_early_sr_wire_test.go \
+    && gofmt -w server_session_early_sr*.go \
+    && go test -p 4 -run 'TestDelayedMediaRTPInfo|TestEarlySenderReport' -count 1 .
 RUN cd mediamtx \
     && go mod edit -replace github.com/bluenviron/gortsplib/v5=../gortsplib \
-    && printf 'v1.21.2-hos-rtp-info-01' > internal/core/VERSION \
+    && printf 'v1.21.2-hos-early-sr-01' > internal/core/VERSION \
     && go build -p 4 -o /build/mediamtx-patched .
 
 FROM bluenviron/mediamtx:1.21.2@sha256:c7540465f868a02652118bea5a0daab12a29ac0f6cb8485abd535939ecddf886
