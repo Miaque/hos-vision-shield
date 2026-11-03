@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile.mediamtx-test
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     environment:
       MTX_PATHDEFAULTS_USEABSOLUTETIMESTAMP: "true"
   api:

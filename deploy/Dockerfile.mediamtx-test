@@ -12,7 +12,8 @@ RUN cd gortsplib \
     && mv /tmp/server_stream_format.go server_stream_format.go \
     && echo '1b665a16e0d2bd608b937e7250c7902e6456e435e8f15df4f852e80d2c152e93  server_stream_format.go' | sha256sum -c - \
     && cp /build/delayed_test.go server_stream_delayed_test.go
-ENV CGO_ENABLED=0 GOMAXPROCS=4
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV CGO_ENABLED=0 GOMAXPROCS=4 GOPROXY=${GOPROXY}
 RUN cd gortsplib && go test -p 4 -run TestDelayedMediaRTPInfo -count 1 .
 RUN cd mediamtx \
     && go mod edit -replace github.com/bluenviron/gortsplib/v5=../gortsplib \
