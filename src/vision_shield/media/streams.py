@@ -505,7 +505,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
     try:
         if trace:
             trace.event('publish_open_started')
-        options = {"rtsp_transport": "tcp", "max_interleave_delta": "100000"}
+        # Compressed source PTS can keep 100 ms of media in the mux queue for seconds of wall time.
+        options = {"rtsp_transport": "tcp", "max_interleave_delta": "1"}
         if protocol == "rtmp":
             original = httpx.URL(config.get("publish_url") or target)
             # DNS 固定到授权 IP，RTMP tcUrl 仍保留平台用于虚拟主机路由的原域名。

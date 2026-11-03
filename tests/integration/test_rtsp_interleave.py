@@ -44,7 +44,7 @@ def interleave_source(tmp_path_factory):
     return path
 
 
-def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=None):
+def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=None, interleave_us=None):
     original_open = av.open
     stop = threading.Event()
     audio_input, wire_clocks, events = [], [], []
@@ -76,6 +76,10 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
                     shift = round(Fraction(1 if scenario=='jump' else -1)/packet.time_base)
                     packet.pts += shift
                     packet.dts += shift
+                if (scenario == 'compressed' and packet.size and packet.stream.type == 'video'
+                        and 1 <= packet.pts * packet.time_base < 2):
+                    moment = 1 + (packet.pts * packet.time_base - 1) / 720
+                    packet.pts = packet.dts = round(moment / packet.time_base)
                 if packet.stream.type == 'audio' and packet.size:
                     audio_input.append((bytes(packet),packet.pts*packet.time_base))
                     if scenario == 'missing' and 25 <= video_count < 50:
@@ -111,6 +115,8 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
             return Reader()
         if default_interleave:
             kwargs['options'] = {k:v for k,v in kwargs['options'].items() if k!='max_interleave_delta'}
+        if interleave_us is not None:
+            kwargs['options']['max_interleave_delta'] = str(interleave_us)
         return Writer(original_open(url, *args, **kwargs))
 
     class Detector:
@@ -144,7 +150,27 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
     return capture,audio_input,wire_clocks,events,None if stop_at is None else time.monotonic()-stop_at
 
 
-@pytest.mark.parametrize('default_interleave',[False,True],ids=['100ms','default'])
+@pytest.mark.parametrize('interleave_us', [100000, None], ids=['100ms-control', 'configured'])
+def test_compressed_source_pts_does_not_hold_accepted_video(interleave_source, monkeypatch, interleave_us):
+    capture, source_audio, clocks, events, _ = run_output(
+        interleave_source, 'compressed', monkeypatch, interleave_us=interleave_us)
+    pictures, audio = capture.pictures(), capture.audio()
+    video = [p for p in clocks if p['track'] == 'video']
+    assert len(pictures) == len(video) == 100
+    offset = (pictures[0]['timestamp'] - round(video[0]['pts'] * 90000)) % 2**32
+    assert all((r['timestamp'] - round(p['pts'] * 90000)) % 2**32 == offset
+               for r, p in zip(pictures, video, strict=True))
+    assert min(b['pts'] - a['pts'] for a, b in pairwise(video)) < Fraction(1, 1000)
+    assert [p['payload'] for p in audio] == [p[0] for p in source_audio[:len(audio)]]
+    assert events[-1]['stats']['dropped_frames'] == 0
+    gap = max(b['at'] - a['at'] for a, b in pairwise(pictures))
+    if interleave_us == 100000:
+        assert gap > .5, 'Control did not reproduce the compressed-PTS interleave freeze'
+    else:
+        assert gap < .5, f'Accepted video remained in the mux queue for {gap:.3f}s'
+
+
+@pytest.mark.parametrize('default_interleave',[False,True],ids=['bounded','default'])
 @pytest.mark.parametrize('scenario',['continuous','sparse','missing','jump','reset','stop'])
 def test_rtsp_interleave_keeps_video_audio_and_sync(interleave_source,monkeypatch,scenario,default_interleave):
     capture,source_audio,clocks,events,stop_seconds = run_output(interleave_source,scenario,monkeypatch,
@@ -163,7 +189,7 @@ def test_rtsp_interleave_keeps_video_audio_and_sync(interleave_source,monkeypatc
     audio_clocks = [x for x in clocks if x['track']=='audio']
     for track in (video_clocks,audio_clocks):
         assert all(b['pts']>a['pts'] and b['dts']>a['dts'] for a,b in pairwise(track))
-    # Default and 100ms both retain one final AAC AU at RTSP teardown in this fixture.
+    # Both policies retain one final AAC AU at RTSP teardown in this fixture.
     # Lock the exact tail deficit and byte-identical contiguous prefix; do not call mux acceptance delivery.
     assert len(audio) > 0 and len(audio_clocks)-len(audio) == 1
     assert [x['payload'] for x in audio] == [x['payload'] for x in audio_clocks[:len(audio)]]
@@ -206,7 +232,7 @@ def test_rtsp_interleave_keeps_video_audio_and_sync(interleave_source,monkeypatc
                       aac_tail_aus_not_received=len(audio_clocks)-len(audio),max_rtp_gap_seconds=max(gaps),
                       av_sender_clock_offset_seconds=video_zero-audio_zero,stop_seconds=stop_seconds,
                       input_aac_packets=len(source_audio),timestamp_repairs=final['stats']['stream']['timestamp_repairs'])
-        (root/f'{scenario}-{"default" if default_interleave else "100ms"}.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
+        (root/f'{scenario}-{"default" if default_interleave else "configured"}.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
 
 
 def test_rtsp_output_reconnects_with_fresh_clocks(interleave_source,monkeypatch):
