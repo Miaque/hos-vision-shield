@@ -1,5 +1,9 @@
 services:
   mediamtx:
+    image: vision-shield-test:mediamtx-rtp-info
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.mediamtx-test
     environment:
       MTX_PATHDEFAULTS_USEABSOLUTETIMESTAMP: "true"
   api:

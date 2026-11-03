@@ -1,0 +1,19 @@
+FROM golang:1.27.1-alpine3.24 AS build
+RUN apk add --no-cache git
+WORKDIR /build
+RUN git clone --depth 1 --branch v1.21.2 https://github.com/bluenviron/mediamtx.git \
+    && test "$(git -C mediamtx rev-parse HEAD)" = 914e39535ece709919ac325aaeed98d394ed9093 \
+    && git clone --depth 1 --branch v5.6.7 https://github.com/bluenviron/gortsplib.git \
+    && test "$(git -C gortsplib rev-parse HEAD)" = 09cc2060a7188c1f5f58498a8ede1e56338cd804
+COPY deploy/mediamtx-test/rtp-info.patch deploy/mediamtx-test/delayed_test.go ./
+RUN git -C gortsplib apply /build/rtp-info.patch \
+    && cp delayed_test.go gortsplib/server_stream_delayed_test.go
+ENV CGO_ENABLED=0 GOMAXPROCS=4
+RUN cd gortsplib && go test -p 4 -run TestDelayedMediaRTPInfo -count 1 .
+RUN cd mediamtx \
+    && go mod edit -replace github.com/bluenviron/gortsplib/v5=../gortsplib \
+    && go generate ./internal/core ./internal/servers/hls \
+    && go build -p 4 -o /build/mediamtx-patched .
+
+FROM bluenviron/mediamtx:1.21.2@sha256:c7540465f868a02652118bea5a0daab12a29ac0f6cb8485abd535939ecddf886
+COPY --from=build /build/mediamtx-patched /mediamtx

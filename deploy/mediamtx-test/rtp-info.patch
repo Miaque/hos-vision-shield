@@ -1,0 +1,16 @@
+diff --git a/server_stream_format.go b/server_stream_format.go
+index 8f9b7e6..436364d 100644
+--- a/server_stream_format.go
++++ b/server_stream_format.go
+@@ -70,6 +70,11 @@ func (ssf *serverStreamFormat) rtpInfoEntry(now time.Time) *headers.RTPInfoEntry
+ 		return nil
+ 	}
+ 
++	// Delayed live media cannot use wall-clock extrapolation as its join timestamp.
++	if age := now.Sub(ssf.lastNTP); age > time.Second || age < -time.Second {
++		return nil
++	}
++
+ 	// sequence number of the first packet of the stream
+ 	seqNum := ssf.lastSequenceNumber + 1
+ 
