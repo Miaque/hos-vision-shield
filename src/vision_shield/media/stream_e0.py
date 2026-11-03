@@ -383,7 +383,7 @@ class StreamE0:
 
     def summary(self):
         result = self.snapshot()
-        for key in ('frames', 'pacer', 'audio_clocks', 'video_clocks', 'audio_outputs', 'events', 'primary_tasks'):
+        for key in ('frames', 'pacer', 'audio_clocks', 'video_clocks', 'audio_outputs', 'primary_tasks'):
             result.pop(key)
         return result
 
