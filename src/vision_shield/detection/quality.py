@@ -2,8 +2,6 @@
 
 import math
 import time
-from concurrent.futures import ThreadPoolExecutor
-from functools import cached_property
 
 import cv2
 import numpy as np
@@ -22,26 +20,10 @@ def _timed_candidates(model, pixels, *, kind=None, full_frame=False):
     return candidates, time.monotonic() - started if started is not None else 0.0
 
 
-def _submit_primary(owner, pixels, *, route, **kwargs):
-    observer = getattr(getattr(owner, 'stage_times', None), 'primary_observer', None)
-    if observer:
-        return observer.submit_primary(owner._pool, _timed_candidates, owner.primary, pixels, route=route, **kwargs)
-    return owner._pool.submit(_timed_candidates, owner.primary, pixels, **kwargs)
-
-
-def _primary_result(owner, pending):
-    observer = getattr(getattr(owner, 'stage_times', None), 'primary_observer', None)
-    return observer.primary_result(pending) if observer else pending.result()
-
-
 class Detector:
     @timed("plate-work-check")
     def plate_needs_work(self, rgb, box):
         return needs_plate_work(rgb, box)
-
-    @cached_property
-    def _pool(self):
-        return ThreadPoolExecutor(max_workers=1)
 
     def __init__(self, config: dict):
         self.max_side, self.box_padding = config["detection_max_side"], config["detection_box_padding"]
@@ -74,13 +56,9 @@ class Detector:
         # Proposals trigger the unchanged quality gate; they never create or renew masks.
         if getattr(self, "inference_device", "cpu") != "cuda":
             return self.detail.candidates(pixels, kind="plate")
-        # Both outcomes need full faces; share detail views and overlap the independent models.
-        pending = _submit_primary(self, pixels, route='plate_proposals', kind="face", full_frame=True)
-        try:
-            detail, detail_seconds = _timed_candidates(self.detail, pixels)
-        finally:
-            with measure(self, 'wait-primary'):
-                primary, primary_seconds = _primary_result(self, pending)
+        # On one GPU, interleaving these model stacks stalls the small-frame critical path.
+        primary, primary_seconds = _timed_candidates(self.primary, pixels, kind="face", full_frame=True)
+        detail, detail_seconds = _timed_candidates(self.detail, pixels)
         self._proposal_candidates = (rgb, primary, primary_seconds, detail, detail_seconds)
         return [detection for detection in detail if detection.kind == "plate"]
 
@@ -101,13 +79,8 @@ class Detector:
         elif self.inference_device == "cuda":
             prepare = getattr(self.primary, "prepare", None)
             pixels = prepare(rgb) if prepare else rgb
-            # 两路全图检测互不依赖；等待两路结束后再复核，异常不返回部分结果。
-            pending = _submit_primary(self, pixels, route='detect_regions', kind=kind, full_frame=full_frame)
-            try:
-                detail, detail_seconds = _timed_candidates(self.detail, pixels, kind=kind)
-            finally:
-                with measure(self, 'wait-primary'):
-                    primary, primary_seconds = _primary_result(self, pending)
+            primary, primary_seconds = _timed_candidates(self.primary, pixels, kind=kind, full_frame=full_frame)
+            detail, detail_seconds = _timed_candidates(self.detail, pixels, kind=kind)
         else:
             primary, primary_seconds = _timed_candidates(self.primary, rgb, kind=kind, full_frame=full_frame)
             detail, detail_seconds = _timed_candidates(self.detail, rgb, kind=kind)

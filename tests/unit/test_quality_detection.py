@@ -128,28 +128,25 @@ def test_quality_is_default_and_requires_both_primary_and_detail_models(monkeypa
 
 
 @pytest.mark.parametrize("failed", [None, "primary", "detail"])
-def test_cuda_overlaps_independent_models_and_waits_for_failure(monkeypatch, failed):
-    from threading import Event
+def test_cuda_models_run_in_order_on_caller_and_fail_closed(monkeypatch, failed):
+    from threading import get_ident
 
     from vision_shield.detection import quality
 
-    primary_started, detail_started, primary_finished = Event(), Event(), Event()
+    caller, calls = get_ident(), []
 
     class Primary:
         def candidates(self, rgb, *, kind=None):
-            primary_started.set()
-            try:
-                assert detail_started.wait(2), "两路全图检测应重叠执行"
-                if failed == "primary":
-                    raise RuntimeError("主检测失败")
-                return [Detection("face", (1, 1, 3, 3), 0.9)]
-            finally:
-                primary_finished.set()
+            assert get_ident() == caller
+            calls.append('primary')
+            if failed == "primary":
+                raise RuntimeError("主检测失败")
+            return [Detection("face", (1, 1, 3, 3), 0.9)]
 
     class Detail:
         def candidates(self, rgb, *, kind=None):
-            assert primary_started.wait(2)
-            detail_started.set()
+            assert get_ident() == caller
+            calls.append('detail')
             if failed == "detail":
                 raise RuntimeError("补充检测失败")
             return []
@@ -171,7 +168,7 @@ def test_cuda_overlaps_independent_models_and_waits_for_failure(monkeypatch, fai
             detector.detect(pixels)
     else:
         assert detector.detect(pixels) == [(1, 1, 3, 3)]
-    assert primary_finished.is_set(), "检测结束前必须回收后台工作"
+    assert calls == (['primary'] if failed == 'primary' else ['primary', 'detail'])
     assert (pixels == 180).all()
 
 
@@ -694,7 +691,7 @@ def test_cuda_probe_never_reuses_another_frame_or_failed_probe():
 
 
 @pytest.mark.parametrize("backend", ["quality", "detail"])
-def test_model_thread_is_reused_across_frames_and_detail_views(monkeypatch, backend):
+def test_primary_runs_inline_and_detail_reuses_its_thread(monkeypatch, backend):
     from concurrent.futures import ThreadPoolExecutor
     from types import SimpleNamespace
     from vision_shield.detection import cpu, quality
@@ -706,7 +703,7 @@ def test_model_thread_is_reused_across_frames_and_detail_views(monkeypatch, back
         return executor
 
     module = quality if backend == "quality" else cpu
-    monkeypatch.setattr(module, "ThreadPoolExecutor", pool)
+    monkeypatch.setattr(module, "ThreadPoolExecutor", pool, raising=False)
     detector = module.Detector.__new__(module.Detector)
     if backend == "quality":
         detector.inference_device, detector.box_padding = "cuda", 0
@@ -721,7 +718,7 @@ def test_model_thread_is_reused_across_frames_and_detail_views(monkeypatch, back
     try:
         pixels = np.zeros((100, 100, 3), np.uint8)
         assert detect(pixels) == detect(pixels) == []
-        assert len(executors) == 1
+        assert len(executors) == (0 if backend == 'quality' else 1)
     finally:
         for executor in executors:
             executor.shutdown(wait=True)
