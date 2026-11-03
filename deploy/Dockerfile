@@ -47,7 +47,7 @@ ADD --checksum=sha256:6e374ed621e48faa40639307dff48ba6fe574a509977956d2cce9669b7
 ADD --checksum=sha256:9b24b5c8cd536946b62086fcafee6d5509d3f549f72d553d2336af87ffbe0da1 https://files.pythonhosted.org/packages/bf/77/67b0b24e45073a699610e50f00c18474ff9b09ea29ecc95083bdf5e60acd/cython-3.3.0-py3-none-any.whl cython.whl
 ADD --checksum=sha256:70b18734b607bd1da571d097d236cfcfacaf01de45717d59e6e04b96877532e0 https://files.pythonhosted.org/packages/e1/c6/76dc613121b793286a3f91621d7b75a2b493e0390ddca50f11993eadf192/setuptools-82.0.0-py3-none-any.whl setuptools.whl
 COPY deploy/build-pyav-flush.py ./
-RUN python build-pyav-flush.py
+RUN /opt/venv/bin/python build-pyav-flush.py
 
 FROM app-runtime AS rtsp-test
 COPY --from=rtsp-builder /native/patched/av/ /opt/venv/lib/python3.12/site-packages/av/
