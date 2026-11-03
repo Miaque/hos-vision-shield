@@ -1,18 +1,19 @@
-FROM golang:1.27.1-alpine3.24 AS build
-RUN apk add --no-cache git
+FROM golang:1.27.1-alpine3.24@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
+ADD --checksum=sha256:476d8b8ebbbf78924fff22aca7f87561f2dd8696ecf0a05eaa5140aed2fcff54 https://codeload.github.com/bluenviron/mediamtx/tar.gz/914e39535ece709919ac325aaeed98d394ed9093 /tmp/mediamtx.tar.gz
+ADD --checksum=sha256:82f97f877d6e58000ab0e16557c2b6921be20aeeeac1985239dd7e34c39ca547 https://codeload.github.com/bluenviron/gortsplib/tar.gz/09cc2060a7188c1f5f58498a8ede1e56338cd804 /tmp/gortsplib.tar.gz
 WORKDIR /build
-RUN git clone --depth 1 --branch v1.21.2 https://github.com/bluenviron/mediamtx.git \
-    && test "$(git -C mediamtx rev-parse HEAD)" = 914e39535ece709919ac325aaeed98d394ed9093 \
-    && git clone --depth 1 --branch v5.6.7 https://github.com/bluenviron/gortsplib.git \
-    && test "$(git -C gortsplib rev-parse HEAD)" = 09cc2060a7188c1f5f58498a8ede1e56338cd804
+RUN mkdir mediamtx gortsplib \
+    && tar -xzf /tmp/mediamtx.tar.gz -C mediamtx --strip-components=1 \
+    && tar -xzf /tmp/gortsplib.tar.gz -C gortsplib --strip-components=1
 COPY deploy/mediamtx-test/rtp-info.patch deploy/mediamtx-test/delayed_test.go ./
-RUN git -C gortsplib apply /build/rtp-info.patch \
-    && cp delayed_test.go gortsplib/server_stream_delayed_test.go
+RUN cd gortsplib && patch -p1 < /build/rtp-info.patch \
+    && cp /build/delayed_test.go server_stream_delayed_test.go
 ENV CGO_ENABLED=0 GOMAXPROCS=4
 RUN cd gortsplib && go test -p 4 -run TestDelayedMediaRTPInfo -count 1 .
 RUN cd mediamtx \
     && go mod edit -replace github.com/bluenviron/gortsplib/v5=../gortsplib \
-    && go generate ./internal/core ./internal/servers/hls \
+    && printf 'v1.21.2-hos-rtp-info-01' > internal/core/VERSION \
+    && go generate ./internal/servers/hls \
     && go build -p 4 -o /build/mediamtx-patched .
 
 FROM bluenviron/mediamtx:1.21.2@sha256:c7540465f868a02652118bea5a0daab12a29ac0f6cb8485abd535939ecddf886
