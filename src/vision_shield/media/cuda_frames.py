@@ -1,6 +1,7 @@
 """NVDEC frames stay on device through color conversion, masking and NVENC input."""
 
 import math
+from contextlib import nullcontext
 
 import av
 from av.codec.hwaccel import HWAccel
@@ -137,13 +138,16 @@ class CUDAFrames:
         if defer:
             from vision_shield.media.plate_lookahead import PendingMask
 
+            capture_detail = getattr(redactor.detector, 'plate_discovery_context', None)
+            discovery_context = capture_detail(pixels) if capture_detail else nullcontext()
+
             def confirm(box):
                 return at_frame(lambda: redactor._recheck(pixels, box, 'plate', gray))
 
             def discover():
                 from vision_shield.detection.plate_readability import source_view
 
-                with source_view(gray):
+                with source_view(gray), discovery_context:
                     return at_frame(lambda: [d.box for d in redactor._detections(pixels, 'plate')])
 
             plates = [t.box for t in redactor.history if t.kind == "plate"]

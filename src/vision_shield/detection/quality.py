@@ -2,7 +2,9 @@
 
 import math
 import time
+import weakref
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager, nullcontext
 from functools import cached_property
 
 import cv2
@@ -69,6 +71,7 @@ class Detector:
 
     def plate_proposals(self, rgb):
         self._proposal_candidates = None
+        self._plate_detail = None
         prepare = getattr(self.primary, "prepare", None)
         pixels = prepare(rgb) if prepare else rgb
         # Proposals trigger the unchanged quality gate; they never create or renew masks.
@@ -82,7 +85,21 @@ class Detector:
             with measure(self, 'wait-primary'):
                 primary, primary_seconds = _primary_result(self, pending)
         self._proposal_candidates = (rgb, primary, primary_seconds, detail, detail_seconds)
+        self._plate_detail = (weakref.ref(rgb), detail)
         return [detection for detection in detail if detection.kind == "plate"]
+
+    def plate_discovery_context(self, rgb):
+        cached = getattr(self, '_plate_detail', None)
+        return self._reuse_plate_detail(rgb, cached[1]) if cached and cached[0]() is rgb else nullcontext()
+
+    @contextmanager
+    def _reuse_plate_detail(self, rgb, detail):
+        previous = self._proposal_candidates
+        self._proposal_candidates = (rgb, [], 0., detail, 0.)
+        try:
+            yield
+        finally:
+            self._proposal_candidates = previous
 
     def detect_faces(self, rgb):
         return self.detect_regions(rgb, kind="face", full_frame=True)
@@ -91,13 +108,14 @@ class Detector:
         """Retain strong primary detections and confirmed complementary masks."""
         cached = getattr(self, "_proposal_candidates", None)
         self._proposal_candidates = None
-        if cached is not None and cached[0] is rgb and (kind is None or kind == "face" and full_frame):
+        if cached is not None and cached[0] is rgb and (kind in (None, "plate") or kind == "face" and full_frame):
             _, primary, primary_seconds, detail, detail_seconds = cached
-            if kind is None:
+            if kind != "face":
                 plates, seconds = _timed_candidates(self.primary, self.primary.prepare(rgb), kind="plate")
-                primary, primary_seconds = primary + plates, primary_seconds + seconds
-            else:
-                detail = [detection for detection in detail if detection.kind == "face"]
+                primary = plates if kind == "plate" else primary + plates
+                primary_seconds += seconds
+            if kind is not None:
+                detail = [detection for detection in detail if detection.kind == kind]
         elif self.inference_device == "cuda":
             prepare = getattr(self.primary, "prepare", None)
             pixels = prepare(rgb) if prepare else rgb
