@@ -11,9 +11,9 @@ from vision_shield.detection import Detection
 from vision_shield.detection.timing import measure
 
 
-def _async_device_moves(model):
+def _async_device_moves(model, *, graph=None):
     # shortcut: fixed Gen1/TorchScript internals; revalidate the graph and APIs on model or PyTorch upgrades.
-    graph = model.inlined_graph.copy()
+    graph = model.inlined_graph.copy() if graph is None else graph
     moves = [node for node in graph.findAllNodes("aten::to")
              if node.schema().startswith("aten::to.prim_Device(")]
     if len(moves) != 17:
@@ -38,10 +38,13 @@ class _HalfPlate(torch.nn.Module):
         core.pixel_mean, core.pixel_std = mean, std
         # Internal transfers target CUDA; their consumers remain ordered on the model stream.
         self._forward = _async_device_moves(model)
+        from vision_shield.detection.plate_graph import GraphedPlate
+        self._graphed = GraphedPlate(model)
 
     def forward(self, pixels):
         with torch.autocast("cuda", dtype=torch.float16):
-            boxes, labels, scores, size = self._forward(self.model, pixels)
+            boxes, labels, scores, size = (self._graphed(pixels) if self._graphed is not None
+                                          else self._forward(self.model, pixels))
         return boxes.float(), labels, scores.float(), size
 
 
