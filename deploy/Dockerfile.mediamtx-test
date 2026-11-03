@@ -6,6 +6,7 @@ RUN mkdir mediamtx gortsplib \
     && tar -xzf /tmp/mediamtx.tar.gz -C mediamtx --strip-components=1 \
     && tar -xzf /tmp/gortsplib.tar.gz -C gortsplib --strip-components=1
 COPY deploy/mediamtx-test/rtp-info.patch deploy/mediamtx-test/delayed_test.go ./
+ADD --checksum=sha256:a12e7ee1cd64a69dcdb314157e45dafcba705bfb0b1440b7935cb265d374423e https://unpkg.com/hls.js@1.7.3/dist/hls.min.js /build/mediamtx/internal/servers/hls/hls.min.js
 RUN cd gortsplib \
     && echo 'd8e5db9ef0d397d21d9fa1be77dec9160e3e01190b133e067e80e04210ac1f95  server_stream_format.go' | sha256sum -c - \
     && awk '/\/\/ sequence number of the first packet of the stream/ { print "\t// Delayed live media cannot use wall-clock extrapolation as its join timestamp.\n\tif age := now.Sub(ssf.lastNTP); age > time.Second || age < -time.Second {\n\t\treturn nil\n\t}\n" } { print }' server_stream_format.go > /tmp/server_stream_format.go \
@@ -18,7 +19,6 @@ RUN cd gortsplib && go test -p 4 -run TestDelayedMediaRTPInfo -count 1 .
 RUN cd mediamtx \
     && go mod edit -replace github.com/bluenviron/gortsplib/v5=../gortsplib \
     && printf 'v1.21.2-hos-rtp-info-01' > internal/core/VERSION \
-    && go generate ./internal/servers/hls \
     && go build -p 4 -o /build/mediamtx-patched .
 
 FROM bluenviron/mediamtx:1.21.2@sha256:c7540465f868a02652118bea5a0daab12a29ac0f6cb8485abd535939ecddf886
