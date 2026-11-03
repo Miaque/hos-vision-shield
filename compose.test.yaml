@@ -1,4 +1,7 @@
 services:
+  mediamtx:
+    environment:
+      MTX_PATHDEFAULTS_USEABSOLUTETIMESTAMP: "true"
   api:
     image: vision-shield-test:cpu
   reconciler:
