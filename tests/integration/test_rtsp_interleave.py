@@ -44,7 +44,8 @@ def interleave_source(tmp_path_factory):
     return path
 
 
-def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=None, interleave_us=None, mux_flush=None):
+def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=None, interleave_us=None, mux_flush=None,
+               rtpflags=''):
     original_open = av.open
     stop = threading.Event()
     audio_input, wire_clocks, events = [], [], []
@@ -121,6 +122,11 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
             kwargs['options'] = {k:v for k,v in kwargs['options'].items() if k!='max_interleave_delta'}
         if interleave_us is not None:
             kwargs['options']['max_interleave_delta'] = str(interleave_us)
+        if rtpflags is not None:
+            if rtpflags:
+                kwargs['options']['rtpflags'] = rtpflags
+            else:
+                kwargs['options'].pop('rtpflags', None)
         return Writer(original_open(url, *args, **kwargs))
 
     class Detector:
@@ -157,6 +163,34 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
                       rtcp_reports=capture.reports)
         (root/f'{scenario}-{"default" if default_interleave else "configured"}-wire.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
     return capture,audio_input,wire_clocks,events,None if stop_at is None else time.monotonic()-stop_at
+
+
+@pytest.mark.parametrize('scenario', ['continuous', 'sparse', 'missing', 'jump', 'reset', 'stop'])
+@pytest.mark.parametrize('rtpflags', [None, ''], ids=['configured', 'generic-control'])
+def test_rtsp_aac_sends_the_final_real_access_unit(interleave_source, monkeypatch, scenario, rtpflags):
+    open_source = av.open
+    capture, source_audio, clocks, events, _ = run_output(
+        interleave_source, scenario, monkeypatch, rtpflags=rtpflags)
+    audio, pictures = capture.audio(), capture.pictures()
+    accepted = [p for p in clocks if p['track'] == 'audio']
+    assert len(pictures) == events[-1]['stats']['processed_frames']
+    assert len(accepted) - len(audio) == (0 if rtpflags is None else 1)
+    assert [a['payload'] for a in audio] == [a['payload'] for a in accepted[:len(audio)]]
+    assert [a['payload'] for a in audio] == [a[0] for a in source_audio[:len(audio)]]
+    offset = (audio[0]['timestamp'] - round(accepted[0]['pts'] * 8000)) % 2**32
+    assert all((r['timestamp'] - round(p['pts'] * 8000)) % 2**32 == offset
+               for r, p in zip(audio, accepted))
+    if rtpflags is None:
+        assert 'MP4A-LATM' in capture.sdp
+    # Decode the unchanged AAC bytes with the actual original AudioSpecificConfig.
+    with open_source(str(interleave_source)) as source:
+        decoder = av.CodecContext.create('aac', 'r')
+        decoder.extradata = source.streams.audio[0].codec_context.extradata
+    assert sum(len(decoder.decode(av.Packet(a['payload']))) for a in audio) == len(audio)
+    video = [p for p in clocks if p['track'] == 'video']
+    video_zero = capture.clock_time(0, pictures[0]['timestamp'], 90000) - float(video[0]['pts'])
+    audio_zero = capture.clock_time(2, audio[0]['timestamp'], 8000) - float(accepted[0]['pts'])
+    assert abs(video_zero - audio_zero) < .002
 
 
 @pytest.mark.parametrize('interleave_us', [100000, None], ids=['100ms-control', 'configured'])

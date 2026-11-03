@@ -124,6 +124,22 @@ class RTSPCapture:
         return result
 
     def audio(self):
+        if 'MP4A-LATM' in self.sdp:
+            # This small fixture uses complete LATM AUs; no retranscoding or synthetic tail AU.
+            result = []
+            for row in self.packets:
+                if row['channel'] != 2:
+                    continue
+                packet, position, size = row['packet'], 12, 0
+                while True:
+                    part = packet[position]
+                    position, size = position + 1, size + part
+                    if part != 255:
+                        break
+                assert packet[1] & 128 and len(packet) - position == size
+                result.append(dict(at=row['at'], timestamp=int.from_bytes(packet[4:8], 'big'),
+                                   payload=packet[position:]))
+            return result
         # RFC3640 AAC-hbr: 13-bit AU size + 3-bit index, no fragmented AUs in this small fixture.
         assert 'sizelength=13' in self.sdp.lower() and 'indexlength=3' in self.sdp.lower()
         result = []

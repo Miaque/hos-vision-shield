@@ -508,7 +508,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
         if trace:
             trace.event('publish_open_started')
         # Compressed source PTS can keep 100 ms of media in the mux queue for seconds of wall time.
-        options = {"rtsp_transport": "tcp", "max_interleave_delta": "1"}
+        # LATM sends each unchanged AAC AU immediately, including the last one before teardown.
+        options = {"rtsp_transport": "tcp", "max_interleave_delta": "1", "rtpflags": "latm"}
         if protocol == "rtmp":
             original = httpx.URL(config.get("publish_url") or target)
             # DNS 固定到授权 IP，RTMP tcUrl 仍保留平台用于虚拟主机路由的原域名。
@@ -517,7 +518,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                        "rw_timeout": str(round(config["rtsp_read_timeout"] * 1_000_000))}
         if diagnostics:
             diagnostics.runtime['output_mux_options'] = {key:value for key,value in options.items()
-                if key in ('rtsp_transport', 'max_interleave_delta', 'flush_packets')}
+                if key in ('rtsp_transport', 'max_interleave_delta', 'flush_packets', 'rtpflags')}
             if trace:
                 from vision_shield.media.stream_e0 import runtime_fingerprint
                 trace.runtime_fingerprint = runtime_fingerprint(diagnostics.runtime)

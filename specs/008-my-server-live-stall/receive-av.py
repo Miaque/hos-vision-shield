@@ -71,6 +71,7 @@ def receive(path, url, seconds):
                             track['control'] = urljoin(headers.get('content-base', url.rstrip('/') + '/'), line[10:])
                         elif track is not None and line.startswith('a=rtpmap:'):
                             track['rate'] = int(line.split('/')[1])
+                            track['latm'] = 'mp4a-latm' in line.lower()
                     assert len(tracks) in (1, 2) and tracks[0]['kind'] == 'video'
                     for index, track in enumerate(tracks):
                         send('SETUP', track['control'],
@@ -111,6 +112,18 @@ def receive(path, url, seconds):
                             offset += 4 + 4 * int.from_bytes(packet[offset + 2:offset + 4], 'big')
                         payload = packet[offset:len(packet) - packet[-1] if packet[0] & 32 else len(packet)]
                         if tracks[channel // 2]['kind'] == 'audio':
+                            if tracks[channel // 2].get('latm'):
+                                position, length = 0, 0
+                                while True:
+                                    part = payload[position]
+                                    position, length = position + 1, length + part
+                                    if part != 255:
+                                        break
+                                assert packet[1] & 128 and len(payload) - position == length, 'Fragmented LATM sample'
+                                record('audio', ssrc=ssrc, timestamp=timestamp,
+                                       sha256=hashlib.sha256(payload[position:]).hexdigest())
+                                output.flush()
+                                continue
                             bits = int.from_bytes(payload[:2], 'big')
                             assert bits and bits % 16 == 0, 'Unsupported AAC packetization'
                             position = 2 + bits // 8
