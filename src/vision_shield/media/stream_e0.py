@@ -10,6 +10,8 @@ import time
 
 def runtime_fingerprint(runtime):
     identity = {key: runtime.get(key) for key in ('source_sha256', 'effective_config', 'output_mux_options')}
+    if 'binary_sha256' in runtime:
+        identity['binary_sha256'] = runtime['binary_sha256']
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 

@@ -10,13 +10,20 @@ services:
       MTX_PATHDEFAULTS_USEABSOLUTETIMESTAMP: "true"
   api:
     image: vision-shield-test:cpu
+    build:
+      target: rtsp-test
   reconciler:
     image: vision-shield-test:cpu
+    build:
+      target: rtsp-test
   notifier:
     image: vision-shield-test:cpu
+    build:
+      target: rtsp-test
   file-worker:
     image: vision-shield-test:cu130
     build:
+      target: rtsp-test
       args:
         TORCH_BACKEND: cu130
     group_add:
@@ -24,6 +31,7 @@ services:
   stream-worker:
     image: vision-shield-test:cu130
     build:
+      target: rtsp-test
       args:
         TORCH_BACKEND: cu130
     environment:

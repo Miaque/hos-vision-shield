@@ -44,7 +44,7 @@ def interleave_source(tmp_path_factory):
     return path
 
 
-def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=None, interleave_us=None):
+def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=None, interleave_us=None, mux_flush=None):
     original_open = av.open
     stop = threading.Event()
     audio_input, wire_clocks, events = [], [], []
@@ -107,8 +107,12 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
 
         def mux(self, packet):
             wire_clocks.append(dict(track=packet.stream.type,pts=packet.pts*packet.time_base,
-                                    dts=packet.dts*packet.time_base,payload=bytes(packet)))
+                                    dts=packet.dts*packet.time_base,payload=bytes(packet), submitted=time.monotonic()))
             self.inner.mux(packet)
+
+        def flush_mux(self):
+            if not default_interleave and mux_flush is not False and (flush := getattr(self.inner, 'flush_mux', None)):
+                flush()
 
     def open_endpoint(url, *args, **kwargs):
         if url == 'rtsp://fixture/input':
@@ -120,7 +124,12 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
         return Writer(original_open(url, *args, **kwargs))
 
     class Detector:
+        calls = 0
+
         def detect(self, pixels):
+            self.calls += 1
+            if scenario == 'model-pause' and self.calls == 31:
+                time.sleep(.75)
             return [(0,0,32,48)]
 
     def emit(event):
@@ -153,7 +162,7 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
 @pytest.mark.parametrize('interleave_us', [100000, None], ids=['100ms-control', 'configured'])
 def test_compressed_source_pts_does_not_hold_accepted_video(interleave_source, monkeypatch, interleave_us):
     capture, source_audio, clocks, events, _ = run_output(
-        interleave_source, 'compressed', monkeypatch, interleave_us=interleave_us)
+        interleave_source, 'compressed', monkeypatch, interleave_us=interleave_us, mux_flush=False)
     pictures, audio = capture.pictures(), capture.audio()
     video = [p for p in clocks if p['track'] == 'video']
     assert len(pictures) == len(video) == 100
@@ -168,6 +177,32 @@ def test_compressed_source_pts_does_not_hold_accepted_video(interleave_source, m
         assert gap > .5, 'Control did not reproduce the compressed-PTS interleave freeze'
     else:
         assert gap < .5, f'Accepted video remained in the mux queue for {gap:.3f}s'
+    if output := os.getenv('INTERLEAVE_RESULT_DIR'):
+        path = Path(output)
+        path.mkdir(parents=True, exist_ok=True)
+        (path / f'compressed-{interleave_us or "configured"}.json').write_text(json.dumps(
+            dict(max_rtp_gap_seconds=gap, frames=len(pictures), aac_received=len(audio),
+                 aac_muxed=sum(p['track'] == 'audio' for p in clocks), original_pts_retained=True), indent=2))
+
+
+@pytest.mark.parametrize('mux_flush', [False, True], ids=['queued-control', 'flush'])
+def test_completed_picture_leaves_mux_before_next_model_call(interleave_source, monkeypatch, mux_flush):
+    if not hasattr(av.container.OutputContainer, 'flush_mux'):
+        pytest.skip('Requires the patched PyAV in the test Docker image')
+    capture, _, clocks, _, _ = run_output(interleave_source, 'model-pause', monkeypatch, mux_flush=mux_flush)
+    video = [p for p in clocks if p['track'] == 'video']
+    pictures = capture.pictures()
+    assert len(pictures) == len(video) == 100
+    waits = [p['at'] - v['submitted'] for p, v in zip(pictures, video, strict=True)]
+    if mux_flush:
+        assert max(waits[10:40]) < .2
+    else:
+        assert max(waits[10:40]) > .6, 'Control did not retain a completed picture during model work'
+    if output := os.getenv('INTERLEAVE_RESULT_DIR'):
+        path = Path(output)
+        path.mkdir(parents=True, exist_ok=True)
+        (path / f'model-pause-{mux_flush}.json').write_text(json.dumps(
+            dict(frames=len(pictures), max_mux_to_rtp_seconds=max(waits[10:40])), indent=2))
 
 
 @pytest.mark.parametrize('default_interleave',[False,True],ids=['bounded','default'])

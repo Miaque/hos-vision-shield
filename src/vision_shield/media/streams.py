@@ -411,6 +411,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                                    mux_started_monotonic=time.monotonic(), encoded_vcl_sha256=encoded_vcl_sha256)
             with diagnostics.operation('video-mux', packet_source_pts) if diagnostics else nullcontext():
                 writer.mux(packet)
+                if flush_mux:
+                    flush_mux()
         except Exception as error:
             failed_frames += 1
             processing = False
@@ -521,6 +523,11 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 trace.runtime_fingerprint = runtime_fingerprint(diagnostics.runtime)
         with av.open(target, "w", format="flv" if protocol == "rtmp" else "rtsp", options=options,
                      timeout=(config["rtsp_connect_timeout"], config["rtsp_read_timeout"])) as writer:
+            flush_mux = getattr(writer, 'flush_mux', None) if protocol == 'rtsp' else None
+            if diagnostics:
+                diagnostics.runtime['output_mux_options']['flush_mux'] = bool(flush_mux)
+                if trace:
+                    trace.runtime_fingerprint = runtime_fingerprint(diagnostics.runtime)
             if trace:
                 trace.event('publish_open_completed')
             video, audio = None, None

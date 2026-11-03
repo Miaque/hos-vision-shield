@@ -22,7 +22,7 @@ COPY README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv build --wheel --out-dir /dist
 
-FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258
+FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS app-runtime
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     FACE_MODEL_PATH=/models/yunet_face.onnx PLATE_MODEL_PATH=/models/hyperlpr_plate.onnx \
     EGOBLUR_FACE_MODEL_PATH=/models/face.jit EGOBLUR_PLATE_MODEL_PATH=/models/license_plate.jit
@@ -37,3 +37,20 @@ RUN --mount=from=dependencies,source=/usr/local/bin/uv,target=/usr/local/bin/uv 
 WORKDIR /app
 USER 10001:10001
 CMD ["python", "-m", "uvicorn", "vision_shield.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--limit-concurrency", "32"]
+
+FROM dependencies AS rtsp-builder
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev
+WORKDIR /native
+ADD --checksum=sha256:08674930eaf1af78a3ed8f93d3ba49383323b3a867e84349d9c399e36f7497da https://files.pythonhosted.org/packages/90/bc/a2a40e503250fe5d4174471911828f31658864eb69a8a7cb960c715e17b7/av-19.0.1.tar.gz av.tar.gz
+ADD --checksum=sha256:6e374ed621e48faa40639307dff48ba6fe574a509977956d2cce9669b7cc27e9 https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2 ffmpeg.tar.gz
+ADD --checksum=sha256:9b24b5c8cd536946b62086fcafee6d5509d3f549f72d553d2336af87ffbe0da1 https://files.pythonhosted.org/packages/bf/77/67b0b24e45073a699610e50f00c18474ff9b09ea29ecc95083bdf5e60acd/cython-3.3.0-py3-none-any.whl cython.whl
+ADD --checksum=sha256:70b18734b607bd1da571d097d236cfcfacaf01de45717d59e6e04b96877532e0 https://files.pythonhosted.org/packages/e1/c6/76dc613121b793286a3f91621d7b75a2b493e0390ddca50f11993eadf192/setuptools-82.0.0-py3-none-any.whl setuptools.whl
+COPY deploy/build-pyav-flush.py ./
+RUN python build-pyav-flush.py
+
+FROM app-runtime AS rtsp-test
+COPY --from=rtsp-builder /native/patched/av/ /opt/venv/lib/python3.12/site-packages/av/
+RUN python -c "import av; assert av.__version__ == '19.0.1' and hasattr(av.container.OutputContainer, 'flush_mux')"
+
+# The ordinary build keeps its original runtime; only compose.test selects rtsp-test.
+FROM app-runtime AS runtime

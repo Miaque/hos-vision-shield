@@ -77,3 +77,11 @@ def test_worker_digest_survives_integral_float_settings_in_redis_json(monkeypatc
                                                for key, value in worker['effective_config'].items()})
     assert runtime_fingerprint(worker) != runtime_fingerprint(transported)
     assert analyze.transported_fingerprint(transported) == runtime_fingerprint(worker)
+
+
+def test_runtime_digest_distinguishes_native_output_bindings():
+    original = {'source_sha256': {'media.streams': 'same'}}
+    patched = dict(original, binary_sha256={'av.container.output': 'patched'})
+    assert runtime_fingerprint(original) != runtime_fingerprint(patched)
+    assert runtime_fingerprint(patched) != runtime_fingerprint(dict(
+        patched, binary_sha256={'av.container.output': 'different'}))
