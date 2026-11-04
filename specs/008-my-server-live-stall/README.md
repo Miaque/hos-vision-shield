@@ -318,3 +318,13 @@ HyperLPR 固定尺寸 CUDA Graph 私有候选，在原版 ONNX Runtime 1.31.1 �
 Windows 全量与定向重跑均重现已有 `test_real_rtsp_reader_is_bounded_and_stops_its_socket` 失败：`close()` 已设置 stop 并调用 socket shutdown，但读取线程仍可能留在原 10 秒阻塞接收中，超过 3 秒 join 时限。现在 socket 每 200 ms 返回一次取消检查，另用无数据截止点保留原 10 秒重连超时；收到数据后仍重置这项超时。没有放宽退出断言或调整视频接收、重组、时间戳与队列容量。
 
 新增静默 RTSP 对端用例：超过一次短轮询后连接不误报错误，主动关闭须在 1 秒内完成。Windows 两次定向均为 4 passed；my-server 独立 CPU 辅助容器重复这两个真实 TCP 用例各五次，10/10 通过，没有使用 GPU 或停止运行任务。[Linux 重复验证](evidence/observer-cancel-linux.json)
+
+## HyperLPR 固定图双流候选
+
+后续像素图试验的同内容第三路对照曾为 48.71→44.55 s，交换顺序后却为 42.76→49.98 s，ROI 前缀也只得到 47.40→47.26 s。两项均未保留。第三路对照受共享负载影响，不能可靠判定亚毫秒级改动；停止叠加原型，重新选择算子证据最明确的 HyperLPR 候选，改用实际两路完整复核决定保留或撤回。
+
+实现只为单张固定尺寸 HyperLPR 增加一个延迟初始化的 ORT CUDA Graph session，沿现有 plate stream 将新输入复制到固定 GPU 地址，重放后阻塞读回新的 CPU 预测数组。权重、FP32/TF32 设置和后处理保持原值，批量分块仍走原 session。尺寸、dtype、设备或 CUDA provider 不符时拒绝处理。`forward-detail-plate` 计时包含输入复制、执行和 CPU 结果完成，不能将异步提交时间作为推理完成时间。[实际候选算子对照](evidence/detailgraph-operator.json)
+
+完整质量对照明确把第一路 detail 绑定到 `ca2bb46` 原始 `_plate_forward`，第二路使用新路径；rfm-01 的 2208 帧、rfm-02 的 2230 帧，最终 YUV 与 PTS 均逐项一致，digest 与此前原基准相同。每段包含 22 次强制不完整前视窗口及 EOF；未把两份新路径互比当成原版对照。GPU 对照进程正常退出。[质量 1](evidence/detailgraph-quality-rfm01.json)、[质量 2](evidence/detailgraph-quality-rfm02.json)、[候选源码与测试起止](evidence/detailgraph-validation.json)
+
+在接收器退出修复后，本地全量单元测试 997 passed、96 skipped；此前含退出问题的失败日志保留，未跳过或放宽该测试。候选此时尚未完成正式双流 600 秒 RTP、内容积压、播放器、资源和同步复核，不以算子微基准或文件质量处理时长宣布吞吐通过。

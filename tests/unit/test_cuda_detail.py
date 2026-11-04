@@ -256,3 +256,102 @@ def test_batch_export_changes_shared_shape_metadata_and_preserves_learned_weight
     assert not result.graph.value_info
     np.testing.assert_array_equal(onnx.numpy_helper.to_array(result.graph.initializer[0]), [0, -1, 1])
     np.testing.assert_array_equal(onnx.numpy_helper.to_array(result.graph.initializer[1]), [1.25, -2.5])
+
+
+def test_single_plate_graph_copies_new_inputs_and_returns_independent_completed_arrays(monkeypatch):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    import torch
+    from vision_shield.detection.cuda_detail import Detector
+
+    detector = Detector.__new__(Detector)
+    detector.device, detector.plate_stream = torch.device('cpu'), object()
+    source = torch.empty((1, 3, 320, 320))
+    output = torch.empty((1, 6300, 15))
+    binding, options, calls = object(), object(), []
+
+    def forward(actual_binding, actual_options):
+        assert actual_binding is binding and actual_options is options
+        calls.append(source[0, 0, 0, 0].item())
+        output.fill_(calls[-1])
+
+    detector._plate_graph = (SimpleNamespace(run_with_iobinding=forward), binding, source,
+                            SimpleNamespace(cpu=lambda: output.clone()), options)
+    monkeypatch.setattr(torch.cuda, 'stream', lambda stream: nullcontext())
+    first = detector._plate_forward(np.full(source.shape, 2, np.float32))
+    second = detector._plate_forward(torch.full(source.shape, 5.0))
+    assert calls == [2, 5]
+    np.testing.assert_array_equal(first, np.full(output.shape, 2, np.float32))
+    np.testing.assert_array_equal(second, np.full(output.shape, 5, np.float32))
+    assert not np.shares_memory(first, second)
+
+
+@pytest.mark.parametrize('shape,dtype', [((1, 3, 319, 320), np.float32), ((1, 3, 320, 320), np.float64)])
+def test_single_plate_graph_rejects_invalid_input_before_replay(shape, dtype):
+    from vision_shield.detection.cuda_detail import Detector
+
+    detector = Detector.__new__(Detector)
+    with pytest.raises(ValueError, match='plate graph input'):
+        detector._plate_forward(np.zeros(shape, dtype))
+
+
+def test_batched_plate_inference_keeps_original_session_path(monkeypatch):
+    import torch
+    from vision_shield.detection import cuda_pixels
+    from vision_shield.detection.cuda_detail import Detector
+
+    detector = Detector.__new__(Detector)
+    detector.plate_stream = object()
+    session, expected = object(), np.zeros((2, 6300, 15), np.float32)
+    detector._plate_session = lambda batch: session if batch == 2 else None
+    blob = torch.empty((2, 3, 320, 320))
+
+    def run(actual_session, actual_blob, stream, *, timing, stage):
+        assert actual_session is session and actual_blob is blob and stream is detector.plate_stream
+        assert timing is detector and stage == 'forward-detail-plate'
+        return [expected]
+
+    monkeypatch.setattr(cuda_pixels, 'run', run)
+    assert detector._plate_forward(blob) is expected
+    assert '_plate_graph' not in vars(detector)
+
+
+@pytest.mark.parametrize('fault', [None, 'provider', 'shape'])
+def test_plate_graph_owns_fixed_buffers_on_selected_producer_stream_and_rejects_invalid_session(monkeypatch, fault):
+    import sys
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    import torch
+    from vision_shield.detection.cuda_detail import Detector
+
+    binding, options, run_options = MagicMock(), MagicMock(), MagicMock()
+    session = MagicMock()
+    session.get_providers.return_value = ['CPUExecutionProvider' if fault == 'provider' else 'CUDAExecutionProvider']
+    session.get_inputs.return_value = [SimpleNamespace(name='input', shape=[1, 3, 320, 320])]
+    session.get_outputs.return_value = [SimpleNamespace(name='output', shape=[1, 6300, 14 if fault == 'shape' else 15])]
+    session.io_binding.return_value = binding
+    create = MagicMock(return_value=session)
+    monkeypatch.setitem(sys.modules, 'onnxruntime', SimpleNamespace(
+        SessionOptions=lambda: options, RunOptions=lambda: run_options, InferenceSession=create))
+    empty = torch.empty
+    monkeypatch.setattr(torch, 'empty', lambda shape, *, dtype, device: empty(shape, dtype=dtype))
+    detector = Detector.__new__(Detector)
+    detector.device, detector.plate_path = torch.device('cuda', 2), 'original-plate.onnx'
+    detector.plate_stream = SimpleNamespace(cuda_stream=12345)
+    if fault:
+        with pytest.raises(RuntimeError if fault == 'provider' else ValueError):
+            detector._plate_graph
+        assert '_plate_graph' not in vars(detector)
+        binding.bind_input.assert_not_called()
+        return
+    graph = detector._plate_graph
+    assert detector._plate_graph is graph and create.call_count == 1
+    assert create.call_args.args == ('original-plate.onnx',)
+    assert create.call_args.kwargs['providers'] == [('CUDAExecutionProvider', dict(
+        device_id=2, use_tf32=0, cudnn_conv_algo_search='HEURISTIC', enable_cuda_graph=1,
+        user_compute_stream='12345'))]
+    session.disable_fallback.assert_called_once()
+    options.add_session_config_entry.assert_called_once_with('session.disable_cpu_ep_fallback', '1')
+    binding.bind_input.assert_called_once_with('input', 'cuda', 2, np.float32, (1, 3, 320, 320), graph[2].data_ptr())
+    binding.bind_output.assert_called_once_with('output', 'cuda', 2, np.float32, (1, 6300, 15), graph[3].data_ptr())
+    run_options.add_run_config_entry.assert_called_once_with('disable_synchronize_execution_providers', '1')

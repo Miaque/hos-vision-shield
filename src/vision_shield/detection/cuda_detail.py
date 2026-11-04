@@ -1,5 +1,6 @@
 """CUDA inference for the same YuNet/HyperLPR weights and CPU view/postprocessing contract."""
 
+from functools import cached_property
 from itertools import batched
 
 import cv2
@@ -89,6 +90,7 @@ class Detector(CPUDetector):
         for output in model.graph.output:
             output.type.tensor_type.shape.dim[1].dim_param = output.name + "_anchors"
         self.face_model, self.face_sessions = model.SerializeToString(), {}
+        self.plate_path = str(plate_path)
         self.plate_model, self.plate_sessions = _batch_plate_model(onnx.load(str(plate_path))), {}
         # Ada's dynamic local shapes can spend seconds in cuDNN's heuristic plan construction.
         face_providers = [(name, {**values, 'cudnn_conv_algo_search': 'DEFAULT'}) for name, values in providers] \
@@ -225,7 +227,45 @@ class Detector(CPUDetector):
             return decode_faces(dict(zip((o.name for o in self.face.get_outputs()), outputs)),
                                 padded.shape[1], padded.shape[0], self.face_threshold)
 
+    @cached_property
+    def _plate_graph(self):
+        import onnxruntime as ort
+
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = 1
+        options.add_session_config_entry("session.disable_cpu_ep_fallback", "1")
+        session = ort.InferenceSession(self.plate_path, sess_options=options, providers=[
+            ("CUDAExecutionProvider", {"device_id": self.device.index, "use_tf32": 0,
+                "cudnn_conv_algo_search": "HEURISTIC", "enable_cuda_graph": 1,
+                "user_compute_stream": str(self.plate_stream.cuda_stream)})])
+        session.disable_fallback()
+        if session.get_providers()[0] != "CUDAExecutionProvider":
+            raise RuntimeError("Plate CUDA provider was not activated")
+        if session.get_inputs()[0].shape != [1, 3, 320, 320] or session.get_outputs()[0].shape != [1, 6300, 15]:
+            raise ValueError("Unsupported plate graph shape")
+        source = torch.empty((1, 3, 320, 320), dtype=torch.float32, device=self.device)
+        output = torch.empty((1, 6300, 15), dtype=torch.float32, device=self.device)
+        binding = session.io_binding()
+        binding.bind_input(session.get_inputs()[0].name, "cuda", self.device.index,
+                           np.float32, tuple(source.shape), source.data_ptr())
+        binding.bind_output(session.get_outputs()[0].name, "cuda", self.device.index,
+                            np.float32, tuple(output.shape), output.data_ptr())
+        run_options = ort.RunOptions()
+        run_options.add_run_config_entry("disable_synchronize_execution_providers", "1")
+        return session, binding, source, output, run_options
+
     def _plate_forward(self, blob):
+        if blob.shape[0] == 1:
+            if tuple(blob.shape) != (1, 3, 320, 320) or blob.dtype not in (torch.float32, np.dtype('float32')):
+                raise ValueError("Invalid plate graph input")
+            if isinstance(blob, torch.Tensor) and blob.device != self.device:
+                raise ValueError("Invalid plate graph input device")
+            with measure(self, "forward-detail-plate"), torch.cuda.stream(self.plate_stream):
+                session, binding, source, output, options = self._plate_graph
+                # Fixed addresses and the producer stream preserve fresh input and completed CPU output.
+                source.copy_(torch.from_numpy(blob) if isinstance(blob, np.ndarray) else blob)
+                session.run_with_iobinding(binding, options)
+                return output.cpu().numpy()
         if isinstance(blob, torch.Tensor):
             from vision_shield.detection.cuda_pixels import run
 
