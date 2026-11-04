@@ -1,0 +1,37 @@
+{
+  "tasks": [
+    {
+      "id": "1aed319f-e680-4f52-ad70-cd9b0be0a220",
+      "kind": "stream",
+      "source_kind": "rtsp",
+      "redaction_mode": "mosaic",
+      "detection_interval": 3,
+      "tracking": "flow",
+      "max_bitrate": 5000000,
+      "desired_state": "run",
+      "audio_enabled": true,
+      "source_ref_sha256": "d69b84fd22e9aee5136e4273df7d51a75cc8eeb724cd043f61b5e1f41e44327d"
+    },
+    {
+      "id": "e9d6a3ab-3843-48f4-8083-7dc8f89759b1",
+      "kind": "stream",
+      "source_kind": "rtsp",
+      "redaction_mode": "mosaic",
+      "detection_interval": 3,
+      "tracking": "flow",
+      "max_bitrate": 5000000,
+      "desired_state": "run",
+      "audio_enabled": true,
+      "source_ref_sha256": "41a7ae65910b0fc5d6b07ffb73286edc464fc911a78d1d69c0004c1c68681fdf"
+    }
+  ],
+  "settings": {
+    "debug": false,
+    "inference_device": "cpu",
+    "detection_backend": "quality",
+    "stream_output_pacing": true,
+    "stream_diagnostics": true,
+    "detection_max_side": 1280,
+    "detection_box_padding": 0.15
+  }
+}

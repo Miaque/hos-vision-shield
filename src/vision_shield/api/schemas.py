@@ -99,6 +99,8 @@ class Stats(BaseModel):
     processed_frames: Annotated[int, Field(ge=0)] = 0
     dropped_frames: Annotated[int, Field(ge=0)] = 0
     elapsed_seconds: Annotated[float, Field(ge=0)] = 0
+    recovered_audio_packets: Annotated[int, Field(ge=0)] = Field(default=0, exclude_if=lambda value: value == 0)
+    unanchored_audio_packets: Annotated[int, Field(ge=0)] = Field(default=0, exclude_if=lambda value: value == 0)
     stream: StreamStats | None = Field(default=None, exclude_if=lambda value: value is None)
 
 

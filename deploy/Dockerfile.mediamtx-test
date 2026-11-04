@@ -1,0 +1,1 @@
+FROM ghcr.io/miaque/mediamtx:1.21.2-gortsplib-5.6.7-hos.1@sha256:2db52d5d8c7e9e874a7996a8084bc67bcf7aa68f21f327e9df45f384b2e8e079

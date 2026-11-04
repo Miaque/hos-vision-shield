@@ -37,9 +37,11 @@ class LiveDiagnostics:
                     runtime = runtime_metadata(detector, config)
                     runtime['av_version'] = av.__version__
                     runtime['av_library_versions'] = {name:list(version) for name,version in av.library_versions.items()}
+                    with Path(av.container.output.__file__).open('rb') as handle:
+                        runtime['binary_sha256'] = {'av.container.output': hashlib.file_digest(handle, 'sha256').hexdigest()}
                     runtime['clock_identity'] = clock_identity()
                     for name in ('media.cuda_frames', 'media.stream_pacing', 'detection.timing', 'media.live_diagnostics',
-                                 'media.rtsp_observer', 'media.stream_e0', 'jobs.tasks', 'config'):
+                                 'media.rtsp_observer', 'media.stream_e0', 'detection.plate_graph', 'jobs.tasks', 'config'):
                         path = Path(__file__).parents[1].joinpath(*name.split('.')).with_suffix('.py')
                         with path.open('rb') as handle:
                             runtime['source_sha256'][name] = hashlib.file_digest(handle, 'sha256').hexdigest()

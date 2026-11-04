@@ -79,17 +79,24 @@ class RTSPObserver:
         parsed = urlsplit(self.url)
         with socket.create_connection((parsed.hostname, parsed.port or 554), timeout=2) as sock:
             self.sock = sock
-            sock.settimeout(10)
+            sock.settimeout(.2)
             buf, cseq, session = b'', 0, None
             def fill(length):
                 nonlocal buf
+                idle_deadline = time.monotonic() + 10
                 while len(buf) < length:
                     if self.stop.is_set() or time.monotonic()-self.last_polled > 20:
                         self.stop.set()
                         raise EOFError('Observer stopped')
-                    chunk = sock.recv(65536)
+                    try:
+                        chunk = sock.recv(65536)
+                    except socket.timeout:
+                        if time.monotonic() >= idle_deadline:
+                            raise
+                        continue
                     if not chunk:
                         raise EOFError('RTSP EOF')
+                    idle_deadline = time.monotonic() + 10
                     buf += chunk
                     if len(buf) > 256 * 1024:
                         raise ValueError('RTSP buffer limit')

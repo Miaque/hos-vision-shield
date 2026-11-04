@@ -1,0 +1,23 @@
+{
+  "compose_version": "Docker Compose version v2.27.0",
+  "gpu_used": false,
+  "containers_preserved_across_final_up": true,
+  "workers": [
+    {
+      "cpus": "32-47,96-111",
+      "mems": "2",
+      "kernel": [
+        "Cpus_allowed_list:\t32-47,96-111",
+        "Mems_allowed_list:\t2"
+      ]
+    },
+    {
+      "cpus": "32-47,96-111",
+      "mems": "2",
+      "kernel": [
+        "Cpus_allowed_list:\t32-47,96-111",
+        "Mems_allowed_list:\t2"
+      ]
+    }
+  ]
+}

@@ -10,6 +10,8 @@ import time
 
 def runtime_fingerprint(runtime):
     identity = {key: runtime.get(key) for key in ('source_sha256', 'effective_config', 'output_mux_options')}
+    if 'binary_sha256' in runtime:
+        identity['binary_sha256'] = runtime['binary_sha256']
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
@@ -188,7 +190,7 @@ class StreamE0:
         with self.lock:
             self._check_clock('video_' + kind + '_pts', raw)
 
-    def audio_clock(self, before, after):
+    def audio_clock(self, before, after, *, sha256=None):
         with self.lock:
             self.clock_totals['audio_packets'] += 1
             self._check_clock('audio_raw_dts', before, 'dts')
@@ -196,15 +198,15 @@ class StreamE0:
             self._check_clock('audio_raw_pts', before)
             self._check_clock('audio_normalized_pts', after)
             self.audio.append(dict(sequence=self.clock_totals['audio_packets'],
-                monotonic=self.clock(), raw=before, normalized=after))
+                monotonic=self.clock(), raw=before, normalized=after, sha256=sha256))
 
-    def video_packet(self, value):
+    def video_packet(self, value, *, vcl_sha256=None):
         with self.lock:
             self.clock_totals['video_demux_packets'] += 1
             self._check_clock('video_demux_pts', value)
             self._check_clock('video_demux_dts', value, 'dts')
             self.video.append(dict(sequence=self.clock_totals['video_demux_packets'],
-                                   monotonic=self.clock(), raw=value))
+                                   monotonic=self.clock(), raw=value, vcl_sha256=vcl_sha256))
 
     def audio_publish(self, before_origin, output, origin, transcoded):
         with self.lock:
@@ -381,7 +383,7 @@ class StreamE0:
 
     def summary(self):
         result = self.snapshot()
-        for key in ('frames', 'pacer', 'audio_clocks', 'video_clocks', 'audio_outputs', 'events', 'primary_tasks'):
+        for key in ('frames', 'pacer', 'audio_clocks', 'video_clocks', 'audio_outputs', 'primary_tasks'):
             result.pop(key)
         return result
 

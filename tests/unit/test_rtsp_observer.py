@@ -67,6 +67,35 @@ def test_real_rtsp_reader_is_bounded_and_stops_its_socket():
     assert not observer.thread.is_alive()
 
 
+def test_close_cancels_a_silent_rtsp_peer_before_the_read_timeout():
+    accepted, release = Event(), Event()
+    server = socket.socket()
+    server.bind(('127.0.0.1', 0))
+    server.listen(1)
+
+    def serve():
+        with server, server.accept()[0]:
+            accepted.set()
+            release.wait(3)
+
+    thread = Thread(target=serve)
+    thread.start()
+    observer = RTSPObserver(f'rtsp://127.0.0.1:{server.getsockname()[1]}/redacted/test')
+    try:
+        assert accepted.wait(2)
+        time.sleep(.3)
+        assert observer.snapshot()['errors'] == 0
+        started = time.monotonic()
+        observer.close()
+        assert not observer.thread.is_alive()
+        assert time.monotonic() - started < 1
+        assert observer.snapshot()['errors'] == 0
+    finally:
+        release.set()
+        observer.close()
+        thread.join(3)
+
+
 async def test_api_observers_use_only_our_output_and_evict_after_two_tasks(monkeypatch):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock

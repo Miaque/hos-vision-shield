@@ -22,7 +22,7 @@ COPY README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv build --wheel --out-dir /dist
 
-FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258
+FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS app-runtime
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     FACE_MODEL_PATH=/models/yunet_face.onnx PLATE_MODEL_PATH=/models/hyperlpr_plate.onnx \
     EGOBLUR_FACE_MODEL_PATH=/models/face.jit EGOBLUR_PLATE_MODEL_PATH=/models/license_plate.jit
@@ -37,3 +37,18 @@ RUN --mount=from=dependencies,source=/usr/local/bin/uv,target=/usr/local/bin/uv 
 WORKDIR /app
 USER 10001:10001
 CMD ["python", "-m", "uvicorn", "vision_shield.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--limit-concurrency", "32"]
+
+FROM ghcr.io/miaque/pyav-runtime:19.0.2-hos.1@sha256:37592ce2dc1b2c2e07bd64eb78251e42e800f973b658845fb357bcf944fe2813 AS pyav-artifact
+
+FROM app-runtime AS rtsp-test
+USER root
+COPY deploy/requirements-rtsp-test.txt ./deploy/
+RUN --mount=from=dependencies,source=/usr/local/bin/uv,target=/usr/local/bin/uv \
+    --mount=from=pyav-artifact,source=/opt/wheels,target=/wheels \
+    uv pip install --no-cache --no-index --no-deps --require-hashes --find-links /wheels \
+        --python /opt/venv/bin/python -r deploy/requirements-rtsp-test.txt \
+    && python -c "import av; from importlib.metadata import version; assert av.__version__ == version('av') == '19.0.2+hos.1' and av.ffmpeg_version_info == '9.0.2' and hasattr(av.container.OutputContainer, 'flush_mux')"
+USER 10001:10001
+
+# The ordinary build keeps its original runtime; only compose.test selects rtsp-test.
+FROM app-runtime AS runtime

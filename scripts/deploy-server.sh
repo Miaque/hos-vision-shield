@@ -86,7 +86,69 @@ main() {
 
     deploy_stage='更新容器并等待就绪（最多 240 秒）'
     printf '%s\n' "$deploy_stage"
-    "${dc[@]}" up -d --no-build --wait --wait-timeout 240
+    local services=''
+    if [[ "$environment" == test ]]; then
+        services=$("${dc[@]}" config --services)
+    fi
+    if grep -qx cuda-mps <<< "$services"; then
+        # Only regular workers in this project; one-off diagnostic containers and replay stay untouched.
+        test_worker_ids() {
+            docker ps -aq --filter "label=com.docker.compose.project=$project" \
+                --filter label=com.docker.compose.service=stream-worker \
+                --filter label=com.docker.compose.oneoff=False
+        }
+        local ids affinity='' current worker cpus mems
+        local affinity_file='.tools/test-stream-affinity'
+        local -a workers=()
+        ids=$(test_worker_ids)
+        if [[ -n "$ids" ]]; then
+            mapfile -t workers <<< "$ids"
+            for worker in "${workers[@]}"; do
+                current=$(docker inspect --format '{{.HostConfig.CpusetCpus}}|{{.HostConfig.CpusetMems}}' "$worker")
+                if [[ -n "$affinity" && "$affinity" != "$current" ]]; then
+                    printf '测试流 worker 的 CPU/内存约束不同，停止部署以避免错误复制。\n' >&2
+                    return 1
+                fi
+                affinity="$current"
+            done
+        elif [[ -f "$affinity_file" ]]; then
+            IFS= read -r affinity < "$affinity_file"
+            affinity=${affinity%$'\r'}
+        fi
+        if [[ -n "$affinity" ]]; then
+            if [[ ! "$affinity" =~ ^[0-9,-]*\|[0-9,-]*$ ]]; then
+                printf '测试流 worker 的 CPU/内存约束格式无效。\n' >&2
+                return 1
+            fi
+            (umask 077; mkdir -p .tools; printf '%s\n' "$affinity" > "$affinity_file")
+        fi
+        # Release the old MPS PID/IPC namespace before replacing its container.
+        "${dc[@]}" stop stream-worker
+        "${dc[@]}" up -d --no-build --scale stream-worker=0
+        "${dc[@]}" create --no-build stream-worker
+        ids=$(test_worker_ids)
+        if [[ -z "$ids" ]]; then
+            printf '未创建测试流 worker，停止部署。\n' >&2
+            return 1
+        fi
+        mapfile -t workers <<< "$ids"
+        if [[ -n "$affinity" && "$affinity" != '|' ]]; then
+            IFS='|' read -r cpus mems <<< "$affinity"
+            docker update --cpuset-cpus "$cpus" --cpuset-mems "$mems" "${workers[@]}"
+        fi
+        "${dc[@]}" up -d --no-build --wait --wait-timeout 240
+        if [[ -n "$affinity" ]]; then
+            for worker in "${workers[@]}"; do
+                current=$(docker inspect --format '{{.HostConfig.CpusetCpus}}|{{.HostConfig.CpusetMems}}' "$worker")
+                if [[ "$current" != "$affinity" ]]; then
+                    printf '测试流 worker 的 CPU/内存约束未恢复。\n' >&2
+                    return 1
+                fi
+            done
+        fi
+    else
+        "${dc[@]}" up -d --no-build --wait --wait-timeout 240
+    fi
     "${dc[@]}" ps
     printf '部署完成，环境：%s，%s：%s，提交：%s\n' "$environment" "$ref_kind" "$ref_name" "$(git rev-parse --short HEAD)"
 }

@@ -77,3 +77,27 @@ def test_worker_digest_survives_integral_float_settings_in_redis_json(monkeypatc
                                                for key, value in worker['effective_config'].items()})
     assert runtime_fingerprint(worker) != runtime_fingerprint(transported)
     assert analyze.transported_fingerprint(transported) == runtime_fingerprint(worker)
+
+
+def test_runtime_digest_distinguishes_native_output_bindings():
+    original = {'source_sha256': {'media.streams': 'same'}}
+    patched = dict(original, binary_sha256={'av.container.output': 'patched'})
+    assert runtime_fingerprint(original) != runtime_fingerprint(patched)
+    assert runtime_fingerprint(patched) != runtime_fingerprint(dict(
+        patched, binary_sha256={'av.container.output': 'different'}))
+
+
+def test_attempt_summary_retains_bounded_lifecycle_after_live_snapshot_is_replaced():
+    from vision_shield.media.stream_e0 import StreamE0
+
+    trace = StreamE0()
+    for index in range(100):
+        trace.event('reader_checkpoint', index=index)
+    trace.event('demux_eof')
+    trace.event('reader_join_completed', alive=False)
+    trace.finish()
+    summary = trace.summary()
+    assert summary['events'][-2]['name'] == 'demux_eof'
+    assert summary['events'][-1]['name'] == 'reader_join_completed'
+    assert len(summary['events']) <= 64
+    assert 'frames' not in summary and 'video_clocks' not in summary

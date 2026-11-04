@@ -61,7 +61,12 @@ def test_production_failure_details_do_not_collect_stack_or_ffmpeg_logs(monkeypa
 
 
 @pytest.mark.parametrize('output_case', ['stable', 'brief', 'unconfirmed', 'ready_only'])
-async def test_reconnect_backoff_resets_only_after_sustained_confirmed_output(monkeypatch, output_case):
+@pytest.mark.parametrize('ending_reason,ending_phase,healthy_delay', [
+    ('source_eof', 'source_read', 0), ('source_decode_error', 'source_decode', 0),
+    ('publish_write_error', 'publish_write', 1),
+])
+async def test_reconnect_backoff_resets_only_after_sustained_confirmed_output(
+        monkeypatch, output_case, ending_reason, ending_phase, healthy_delay):
     from vision_shield.jobs import tasks
 
     record = dict(id='job', kind='stream', desired_state='run', generation=1, source_ref='rtsp://input')
@@ -84,7 +89,7 @@ async def test_reconnect_backoff_resets_only_after_sustained_confirmed_output(mo
                 gap = 1 if output_case == 'brief' else settings.heartbeat_seconds
                 for at in (first, first + gap):
                     await args[3](dict(output=True, ready=True, output_monotonic=at))
-            await args[3](dict(stream_end=dict(reason='source_eof', phase='source_read')))
+            await args[3](dict(stream_end=dict(reason=ending_reason, phase=ending_phase)))
             return dict(returncode=0, retryable=True)
         await args[3](dict(stream_end=dict(reason='source_open_error', phase='source_open')))
         return dict(returncode=1, retryable=True)
@@ -99,7 +104,7 @@ async def test_reconnect_backoff_resets_only_after_sustained_confirmed_output(mo
     monkeypatch.setattr(tasks, 'run_process', run)
     monkeypatch.setattr(tasks.asyncio, 'wait_for', retry_wait)
     await tasks.run_stream(record, store, settings, cancel, 'owner', 1)
-    expected = [1, 2, 4, 8, 16] + ([1, 2] if output_case == 'stable' else [30, 30])
+    expected = [1, 2, 4, 8, 16] + ([healthy_delay, 2] if output_case == 'stable' else [30, 30])
     assert waits == expected
     if output_case == 'ready_only':
         store.mark_output.assert_not_awaited()
