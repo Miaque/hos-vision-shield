@@ -1,4 +1,4 @@
-# 测试镜像的 PyAV 补充锁，在基础依赖安装后应用。
+# 正式与测试镜像共用的 PyAV 补充锁，在基础依赖安装后应用。
 # Source: ghcr.io/miaque/pyav-runtime:19.0.2-hos.1@sha256:37592ce2dc1b2c2e07bd64eb78251e42e800f973b658845fb357bcf944fe2813
 # Wheel: av-19.0.2+hos.1-cp312-abi3-manylinux_2_28_x86_64.manylinux_2_36_x86_64.whl
 av==19.0.2+hos.1 \

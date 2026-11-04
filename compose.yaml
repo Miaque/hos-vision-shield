@@ -47,11 +47,12 @@ x-models: &models
 
 services:
   mediamtx:
-    image: bluenviron/mediamtx:1.21.2@sha256:c7540465f868a02652118bea5a0daab12a29ac0f6cb8485abd535939ecddf886
+    image: ghcr.io/miaque/mediamtx:1.21.2-gortsplib-5.6.7-hos.1@sha256:2db52d5d8c7e9e874a7996a8084bc67bcf7aa68f21f327e9df45f384b2e8e079
     platform: linux/amd64
     restart: unless-stopped
     environment:
       MTX_HLSCDNSECRET: ${HLS_CDN_SECRET:?请设置至少32字符的内部HLS代理密钥}
+      MTX_PATHDEFAULTS_USEABSOLUTETIMESTAMP: "true"
     volumes:
       - ./deploy/mediamtx.compose.yml:/mediamtx.yml:ro
     ports:

@@ -50,5 +50,5 @@ RUN --mount=from=dependencies,source=/usr/local/bin/uv,target=/usr/local/bin/uv 
     && python -c "import av; from importlib.metadata import version; assert av.__version__ == version('av') == '19.0.2+hos.1' and av.ffmpeg_version_info == '9.0.2' and hasattr(av.container.OutputContainer, 'flush_mux')"
 USER 10001:10001
 
-# The ordinary build keeps its original runtime; only compose.test selects rtsp-test.
-FROM app-runtime AS runtime
+# 正式与测试镜像共用已验收的媒体依赖。
+FROM rtsp-test AS runtime

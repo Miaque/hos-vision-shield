@@ -5,6 +5,7 @@ import re
 import tomllib
 
 import pytest
+import yaml
 
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
@@ -81,3 +82,19 @@ def test_rtsp_test_locks_pyav_source_version_hash_and_offline_install():
     assert "--require-hashes" in stage and "--no-index" in stage and "--no-deps" in stage
     assert "--find-links /wheels" in stage and "-r deploy/requirements-rtsp-test.txt" in stage
     assert "/wheels/*.whl" not in stage
+
+
+def test_production_image_inherits_verified_pyav_runtime():
+    root = Path(__file__).resolve().parents[2]
+    dockerfile = (root / "deploy/Dockerfile").read_text("utf-8")
+    stages = re.findall(r"(?m)^FROM (\S+) AS (\S+)$", dockerfile)
+    assert stages[-1] == ("rtsp-test", "runtime")
+
+
+def test_production_mediamtx_uses_verified_artifact_and_absolute_timestamps():
+    root = Path(__file__).resolve().parents[2]
+    artifact = (root / "deploy/Dockerfile.mediamtx-test").read_text("utf-8").strip().removeprefix("FROM ")
+    services = yaml.safe_load((root / "compose.yaml").read_text("utf-8"))["services"]
+    mediamtx = services["mediamtx"]
+    assert mediamtx["image"] == artifact
+    assert mediamtx["environment"]["MTX_PATHDEFAULTS_USEABSOLUTETIMESTAMP"] == "true"
