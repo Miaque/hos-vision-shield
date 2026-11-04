@@ -37,7 +37,7 @@ def play(binary, url, directory, seconds):
         while time.monotonic() < deadline:
             attempt += 1
             process = subprocess.Popen([binary, '-hide_banner', '-loglevel', 'info', '-stats', '-noframedrop',
-                '-noinfbuf', '-autoexit', '-rtsp_transport', 'tcp', '-window_title', 'my-server-final-rfm01', url],
+                '-noinfbuf', '-autoexit', '-rtsp_transport', 'tcp', '-window_title', directory.name, url],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             timer = Timer(max(.01, deadline - time.monotonic()), process.terminate)
             timer.start()

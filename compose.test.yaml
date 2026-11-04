@@ -1,4 +1,55 @@
 services:
+  cuda-mps:
+    image: vision-shield-test:cu130
+    init: true
+    restart: unless-stopped
+    user: "10001:10001"
+    group_add:
+      - "1022"
+    network_mode: none
+    ipc: shareable
+    environment:
+      CUDA_VISIBLE_DEVICES: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_MPS_PIPE_DIRECTORY: /data/runtime/cuda-mps/pipe
+      CUDA_MPS_LOG_DIRECTORY: /data/runtime/cuda-mps/log
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        mkdir -p /data/runtime/cuda-mps/pipe /data/runtime/cuda-mps/log;
+        chmod 700 /data/runtime/cuda-mps /data/runtime/cuda-mps/pipe /data/runtime/cuda-mps/log;
+        exec /usr/bin/nvidia-cuda-mps-control -f
+    volumes:
+      - type: bind
+        source: ${MEDIA_DIR:?请设置已准备且可写的媒体绝对目录}
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /usr/bin/nvidia-cuda-mps-control
+        target: /usr/bin/nvidia-cuda-mps-control
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /usr/bin/nvidia-cuda-mps-server
+        target: /usr/bin/nvidia-cuda-mps-server
+        read_only: true
+        bind:
+          create_host_path: false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: all
+    healthcheck:
+      test: [CMD-SHELL, "echo get_server_list | nvidia-cuda-mps-control"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
   mediamtx:
     image: vision-shield-test:mediamtx-rtp-info
     build:
@@ -37,6 +88,11 @@ services:
       - "1022"
   stream-worker:
     image: vision-shield-test:cu130
+    pid: service:cuda-mps
+    ipc: service:cuda-mps
+    depends_on:
+      cuda-mps:
+        condition: service_healthy
     build:
       target: rtsp-test
       args:
@@ -44,6 +100,8 @@ services:
         FFMPEG_SOURCE_URL: ${FFMPEG_SOURCE_URL:-https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2}
     environment:
       CUDA_VISIBLE_DEVICES: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
+      CUDA_MPS_PIPE_DIRECTORY: /data/runtime/cuda-mps/pipe
+      CUDA_MPS_LOG_DIRECTORY: /data/runtime/cuda-mps/log
     group_add:
       - "1022"
     deploy:

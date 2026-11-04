@@ -5,6 +5,8 @@
 
 **最新已部署代码为 `ad83daa4a54cd6b79bff4d16530992cb889bff88`，标签 `cand-20261103-myserver-aac-tail-01`，DEBUG=false。专项尚未完成。** 以下较早结果保留为历史对照；最新完整 600 秒复核见文末。共享 GPU 4 的两路输出仍未达到 25 FPS，播放器缓冲、持续积压及恢复后的音画同步仍须解决。
 
+2026-11-04 已完成同代码的隔离 MPS 双流 600 秒复核，运行参数用 SHA256 固定；结果及仍存缺口见文末。MPS 正在纳入测试 Compose，正式栈配置不变。部署代码提交、配置试验及实际接收结果分别记录。
+
 ## 验证顺序
 
 1. 固定真实部署与恢复资料，核对模块及 GPU 后端。
@@ -172,3 +174,34 @@ FFplay 4 次连接，17438 个状态点，fd 最大值 0；绝对 A-V 中位数 
 本轮只覆盖约 5 次视频循环的短测，**不作长期稳定性通过结论**。部署 API 与三个 stream worker 的 48 个模块逐项匹配 `ad83daa`；MediaMTX 为 `v1.21.2-hos-early-sr-01`。回退可用原部署入口指定前一候选标签；MPS 等后续实验须另存配置恢复证据，当前这轮没有启用 MPS。
 
 证据：[完整 600 秒 RTP/RTCP/资源](evidence/aac-round-600.json)、[播放器](evidence/player-aac-600.json)、[部署源码与镜像指纹](evidence/aac-installed-source.json)。原始证据保存在服务器同诊断目录 `aac-formal-rfm01/`、`aac-formal-rfm02/`，本地播放器目录为 `data/diagnostics/my-server-20261103/player-aac-final/`；原始载荷、视频和凭据不进入 Git。
+
+## MPS 双流复核（2026-11-04，UTC+8）
+
+先在用户选择的 GPU 4 上验证私有 MPS 的 NVDEC→CUDA 帧共享→NVENC，再完成 rfm-01/02 共 4438 帧质量比较：YUV+PTS digest 与旧路径完全相同，含各 22 次强制不完整窗口和 EOF。没有变更 GPU compute mode、停止其他用户进程或使用 host PID/IPC。旧测试 worker 的 UID 为 10001，GPU 补充组为 1022；两项都必须保留。
+
+代码固定为 `ad83daa`，仅给 stream worker 增加私有 MPS 目录及容器 PID/IPC 关联，临时覆盖文件 SHA256 为 `5c6080ffa091e3d6869aaaae302e583b2dbaa9780759c620b3e48e328d52f397`。正式采集 DEBUG=false：**09:23:42.735 开始，09:33:42.735 截止，09:33:42.737 停止完成**，晚约 2.5 ms；四个采集进程均只运行至同一原始截止点。两个播放器各观测约 598.4 s，09:33:43.037/43.052 关闭，采集结束后脱敏任务继续运行。
+
+| 接收流 | 完整画面 / 600 秒 FPS | 间隔 P99 / max（ms） | >200 / 500 / 1000 ms | 1 秒 / 5 秒 FPS 中位数 | 5 秒最低 FPS |
+|---|---|---|---|---|---|
+| rfm-01 原始 | 14393 / 23.99 | 162.26 / 3020.91 | 46 / 39 / 19 | 25 / 24.8 | 9.8 |
+| rfm-01 脱敏 | 14281 / 23.80 | 207.48 / 956.29 | 149 / 25 / 0 | 22 / 21.6 | 10.6 |
+| rfm-02 原始 | 14882 / 24.80 | 164.59 / 886.87 | 28 / 21 / 0 | 25 / 24.8 | 21.0 |
+| rfm-02 脱敏 | 11949 / 19.92 | 191.28 / 2037.79 | 104 / 11 / 1 | 19 / 18.8 | 10.2 |
+
+两路输出连接内的 RTP 时间戳递增、无接收 sequence gap。GPU 利用率中位数 57%、P95 69%、max 73%；活动 worker CPU 中位数约 275%/277%。观测到的 GPU 4 compute PID 均属于测试栈；没有证据将本轮剩余缺口全部归咎于其他用户争用，也不能据 GPU 利用率推断物理算力已用尽。
+
+**持续积压没有通过。** 原文件每个 AAC AU 的哈希均唯一，以真实内容标识跨循环展开，在新 attempt 内固定首次匹配的循环偏移，不随延迟增长重新选取最近循环。rfm-01 同 AU 接收延迟约 5.4→9.1 s，期间最大 19.9 s，呈周期波动；rfm-02 第一连接约 21.7→58.7 s，恢复后另一连接又约 0.7→41.0 s，后者增长约 12.0 s/min。[同 AU 时间线](evidence/mps-content-lag.json)
+
+rfm-02 输入连接 `10.0.15.1:36876`、源 session `cb41e717` 在 09:23:03 订阅 `replay/rfm-02`；09:26:20 开始出现慢读丢弃，09:29:45 TCP 写超时。该段独立原流接收未断。对应的源端 44 条慢读告警共报丢弃 4709 个队列条目，不能将该数字当作解码后视频帧数。这是处理落后→输入背压→源端丢弃/断连的证据，不能称为源固有 EOF，也不能用接收 sequence 连续掩盖这些更早的丢失。[源连接证据](evidence/mps-source-timeout.json)
+
+两路实际窗口均观察到画面推进及车牌遮挡。FFplay rfm-01 绝对 A-V 中位数 0.012 s、P95 0.374 s、max 3.788 s，视频队列为空约 33.5%；rfm-02 为 0.355/0.493/8.471 s，空队列约 72.2%，3 次连接。仍无逐帧呈现计数，第二路播放、同步和 25 FPS 尚未通过。本轮只覆盖约 5 次循环，不作长期稳定性结论。
+
+同内容 400 帧辅助对照保持两路原任务运行：普通 CUDA 的第三路接收跨度 37.953 s，MPS 对照 20.555/21.399 s，400 个画面均按同一输入 VCL 顺序收到。该辅助容量对照支持保留 MPS；不把第三路数据当成双流 25 FPS 验收。
+
+其他候选按证据撤销：`af753f6` 合并数值校验的五次 scalar 等待为一次，单元测试通过，但两轮 RTSP 为 21.399→20.149 s 和 20.555→21.519 s，收益不稳定，已由 `594215a` 撤销。detail 串行化约 20.910 s，无稳定优势且该次 AAC 仅收到 66 AU（其他对照为 124），未部署，音频缺口另行定位。ORT TF32 隔离实验的 2208 帧输出 digest 与基准不同，质量门禁拒绝；未运行第二段、未变更线上精度。[组件对照](evidence/mps-components.json)、[被拒绝的 TF32 结果](evidence/tf32-rejected-rfm01.json)
+
+测试 Compose 将 MPS 控制进程固定为 UID/GID 10001、补充组 1022、无网络、私有可共享 IPC，仅 stream worker 加入其 PID/IPC。私有目录强制 0700，driver 工具为已验证的 host 只读绑定，缺失时不创建 host 路径。健康检查通过控制 socket，既不切换 GPU 模式也不预占其他卡。已用实际控制进程核验目录权限与健康状态；file worker 和生产 Compose 不加入 MPS。[启动检查](evidence/mps-canonical-smoke.json)
+
+临时实验的恢复资料在服务器 `data/diagnostics/my-server-20261103/mps-restore-20261104/`，含私有环境文件、旧容器指纹及 Compose SHA；镜像另固定为 `vision-shield-test:before-mps-20261104-cpu/cu130`。恢复原调度时，先用旧提交的三份 Compose 文件执行 `up -d --no-build --no-deps stream-worker`；确认私有 MPS 无客户端后才停止 `vs-stall-mps-probe-04`，不停止源、其他服务或其他用户进程。正式候选通过现有 `scripts/deploy-server.sh --env test --tag <候选标签>` 部署，撤回 MPS 可选择 `cand-20261103-myserver-aac-tail-01`。
+
+完整原始采集和 SHA256 清单在服务器 `mps-formal-rfm01-20261104/`、`mps-formal-rfm02-20261104/`，均位于同诊断根目录。安全汇总：[600 秒结果](evidence/mps-round-600.json)、[rfm-01 质量](evidence/mps-quality-rfm01.json)、[rfm-02 质量](evidence/mps-quality-rfm02.json)、[播放器 1](evidence/player-mps-rfm01.json)、[播放器 2](evidence/player-mps-rfm02.json)。

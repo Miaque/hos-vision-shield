@@ -43,3 +43,22 @@ def test_only_test_stream_workers_override_gpu_visibility_and_keep_selected_cuda
     for key in ("services", "stream-worker", "deploy", "resources", "reservations", "devices"):
         node = next(value for name, value in node.value if name.value == key)
     assert node.tag == "!override"
+
+
+def test_test_stream_mps_stays_in_private_namespaces_on_the_selected_gpu():
+    root = Path(__file__).resolve().parents[2]
+    testing = yaml.load((root / "compose.test.yaml").read_text("utf-8"), Loader=yaml.BaseLoader)["services"]
+    server, worker = testing["cuda-mps"], testing["stream-worker"]
+    assert server["network_mode"] == "none"
+    assert server["ipc"] == "shareable"
+    assert server["user"] == "10001:10001"
+    assert server["group_add"] == ["1022"]
+    assert server["environment"]["CUDA_VISIBLE_DEVICES"] == worker["environment"]["CUDA_VISIBLE_DEVICES"]
+    assert worker["pid"] == worker["ipc"] == "service:cuda-mps"
+    assert worker["depends_on"]["cuda-mps"]["condition"] == "service_healthy"
+    for key in ("CUDA_MPS_PIPE_DIRECTORY", "CUDA_MPS_LOG_DIRECTORY"):
+        assert worker["environment"][key] == server["environment"][key]
+        assert worker["environment"][key].startswith("/data/runtime/cuda-mps/")
+    assert "chmod 700" in server["command"][-1]
+    assert "privileged" not in server and "pid" not in server
+    assert "CUDA_MPS_PIPE_DIRECTORY" not in testing["file-worker"].get("environment", {})

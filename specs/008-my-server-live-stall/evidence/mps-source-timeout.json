@@ -1,0 +1,15 @@
+{
+  "connection": "10.0.15.1:36876",
+  "session": "cb41e717",
+  "source": "replay/rfm-02",
+  "events": [
+    "2026/11/04 01:23:03 INF [RTSP] [session cb41e717] created by 10.0.15.1:36876",
+    "2026/11/04 01:23:03 INF [RTSP] [session cb41e717] is reading from path 'replay/rfm-02', with TCP, 2 tracks (H264, MPEG-4 Audio)",
+    "2026/11/04 01:29:45 INF [RTSP] [session cb41e717] destroyed: write tcp 10.0.15.11:8554->10.0.15.1:36876: i/o timeout"
+  ],
+  "slow_reader_warnings": 44,
+  "discard_entries_sum": 4709,
+  "discard_unit": "Media server reported frames; not a decoded picture count",
+  "first_slow_reader": "2026/11/04 01:26:20 WAR [RTSP] [session cb41e717] reader is too slow, discarding 79 frames",
+  "last_slow_reader": "2026/11/04 01:29:44 WAR [RTSP] [session cb41e717] reader is too slow, discarding 133 frames"
+}
