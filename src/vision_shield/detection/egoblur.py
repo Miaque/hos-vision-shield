@@ -119,10 +119,12 @@ class Detector:
                     else:
                         coordinates, _, scores, _ = model(image)
                 with measure(self, "post-primary"):
-                    if (coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),)
-                            or not torch.isfinite(coordinates).all() or not torch.isfinite(scores).all()
-                            or (scores < 0).any() or (scores > 1).any()
-                            or (coordinates[:, 2:] <= coordinates[:, :2]).any()):
+                    if coordinates.ndim != 2 or coordinates.shape[1] != 4 or scores.shape != (len(coordinates),):
+                        raise ValueError("Invalid detector output")
+                    # Combine device predicates before the single host decision.
+                    if (~torch.isfinite(coordinates).all() | ~torch.isfinite(scores).all()
+                            | (scores < 0).any() | (scores > 1).any()
+                            | (coordinates[:, 2:] <= coordinates[:, :2]).any()):
                         raise ValueError("Invalid detector output")
                     keep = torchvision.ops.nms(coordinates, scores, 0.3)
                     # Map each axis using the actual rounded input size, then mask full-resolution pixels.
