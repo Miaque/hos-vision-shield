@@ -181,18 +181,19 @@ def raw_aac():
     return encoder.extradata, [bytes(p) for p in packets]
 
 
-def test_aggregated_aac_missing_clock_uses_samples_without_changing_anchored_packets(raw_aac):
+@pytest.mark.parametrize("source_jump", [0, -4, 4, 3200])
+def test_aggregated_aac_missing_clock_uses_samples_without_changing_anchored_packets(raw_aac, source_jump):
     extra, payloads = raw_aac
     audio = SimpleNamespace(codec_context=SimpleNamespace(name="aac", sample_rate=8000, frame_size=0, extradata=extra))
     clock = streams.LiveAVClock(audio=audio)
     packets = []
-    for payload, pts in zip(payloads, (8000, None, 10048, None), strict=True):
+    for payload, pts in zip(payloads, (8000, None, 10048 + source_jump, None), strict=True):
         packet = av.Packet(payload)
         packet.pts = packet.dts = pts
         packet.time_base = Fraction(1, 8000)
         clock.audio_packet(packet)
         packets.append(packet)
-    assert [p.pts for p in packets] == [8000, 9024, 10048, 11072]
+    assert [p.pts for p in packets] == [8000, 9024, 10048 + source_jump, 11072 + source_jump]
     assert [p.dts for p in packets] == [p.pts for p in packets]
     assert [bytes(p) for p in packets] == payloads
     assert clock.recovered_audio_packets == 2

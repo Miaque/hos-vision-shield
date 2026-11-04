@@ -205,3 +205,15 @@ rfm-02 输入连接 `10.0.15.1:36876`、源 session `cb41e717` 在 09:23:03 订�
 临时实验的恢复资料在服务器 `data/diagnostics/my-server-20261103/mps-restore-20261104/`，含私有环境文件、旧容器指纹及 Compose SHA；镜像另固定为 `vision-shield-test:before-mps-20261104-cpu/cu130`。恢复原调度时，先用旧提交的三份 Compose 文件执行 `up -d --no-build --no-deps stream-worker`；确认私有 MPS 无客户端后才停止 `vs-stall-mps-probe-04`，不停止源、其他服务或其他用户进程。正式候选通过现有 `scripts/deploy-server.sh --env test --tag <候选标签>` 部署，撤回 MPS 可选择 `cand-20261103-myserver-aac-tail-01`。
 
 完整原始采集和 SHA256 清单在服务器 `mps-formal-rfm01-20261104/`、`mps-formal-rfm02-20261104/`，均位于同诊断根目录。安全汇总：[600 秒结果](evidence/mps-round-600.json)、[rfm-01 质量](evidence/mps-quality-rfm01.json)、[rfm-02 质量](evidence/mps-quality-rfm02.json)、[播放器 1](evidence/player-mps-rfm01.json)、[播放器 2](evidence/player-mps-rfm02.json)。
+
+## AAC 输入缺包的直接根因与候选修复
+
+`61707c2` 修复输入侧另一条独立缺失路径。真实 RTSP 的同内容 400 帧探针收到 124 个完整 AAC AU，其中 58 个解复用后 PTS、DTS 和 duration 都缺失；旧读包条件 `packet.dts is not None` 将这些 AU 静默跳过，最终只有 66 个进入时钟、mux 和实际 RTP。原 FFmpeg `rtpdec_mpeg4.c` 的后续聚合 AU 分支返回载荷时没有设置时间戳。该样本的输入 codec frame_size 也为 0，不能用两个已知时间戳的差值代替单个 AU 的时长。[修复前分层证据](evidence/aac-input-loss-before.json)
+
+修复在共享输入时钟中补齐已有时间锚后的 AAC 缺失时钟：当 codec 和 packet 都未给出样本间隔时，仅解码一个真实 AU，得到 1024 samples / 8000 Hz = 128 ms，之后按该采样间隔补齐缺失值；压缩载荷不重编码。已有时间戳保留原值及原有异常时钟处理。缺少起始锚的 AU 仍无法确定绝对时间，单独计入 `unanchored_audio_packets`；成功恢复的数量为 `recovered_audio_packets`，两项非零时在公开 Stats 中可见，不再藏在总视频丢帧数后面。
+
+对同一真实故障的 124 个原始 AU 和捕获时钟做确定性复放：58 个缺失时钟全部恢复，原有时间戳（包括小幅抖动及约 400 ms 的跳变）逐项保持，所有 AAC 载荷不变。该复放不是新的实时吞吐结果。[捕获故障复放](evidence/aac-observed-clock-replay.json)
+
+新增两项实际 RTSP 输出回归覆盖隔个 AU 缺时钟和从第二个起持续缺时钟，均保留 100 帧、全部已接受 AAC、源相对时间和真实 RTP 时间戳映射。服务器使用原生媒体库的合计 33 项回归全部通过、无 skip；本地全量单元测试串行复核 984 passed、96 skipped，随后增加三个源时钟抖动/跳变参数，定向 5 passed。首次全量中的一个既有 Windows 接收器退出时限测试曾失败，未修改其代码或门槛，定向与串行全量重测通过，失败日志保留。[原生回归起止](evidence/aac-input-regression.json)、[间歇缺时钟 RTP](evidence/aac-clockless-wire.json)、[连续缺时钟 RTP](evidence/aac-clockless-run-wire.json)
+
+本候选还须部署后验证自然产生的缺失时钟、播放器 A-V、RTCP、端到端音频完整性及积压。MPS 的上一轮 600 秒吞吐数字不能代替本修复的正式复核，也不能据此把第二路 25 FPS 或持续性门槛改成通过。
