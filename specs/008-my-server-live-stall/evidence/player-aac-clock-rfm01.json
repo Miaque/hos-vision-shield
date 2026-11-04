@@ -1,0 +1,17 @@
+{
+  "start_unix": 1793761955.8215268,
+  "last_status_unix": 1793762502.2176523,
+  "exit_unix": 1793762502.258403,
+  "observed_seconds": 546.3961255550385,
+  "attempts": 1,
+  "status_samples": 15326,
+  "abs_av": {
+    "p50": 0.024,
+    "p95": 0.388,
+    "p99": 0.546,
+    "max": 2.53
+  },
+  "empty_video_queue_fraction": 0.4016703640871721,
+  "max_fd": 0,
+  "note": "Actual FFplay status, not presented frame count. Initial controller failed before campaign metadata was available; this run keeps the original cutoff."
+}

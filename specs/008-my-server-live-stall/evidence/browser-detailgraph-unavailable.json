@@ -1,0 +1,8 @@
+{
+  "completed": false,
+  "valid_render_observation_seconds": 0,
+  "error": "Hls was not defined at browser arm; no actual browser callbacks were collected. Computer Use stopped because it could not verify the Windows browser URL; no UI fallback was attempted after the block.",
+  "campaign_start_unix": 1793782165.5992272,
+  "deadline_unix": 1793782765.5992272,
+  "clock_restarted": false
+}

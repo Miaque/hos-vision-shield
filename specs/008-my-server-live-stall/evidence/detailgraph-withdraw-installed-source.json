@@ -1,0 +1,105 @@
+{
+  "unix": 1793783282.1066642,
+  "commit": "7794f02d91cf9deccfa2ee170778bac278e18a66",
+  "tag": "cand-20261104-myserver-observer-stop-01",
+  "containers": [
+    {
+      "name": "vision-shield-test-api-1",
+      "id": "97fde0b9ac01bdcac19e8521cc1fed37770d5eabf68628db14c5cadfb276866d",
+      "image": "sha256:754e355331501855c3fd9ac0ac3c2fd8488165578f0dba30620a937f2d20f7d0",
+      "cpuset_cpus": "",
+      "cpuset_mems": "",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true
+    },
+    {
+      "name": "vision-shield-test-stream-worker-1",
+      "id": "f4cc86ead65ed09e9d37d1c95ff7f9e2aa1dc1e74f2a3bac4bb5410125542891",
+      "image": "sha256:56e97d365f5722fd70ecac96e02d6e38868fba5e60bd660d627ec982f4b9a675",
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "kernel_affinity": [
+        "Cpus_allowed_list:\t32-47,96-111",
+        "Mems_allowed_list:\t2"
+      ]
+    },
+    {
+      "name": "vision-shield-test-stream-worker-2",
+      "id": "fbb84b8216727ae1cb76449d5481290c0f90fdcaba72893ddf72ea2ae39446bd",
+      "image": "sha256:56e97d365f5722fd70ecac96e02d6e38868fba5e60bd660d627ec982f4b9a675",
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "kernel_affinity": [
+        "Cpus_allowed_list:\t32-47,96-111",
+        "Mems_allowed_list:\t2"
+      ]
+    },
+    {
+      "name": "vision-shield-test-stream-worker-3",
+      "id": "1f99a2547c6baf0ef824091db43efcd35869fde7f0a1a2a66466abd436503f17",
+      "image": "sha256:56e97d365f5722fd70ecac96e02d6e38868fba5e60bd660d627ec982f4b9a675",
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "kernel_affinity": [
+        "Cpus_allowed_list:\t32-47,96-111",
+        "Mems_allowed_list:\t2"
+      ]
+    }
+  ],
+  "source": {
+    "id": "1cde2024b4e2687e4baa7cdc2b11f48d2a051c19fa8227ebc7d72b2b672fdee8",
+    "started_at": "2026-11-02T14:04:25.631610712Z"
+  },
+  "tasks": [
+    {
+      "id": "1aed319f-e680-4f52-ad70-cd9b0be0a220",
+      "state": "running",
+      "ready": true,
+      "health": {
+        "observed_at": "2026-11-04 17:08:02",
+        "last_output_at": "2026-11-04 17:07:58",
+        "valid_until": "2026-11-04 17:08:21",
+        "lease_valid": true,
+        "generation": 24
+      },
+      "stats": {
+        "processed_frames": 1121,
+        "dropped_frames": 0,
+        "elapsed_seconds": 50.822049289942,
+        "unanchored_audio_packets": 1
+      }
+    },
+    {
+      "id": "e9d6a3ab-3843-48f4-8083-7dc8f89759b1",
+      "state": "running",
+      "ready": true,
+      "health": {
+        "observed_at": "2026-11-04 17:08:02",
+        "last_output_at": "2026-11-04 17:08:00",
+        "valid_until": "2026-11-04 17:08:21",
+        "lease_valid": true,
+        "generation": 16
+      },
+      "stats": {
+        "processed_frames": 740,
+        "dropped_frames": 0,
+        "elapsed_seconds": 49.602618350182
+      }
+    }
+  ],
+  "note": "Restored detector runtime with observer stop fix; post-rollback health only, not another 600-second performance acceptance"
+}

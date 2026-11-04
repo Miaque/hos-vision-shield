@@ -1,0 +1,100 @@
+{
+  "unix": 1793781930.5493186,
+  "commit": "26522cd8a99732cba33972894807c16910dae1ef",
+  "containers": [
+    {
+      "name": "vision-shield-test-api-1",
+      "image": "sha256:940875fb216186cb514fe11c942b9bcdd18f250f1d5075ae7b6d43f9dd77175e",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "cpuset_cpus": "",
+      "cpuset_mems": ""
+    },
+    {
+      "name": "vision-shield-test-stream-worker-1",
+      "image": "sha256:bdd2917b55831dadf67e573e0a8e4f0bffb26e047a8b4d446a7c8b91cd8ceac3",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2",
+      "kernel_affinity": [
+        "Cpus_allowed_list:\t32-47,96-111",
+        "Mems_allowed_list:\t2"
+      ]
+    },
+    {
+      "name": "vision-shield-test-stream-worker-2",
+      "image": "sha256:bdd2917b55831dadf67e573e0a8e4f0bffb26e047a8b4d446a7c8b91cd8ceac3",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2",
+      "kernel_affinity": [
+        "Cpus_allowed_list:\t32-47,96-111",
+        "Mems_allowed_list:\t2"
+      ]
+    },
+    {
+      "name": "vision-shield-test-stream-worker-3",
+      "image": "sha256:bdd2917b55831dadf67e573e0a8e4f0bffb26e047a8b4d446a7c8b91cd8ceac3",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2",
+      "kernel_affinity": [
+        "Cpus_allowed_list:\t32-47,96-111",
+        "Mems_allowed_list:\t2"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "1aed319f-e680-4f52-ad70-cd9b0be0a220",
+      "state": "running",
+      "ready": true,
+      "health": {
+        "observed_at": "2026-11-04 16:45:30",
+        "last_output_at": "2026-11-04 16:45:29",
+        "valid_until": "2026-11-04 16:45:49",
+        "lease_valid": true,
+        "generation": 22
+      },
+      "stats": {
+        "processed_frames": 1096,
+        "dropped_frames": 0,
+        "elapsed_seconds": 58.332058222964,
+        "recovered_audio_packets": 166,
+        "unanchored_audio_packets": 2
+      }
+    },
+    {
+      "id": "e9d6a3ab-3843-48f4-8083-7dc8f89759b1",
+      "state": "running",
+      "ready": true,
+      "health": {
+        "observed_at": "2026-11-04 16:45:30",
+        "last_output_at": "2026-11-04 16:45:28",
+        "valid_until": "2026-11-04 16:45:50",
+        "lease_valid": true,
+        "generation": 14
+      },
+      "stats": {
+        "processed_frames": 1050,
+        "dropped_frames": 0,
+        "elapsed_seconds": 59.887831250206
+      }
+    }
+  ],
+  "source": {
+    "id": "1cde2024b4e2687e4baa7cdc2b11f48d2a051c19fa8227ebc7d72b2b672fdee8",
+    "started_at": "2026-11-02T14:04:25.631610712Z"
+  }
+}

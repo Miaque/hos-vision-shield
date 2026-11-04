@@ -1,0 +1,11 @@
+{
+  "source": "rfm-02.mp4",
+  "frames": 2230,
+  "identical_yuv_and_pts": true,
+  "mismatches": [],
+  "forced_incomplete_flushes": 22,
+  "output_digest": "4ccd4278183b17b049cc5b33f0e6afa1b6880e2fcb9ceec02b95a84a328539ed",
+  "note": "Quality equivalence on source pictures; not a live throughput measurement",
+  "baseline_detail_forward": "ca2bb46 original ORT singleton inference",
+  "candidate_detail_forward": "fixed single graph on producer stream, GPU input/output binding"
+}

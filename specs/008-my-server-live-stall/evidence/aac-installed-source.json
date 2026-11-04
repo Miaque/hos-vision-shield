@@ -1,0 +1,58 @@
+{
+  "commit": "ad83daa4a54cd6b79bff4d16530992cb889bff88",
+  "at": "2026-11-03T17:41:34.937423",
+  "containers": [
+    {
+      "name": "vision-shield-test-api-1",
+      "image": "sha256:f10cd9afb8d5f8c0bcfafaca98bb90efa0f26dad88725290290b1a1af8d24f57",
+      "source_modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "debug": "false",
+      "gpu": null,
+      "quality_sha256": "a6608c5f305303cb246d097195299e2356103fcf48d589ae52a1c509d74451db",
+      "plate_graph_sha256": "b5531a1a8849a6ae39989a39ad69905d5eac3426da8202e5a921d51e37641d50"
+    },
+    {
+      "name": "vision-shield-test-stream-worker-1",
+      "image": "sha256:3ad38dd312a371f03ffffdb28d8c84b2b99e47428d712a50665cf183ea5641b3",
+      "source_modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "debug": "false",
+      "gpu": "GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9",
+      "quality_sha256": "a6608c5f305303cb246d097195299e2356103fcf48d589ae52a1c509d74451db",
+      "plate_graph_sha256": "b5531a1a8849a6ae39989a39ad69905d5eac3426da8202e5a921d51e37641d50"
+    },
+    {
+      "name": "vision-shield-test-stream-worker-2",
+      "image": "sha256:3ad38dd312a371f03ffffdb28d8c84b2b99e47428d712a50665cf183ea5641b3",
+      "source_modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "debug": "false",
+      "gpu": "GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9",
+      "quality_sha256": "a6608c5f305303cb246d097195299e2356103fcf48d589ae52a1c509d74451db",
+      "plate_graph_sha256": "b5531a1a8849a6ae39989a39ad69905d5eac3426da8202e5a921d51e37641d50"
+    },
+    {
+      "name": "vision-shield-test-stream-worker-3",
+      "image": "sha256:3ad38dd312a371f03ffffdb28d8c84b2b99e47428d712a50665cf183ea5641b3",
+      "source_modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "debug": "false",
+      "gpu": "GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9",
+      "quality_sha256": "a6608c5f305303cb246d097195299e2356103fcf48d589ae52a1c509d74451db",
+      "plate_graph_sha256": "b5531a1a8849a6ae39989a39ad69905d5eac3426da8202e5a921d51e37641d50"
+    }
+  ],
+  "mediamtx": {
+    "image": "sha256:04e035a6575875c2b4bbbd401a24ad13014b2fa82d98ba8f12040fe8e63c4fec",
+    "version": "v1.21.2-hos-early-sr-01"
+  }
+}

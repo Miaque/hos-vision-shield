@@ -1,0 +1,27 @@
+{
+  "original_start_unix": 1793693930.5444465,
+  "deadline_unix": 1793694530.5444465,
+  "actual_stop_unix": 1793694531.131,
+  "first_open_unix": 1793694140.128757,
+  "last_status_unix": 1793694530.5172732,
+  "observed_seconds": 390.38851618766785,
+  "attempts": 3,
+  "status_samples": 11114,
+  "av_absolute_seconds": {
+    "p50": 0.138,
+    "p95": 0.32,
+    "p99": 0.527,
+    "max": 3.755,
+    "min": 0.0
+  },
+  "max_fd": 0,
+  "zero_video_queue_fraction": 0.6382040669425949,
+  "status_wall_gaps": {
+    "p50": 0.03152585029602051,
+    "p95": 0.047421932220458984,
+    "p99": 0.0505373477935791,
+    "max": 10.81478214263916,
+    "min": 0.029112577438354492
+  },
+  "note": "Clock/queue observations are not per-frame render proof; no new UI inspection after Esc"
+}

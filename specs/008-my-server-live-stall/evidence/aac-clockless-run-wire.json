@@ -1,0 +1,21 @@
+{
+  "scenario": "clockless-run",
+  "default_interleave": false,
+  "video_frames": 100,
+  "mux_audio_packets": 32,
+  "rtp_audio_aus": 32,
+  "max_rtp_gap_seconds": 0.07994206575676799,
+  "audio_prefix_matches": true,
+  "rtcp_reports": [
+    {
+      "channel": 2,
+      "ntp": 4002748765.47,
+      "rtp": 2004018361
+    },
+    {
+      "channel": 0,
+      "ntp": 4002748765.473,
+      "rtp": 2339604488
+    }
+  ]
+}

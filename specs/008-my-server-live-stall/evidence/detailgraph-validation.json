@@ -1,0 +1,33 @@
+{
+  "base_commit": "ca2bb46d9346e88822f17aff1f9986aebc3297d0",
+  "candidate_sha256": "a491ed00878ac53cc80dd0acca2da7c75eaa25f1fe8fd5e85dbdf0178c47e1c3",
+  "quality": [
+    {
+      "source": "01",
+      "start": 1793780916.6612544,
+      "end": 1793781114.3172472,
+      "returncode": 0
+    },
+    {
+      "source": "02",
+      "start": 1793781114.4048445,
+      "end": 1793781359.053107,
+      "returncode": 0
+    }
+  ],
+  "quality_source": {
+    "start": 1793780916.5948641,
+    "candidate_sha256": "a491ed00878ac53cc80dd0acca2da7c75eaa25f1fe8fd5e85dbdf0178c47e1c3",
+    "base_commit": "ca2bb46d9346e88822f17aff1f9986aebc3297d0",
+    "scope": "quality only, no formal RTP or player collection",
+    "files_sha256": {
+      "compare-quality-ort-01.py": "847292be068e87ff629bfc90501a5284cb4cc893e53422e4cb455b86f9b605b1",
+      "cuda_detail-ort-legacy.py": "6d08570c75c79fb266ff285ef6f53682c1bc806658cfa0c8d0eda0c2abe34040",
+      "run-ort-quality-final.py": "f2a60e8c74595372d6e7f8b6358237941f3f9b80f57211afdc9957b43e14bf2f"
+    },
+    "pid": 230749
+  },
+  "retained_optimization": "HyperLPR fixed singleton session only",
+  "private_probes_retained": false,
+  "formal_dual_run_completed": false
+}

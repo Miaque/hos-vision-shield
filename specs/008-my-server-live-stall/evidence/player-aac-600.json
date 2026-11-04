@@ -1,0 +1,19 @@
+{
+  "start_unix": 1793697814.3747249,
+  "deadline_unix": 1793698412.4198384,
+  "last_status_unix": 1793698412.3895164,
+  "observed_seconds": 598.0147914886475,
+  "attempts": 4,
+  "av_absolute_seconds": {
+    "p50": 0.259,
+    "p95": 0.439,
+    "p99": 0.946,
+    "min": 0.0,
+    "max": 7.019,
+    "count": 17438
+  },
+  "max_fd": 0,
+  "video_queue_empty_fraction": 0.7394196582176855,
+  "actual_ui_observed": true,
+  "ui_note": "Two actual software-rendered windows observed, including after reconnect; does not measure every presented frame"
+}
