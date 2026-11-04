@@ -9,6 +9,7 @@ import time
 def capture(path, seconds):
     deadline = time.monotonic() + seconds
     containers = ['vision-shield-test-stream-worker-' + str(n) for n in (1, 2, 3)]
+    containers += ['vision-shield-test-cuda-mps-1', 'vision-shield-test-mediamtx-1']
     with path.open('w') as output:
         while time.monotonic() < deadline:
             started = time.monotonic()
@@ -18,6 +19,8 @@ def capture(path, seconds):
                          '--query-gpu=utilization.gpu,utilization.memory,memory.used,power.draw',
                          '--format=csv,noheader,nounits']),
                 ('containers', ['docker', 'stats', '--no-stream', '--format', '{{json .}}', *containers]),
+                ('gpu_apps', ['nvidia-smi', '-i', 'GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9',
+                              '--query-compute-apps=pid,used_gpu_memory,process_name', '--format=csv,noheader,nounits']),
             ]:
                 try:
                     result = subprocess.run(command, capture_output=True, text=True, timeout=4)
