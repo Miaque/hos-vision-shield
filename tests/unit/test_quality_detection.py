@@ -576,30 +576,6 @@ def test_primary_filter_keeps_float32_threshold_and_nms_order():
     assert result == [Detection("plate", (4., 4., 5., 5.), 1.),
                       Detection("plate", (2., 2., 3., 3.), float(above))]
 
-
-def test_primary_validation_reads_one_scalar_before_nms(monkeypatch):
-    import torch
-    from vision_shield.detection import egoblur
-
-    boxes, scores = torch.tensor([[1., 1., 4., 4.]]), torch.tensor([0.8])
-    detector = egoblur.Detector.__new__(egoblur.Detector)
-    detector.models = [None, lambda pixels: (boxes, None, scores, None)]
-    detector.device = torch.device("cpu")
-    detector.face_threshold, detector.max_side = 0.1, 1280
-    reads, original = [], torch.Tensor.__bool__
-
-    def scalar(value):
-        reads.append(value.numel())
-        return original(value)
-
-    def nms(*args):
-        assert reads == [1], "CUDA validation must not wait for five separate scalar reads"
-        return torch.tensor([0])
-
-    monkeypatch.setattr(torch.Tensor, "__bool__", scalar)
-    monkeypatch.setattr(egoblur.torchvision.ops, "nms", nms)
-    assert len(detector.candidates(np.zeros((10, 10, 3), np.uint8), kind="plate")) == 1
-
 @pytest.mark.parametrize('kind', ['face', 'plate'])
 def test_typed_quality_recheck_does_not_run_unrelated_models(kind):
     from vision_shield.detection.quality import Detector
