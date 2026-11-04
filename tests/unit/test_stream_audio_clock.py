@@ -167,6 +167,49 @@ def test_unknown_audio_interval_still_fails_closed():
         streams.LiveAVClock().audio_packet(packet)
 
 
+@pytest.fixture
+def raw_aac():
+    encoder = av.CodecContext.create("aac", "w")
+    encoder.sample_rate, encoder.layout, encoder.format = 8000, "mono", "fltp"
+    encoder.open()
+    packets = []
+    for index in range(3):
+        frame = av.AudioFrame.from_ndarray(np.zeros((1, 1024), np.float32), format="fltp", layout="mono")
+        frame.sample_rate, frame.pts, frame.time_base = 8000, index * 1024, Fraction(1, 8000)
+        packets.extend(encoder.encode(frame))
+    packets.extend(encoder.encode())
+    return encoder.extradata, [bytes(p) for p in packets]
+
+
+def test_aggregated_aac_missing_clock_uses_samples_without_changing_anchored_packets(raw_aac):
+    extra, payloads = raw_aac
+    audio = SimpleNamespace(codec_context=SimpleNamespace(name="aac", sample_rate=8000, frame_size=0, extradata=extra))
+    clock = streams.LiveAVClock(audio=audio)
+    packets = []
+    for payload, pts in zip(payloads, (8000, None, 10048, None), strict=True):
+        packet = av.Packet(payload)
+        packet.pts = packet.dts = pts
+        packet.time_base = Fraction(1, 8000)
+        clock.audio_packet(packet)
+        packets.append(packet)
+    assert [p.pts for p in packets] == [8000, 9024, 10048, 11072]
+    assert [p.dts for p in packets] == [p.pts for p in packets]
+    assert [bytes(p) for p in packets] == payloads
+    assert clock.recovered_audio_packets == 2
+    assert clock.audio_duration == Fraction(1024, 8000)
+
+
+def test_unanchored_aac_is_counted_without_inventing_a_start_time(raw_aac):
+    extra, payloads = raw_aac
+    audio = SimpleNamespace(codec_context=SimpleNamespace(name="aac", sample_rate=8000, frame_size=0, extradata=extra))
+    clock = streams.LiveAVClock(audio=audio)
+    packet = av.Packet(payloads[0])
+    packet.time_base = Fraction(1, 8000)
+    assert clock.audio_packet(packet) is False
+    assert packet.pts is None and packet.dts is None
+    assert clock.unanchored_audio_packets == 1
+
+
 @pytest.mark.parametrize("protocol", ["rtsp", "rtmp"])
 @pytest.mark.parametrize("fault", ["video_reset", "audio_reset", "both_reset"])
 def test_millisecond_input_does_not_accumulate_rounding_drift(tmp_path, monkeypatch, protocol, fault):

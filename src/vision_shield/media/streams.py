@@ -37,14 +37,28 @@ class LiveAVClock:
         self.audio_regressed = self.video_regressed = False
         self.audio_offset = 0
         self.audio_codec = audio.codec_context if audio else None
+        self._aac_duration = None
+        self.recovered_audio_packets = self.unanchored_audio_packets = 0
         rate = getattr(video, "average_rate", None)
         self.video_interval = 1 / rate if rate and rate > 0 else None
 
     def audio_packet(self, packet):
         """按可靠包间隔恢复音频时钟，保持压缩内容及 PTS/DTS 相对关系。"""
-        if packet.pts is None or packet.dts is None or packet.time_base is None:
+        missing = packet.pts is None and packet.dts is None
+        aac = getattr(self.audio_codec, "name", None) == "aac"
+        if packet.time_base is None or (packet.pts is None or packet.dts is None) and not (missing and aac):
             raise BufferError("Invalid audio clock")
-        source = packet.dts * packet.time_base
+        if missing and self.audio_source is None:
+            self.unanchored_audio_packets += 1
+            return False
+        if missing:
+            if not self.audio_duration:
+                raise BufferError("Cannot recover AAC clock without a sample interval")
+            source = self.audio_source + self.audio_duration
+            packet.pts = packet.dts = round(source / packet.time_base)
+            self.recovered_audio_packets += 1
+        else:
+            source = packet.dts * packet.time_base
         duration = (packet.duration or 0) * packet.time_base
         rate = getattr(self.audio_codec, "sample_rate", 0)
         samples = getattr(self.audio_codec, "frame_size", 0)
@@ -52,6 +66,16 @@ class LiveAVClock:
         # RTMP 时基只有毫秒；从真实采样数保留小数，避免每包取整逐渐累积音画偏移。
         if rate and samples:
             duration = Fraction(samples, rate)
+        elif aac and not duration:
+            if self._aac_duration is None:
+                # RTP's later aggregated AUs have no clocks; calibrate their interval from a real AU.
+                decoder = av.CodecContext.create("aac", "r")
+                decoder.extradata = self.audio_codec.extradata
+                decoded = decoder.decode(av.Packet(bytes(packet)))
+                if len(decoded) != 1 or not decoded[0].samples or not decoded[0].sample_rate:
+                    raise BufferError("Cannot determine AAC sample interval")
+                self._aac_duration = Fraction(decoded[0].samples, decoded[0].sample_rate)
+            duration = self._aac_duration
         elif rate and channels and self.audio_codec.name in {"pcm_alaw", "pcm_mulaw"}:
             duration = Fraction(packet.size, rate * channels)
         if self.audio_source is not None and source > self.audio_source and not self.audio_regressed:
@@ -108,6 +132,7 @@ class StreamBuffer:
         self.last_source_pts, self.last_timestamp_repaired = None, False
         self.audio_size, self.dropped = 0, 0
         self.eof, self.error, self.input_video, self.input_audio = False, None, None, None
+        self.av_clock = None
         self.failure = None
         self.trace, self.trace_ids, self.last_trace_id = None, deque(), None
 
@@ -256,6 +281,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                 buffer.input_video = video
                 buffer.input_audio = source_reader.streams.audio[0] if audio_enabled and source_reader.streams.audio else None
             av_clock = LiveAVClock(video, buffer.input_audio) if buffer.input_audio else None
+            buffer.av_clock = av_clock
             if trace:
                 trace.event('source_validated', video_time_base=str(getattr(video, 'time_base', None)),
                     video_average_rate=str(getattr(video, 'average_rate', None)),
@@ -306,18 +332,19 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
                         with measure(redactor, "source-backpressure"):
                             buffer.frame(frame, received_at, source_pts=moment, timestamp_repaired=repaired,
                                          decoded_at=decoded_at, trace_id=trace_id)
-                elif audio_enabled and packet.stream.type == "audio" and packet.dts is not None:
+                elif audio_enabled and packet.stream.type == "audio" and packet.size:
                     raw_audio_clock = trace.media_clock(packet) if trace else None
                     phase = "input_audio_clock"
                     try:
-                        if av_clock:
-                            av_clock.audio_packet(packet)
+                        accepted = av_clock is None or av_clock.audio_packet(packet) is not False
                     finally:
                         if trace:
                             trace.audio_clock(raw_audio_clock, trace.media_clock(packet),
                                               sha256=hashlib.sha256(bytes(packet)).hexdigest()
                                               if isinstance(packet, av.Packet) else None)
                     phase = "input_audio_buffer"
+                    if not accepted:
+                        continue
                     buffer.audio_packet(packet)
         except Exception as error:
             if trace:
@@ -359,6 +386,8 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
             return
         with buffer.condition:
             dropped = buffer.dropped
+            audio_stats = {key: getattr(buffer.av_clock, key, 0)
+                           for key in ("recovered_audio_packets", "unanchored_audio_packets")}
             stream_stats = dict(input_frames=buffer.input_frames, queue_frames=len(buffer.frames),
                                **(dict(lookahead_frames=len(delay.pending)) if delay else {}),
                                **(dict(input_width=buffer.input_video.width, input_height=buffer.input_video.height)
@@ -377,7 +406,7 @@ def process_stream(source: str, target: str, detector: "Detector", config: dict,
               **({"video_decoder": "h264_nvdec" if frames else "h264",
                   "video_encoder": video.codec_context.name} if video else {}),
               "stats": {"processed_frames": count, "dropped_frames": dropped,
-                        "elapsed_seconds": now - started, **({"stream": stream_stats} if debug else {})},
+                        "elapsed_seconds": now - started, **audio_stats, **({"stream": stream_stats} if debug else {})},
               **({"detection_stats": redactor.detection_stats.copy(),
               "timings": dict(frame=frame_seconds, inference=redactor.inference_seconds,
                               encode=encode_seconds, **{'output-pacing': pacing_seconds},

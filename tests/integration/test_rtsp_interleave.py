@@ -83,6 +83,10 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
                     packet.pts = packet.dts = round(moment / packet.time_base)
                 if packet.stream.type == 'audio' and packet.size:
                     audio_input.append((bytes(packet),packet.pts*packet.time_base))
+                    if (scenario == 'clockless' and audio_count % 2 == 0
+                            or scenario == 'clockless-run' and audio_count > 1):
+                        packet.pts = packet.dts = None
+                        packet.duration = 0
                     if scenario == 'missing' and 25 <= video_count < 50:
                         held.append(packet)
                         continue
@@ -163,6 +167,27 @@ def run_output(source, scenario, monkeypatch, *, default_interleave=False, e0=No
                       rtcp_reports=capture.reports)
         (root/f'{scenario}-{"default" if default_interleave else "configured"}-wire.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
     return capture,audio_input,wire_clocks,events,None if stop_at is None else time.monotonic()-stop_at
+
+
+@pytest.mark.parametrize('scenario', ['clockless', 'clockless-run'])
+def test_rtsp_keeps_anchored_aac_when_demux_omits_au_clocks(interleave_source, monkeypatch, scenario):
+    with av.open(str(interleave_source)) as reader:
+        first = next(reader.decode(video=0))
+        origin = first.pts * first.time_base
+    capture, source_audio, clocks, events, _ = run_output(
+        interleave_source, scenario, monkeypatch, rtpflags=None)
+    accepted = [p for p in clocks if p['track'] == 'audio']
+    received = capture.audio()
+    assert len(capture.pictures()) == 100
+    assert len(accepted) >= len(source_audio) - 1
+    assert [a['payload'] for a in received] == [a[0] for a in source_audio[:len(received)]]
+    assert len(received) == len(accepted)
+    for before, after in zip(source_audio, accepted):
+        assert abs(before[1] - origin - after['pts']) < Fraction(1, 8000)
+    assert events[-1]['stats']['recovered_audio_packets'] >= 15
+    offset = (received[0]['timestamp'] - round(accepted[0]['pts'] * 8000)) % 2**32
+    assert all((r['timestamp'] - round(a['pts'] * 8000)) % 2**32 == offset
+               for r, a in zip(received, accepted, strict=True))
 
 
 @pytest.mark.parametrize('scenario', ['continuous', 'sparse', 'missing', 'jump', 'reset', 'stop'])
