@@ -91,6 +91,8 @@ bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 
 脚本默认 `--env test`：读取 `.env.compose.test`，使用项目名 `vision-shield-test`，组合 `compose.yaml`、`compose.gpu.yaml` 和 `compose.test.yaml`，测试镜像使用 `vision-shield-test:cpu/cu130`。测试 GPU 镜像为 RTX 5090 使用 PyTorch CUDA 13.0 和 ONNX Runtime 1.31.1，并保留测试机 NVIDIA 设备附加组 `1022`。`--env prod` 沿用 `.env.compose`、项目名 `vision-shield` 和原有 cu126 GPU 文件组合，不追加测试覆盖文件。缺少所选环境配置时直接停止，不回退到另一套环境。
 
+测试构建已接入独立发布的 PyAV `19.0.2+hos.1`（FFmpeg `9.0.2`）和含 gortsplib `v5.6.7-hos.1` 的 MediaMTX `1.21.2`，两个制品均在 Dockerfile 中固定镜像 digest。`rtsp-test` 从 PyAV 制品复制 wheel，以离线、无依赖方式安装并核对包版本及 `flush_mux()`；MediaMTX 测试 Dockerfile 直接引用成品，仍沿用现有 `build` 后再 `up --no-build` 的部署顺序。测试构建不再下载源码打补丁，不需要 `FFMPEG_SOURCE_URL` 或 `GOPROXY`。根 `uv.lock`、GPU 依赖锁及普通 `runtime` 继续保留官方 PyAV，正式构建待测试环境验收通过后单独切换。
+
 测试流 worker 包含 NVIDIA 580 多卡宿主机的 NVDEC 临时兼容配置：用 `!override` 将设备预留替换为 `count: all`，并用 `CUDA_VISIBLE_DEVICES=${GPU_DEVICE_ID}` 固定应用计算卡，推荐填写完整 GPU UUID。这会赋予测试流容器全部 GPU 的访问权限，环境变量不提供设备隔离；文件 worker 和正式环境仍使用单卡预留。配置已纳入 `compose.test.yaml`，正常测试更新无需再加载服务器 `.tools/nvdec-workaround/` 中的临时覆盖文件；驱动修复后应移除此兼容配置并恢复单卡映射。
 
 首次使用须先同步支持 `--env` 的新版脚本，旧版无参数调用仍可能操作正式环境。测试环境配置可从 `deploy/compose.env.example` 复制为 `.env.compose.test`，指定测试 GPU（如 `GPU_DEVICE_ID=5`，推荐使用完整 UUID），并单独设置 API/RTSP/HLS 端口、`RTSP_PUBLIC_BASE_URL`、Redis 数据库和媒体目录；模型目录可只读共享。测试通知须使用独立目标，或保持 `NOTIFICATION_TARGETS=[]`。脚本不自动生成环境配置。
