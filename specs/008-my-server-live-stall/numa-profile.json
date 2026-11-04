@@ -1,0 +1,16 @@
+{
+  "scope": "my-server test stream workers only",
+  "compose_project": "vision-shield-test",
+  "compose_service": "stream-worker",
+  "gpu_uuid": "GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9",
+  "pci_bus": "0000:98:00.0",
+  "cpuset_cpus": "32-47,96-111",
+  "cpuset_mems": "2",
+  "containers": [
+    "vision-shield-test-stream-worker-1",
+    "vision-shield-test-stream-worker-2",
+    "vision-shield-test-stream-worker-3"
+  ],
+  "baseline_cpuset_cpus": "",
+  "baseline_cpuset_mems": ""
+}

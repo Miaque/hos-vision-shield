@@ -1,0 +1,98 @@
+[
+  {
+    "group": "numa-rfm02-control-01",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "numa-rfm02-control-02",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "numa-rfm02-numa2-01",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "numa-rfm02-numa2-02",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "numa-mems-rfm02-cpu2-01",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "numa-mems-rfm02-numa2-01",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "host-validation-rfm02-control-01",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "host-validation-rfm02-host-validation-01",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": false,
+    "first_difference": 758,
+    "differences": 14
+  },
+  {
+    "group": "warm-cache-rfm02-cache4-01",
+    "frames": 400,
+    "source_start": 0,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "warm-cache-rfm02-cache4-02",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "warm-cache-rfm02-control-01",
+    "frames": 400,
+    "source_start": 0,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  },
+  {
+    "group": "warm-cache-rfm02-control-02",
+    "frames": 800,
+    "source_start": 1000,
+    "exact_source_video_sequence": true,
+    "first_difference": null,
+    "differences": 0
+  }
+]

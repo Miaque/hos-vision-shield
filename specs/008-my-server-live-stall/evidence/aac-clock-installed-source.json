@@ -1,0 +1,55 @@
+{
+  "unix": 1793760612.1568708,
+  "commit": "debc02de745a9df82b427c754fe6128cb126461d",
+  "tag": "cand-20261104-myserver-aac-clock-01",
+  "containers": [
+    {
+      "name": "vision-shield-test-api-1",
+      "image": "sha256:3b8916d140a01245f719f9cd27a9b04d3bcb71bb147dc2805378bb6720fafdf2",
+      "source_modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "debug": "false",
+      "mps_pipe": null,
+      "pid_mode": "",
+      "ipc_mode": "private"
+    },
+    {
+      "name": "vision-shield-test-stream-worker-1",
+      "image": "sha256:b20653788c34c0701f9c7a852fe8edad668a42d50c6f521b83b45173f92fcc1b",
+      "source_modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "debug": "false",
+      "mps_pipe": "/data/runtime/cuda-mps/pipe",
+      "pid_mode": "container:e6bcd8bfa6de91bf5409802b390c27541edbeb687c13088113906c851c72f4a9",
+      "ipc_mode": "container:e6bcd8bfa6de91bf5409802b390c27541edbeb687c13088113906c851c72f4a9"
+    },
+    {
+      "name": "vision-shield-test-stream-worker-2",
+      "image": "sha256:b20653788c34c0701f9c7a852fe8edad668a42d50c6f521b83b45173f92fcc1b",
+      "source_modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "debug": "false",
+      "mps_pipe": "/data/runtime/cuda-mps/pipe",
+      "pid_mode": "container:e6bcd8bfa6de91bf5409802b390c27541edbeb687c13088113906c851c72f4a9",
+      "ipc_mode": "container:e6bcd8bfa6de91bf5409802b390c27541edbeb687c13088113906c851c72f4a9"
+    },
+    {
+      "name": "vision-shield-test-stream-worker-3",
+      "image": "sha256:b20653788c34c0701f9c7a852fe8edad668a42d50c6f521b83b45173f92fcc1b",
+      "source_modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "debug": "false",
+      "mps_pipe": "/data/runtime/cuda-mps/pipe",
+      "pid_mode": "container:e6bcd8bfa6de91bf5409802b390c27541edbeb687c13088113906c851c72f4a9",
+      "ipc_mode": "container:e6bcd8bfa6de91bf5409802b390c27541edbeb687c13088113906c851c72f4a9"
+    }
+  ]
+}

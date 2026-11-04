@@ -25,7 +25,8 @@ def run(root, source, seconds, mode='no-model', aligned_frames=0):
     stop, events = Event(), []
     timer = Timer(seconds, stop.set)
     config = Settings().model_dump(mode='json')
-    config.update(debug=False, audio_enabled=True, detection_interval=3, tracking='flow', max_bitrate=5000000)
+    config.update(debug=False, audio_enabled=True, redaction_mode='mosaic', detection_interval=3,
+                  tracking='flow', max_bitrate=5000000)
     detector = NoModel()
     if mode != 'no-model':
         from vision_shield.detection import load_detector
@@ -89,15 +90,16 @@ def run(root, source, seconds, mode='no-model', aligned_frames=0):
         stop.set()
         timer.cancel()
     pictures = capture.pictures()
-    assert pictures, 'No real RTP pictures received'
-    if aligned_frames:
-        assert alignment['selected_video_packets'] == aligned_frames, 'Incomplete aligned sample'
-        assert len(pictures) == aligned_frames, 'Aligned sample lost decoded or transmitted pictures'
-    result = dict(sdp=capture.sdp, reports=capture.reports, events=events, alignment=alignment,
+    result = dict(redaction_mode=config['redaction_mode'], sdp=capture.sdp,
+                  reports=capture.reports, events=events, alignment=alignment,
                   pictures=[{k: v for k, v in p.items() if k != 'payload'} for p in pictures],
                   audio=[dict(at=p['at'], timestamp=p['timestamp'], sha256=hashlib.sha256(p['payload']).hexdigest())
                          for p in capture.audio()])
     (root / f'isolated-{mode}{"-aligned" if aligned_frames else ""}.json').write_text(json.dumps(result), encoding='utf-8')
+    assert pictures, 'No real RTP pictures received'
+    if aligned_frames:
+        assert alignment['selected_video_packets'] == aligned_frames, 'Incomplete aligned sample'
+        assert len(pictures) == aligned_frames, 'Aligned sample lost decoded or transmitted pictures'
 
 
 if __name__ == '__main__':

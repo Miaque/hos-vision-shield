@@ -1,0 +1,23 @@
+{
+  "ort_version": "1.31.1",
+  "exact_predictions": true,
+  "cases": [
+    {
+      "input": "cuda_input",
+      "changed_outputs": 48,
+      "reference_graph_median_seconds": [
+        0.002635744633153081,
+        0.0014387008268386126
+      ]
+    },
+    {
+      "input": "numpy_input",
+      "changed_outputs": 48,
+      "reference_graph_median_seconds": [
+        0.002532058861106634,
+        0.0016713077202439308
+      ]
+    }
+  ],
+  "note": "Private operator benchmark with complete CPU output readback, not live output FPS"
+}
