@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | `compose.yaml` | 五服务 CPU 部署，复用现有带密码 Redis，不预留 GPU |
-| `compose.gpu.yaml` | 覆盖两类 worker 的镜像、构建参数、检测后端、设备设置、每池两个副本及同一张 GPU 预留 |
+| `compose.gpu.yaml` | 两类 worker 共用指定单卡；文件池2个、流池3个副本；私有 MPS 仅接入流 worker |
 | `compose.test.yaml` | 测试环境独立镜像标签；两个 worker 使用 cu130 构建及测试机 GPU 设备附加组 1022；流 worker 包含 NVIDIA 580 NVDEC 兼容配置 |
 | `deploy/Dockerfile` | 一个构建定义，生成 CPU、cu126 与测试用 cu130 应用镜像 |
 | `deploy/requirements-cu126.txt` | 从根声明与原锁共同版本约束生成的带哈希 GPU 锁，不改变本机默认依赖 |
@@ -23,7 +23,7 @@
 # CPU
 docker-compose --env-file .env.compose -p vision-shield -f compose.yaml up -d --build
 # GPU
-docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml up -d --build
+bash scripts/deploy-server.sh --env prod
 ```
 
 切换模式前使用当前模式的同一文件组合执行 `down`，保留数据；不得以删卷作为切换步骤。镜像构建和拉取可以联网，但模型由本地目录提供；运行容器直接调用已安装的 Python，启动时不执行依赖同步或模型下载。
@@ -31,6 +31,8 @@ docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compo
 正式环境应用镜像名固定为 `vision-shield:cpu` 与 `vision-shield:cu126`，测试环境使用 `vision-shield-test:cpu` 与 `vision-shield-test:cu130`。Dockerfile 构建参数 `TORCH_BACKEND` 接受 cpu/cu126/cu130；cu130 仅由测试覆盖文件选择，API/reconciler 始终使用各环境的 CPU 镜像。基础镜像和依赖选择见 [研究记录](../research.md)，CPU 按根 uv.lock 安装，GPU 按对应 CUDA 版本的生成锁一次安装，再无依赖安装同一应用包。正式默认 `runtime` 与测试 `rtsp-test` 共用 `deploy/requirements-rtsp-test.txt` 的 PyAV 精确版本、来源镜像及 wheel 哈希；正式 MediaMTX 与测试引用同一发布制品，并启用绝对时间。发布步骤见[正式媒体依赖发布](../../009-published-dependencies-parity/production-release.md)。
 
 `compose.yaml` 为四个应用服务显式设置 `build.args.TORCH_BACKEND: cpu`。`compose.gpu.yaml` 必须同时将 `file-worker`、`stream-worker` 的 `image` 覆盖为 `vision-shield:cu126`，并将各自的 `build.args.TORCH_BACKEND` 覆盖为 `cu126`；仅修改镜像名不会切换 Dockerfile 构建分支。合并后 API/reconciler 的镜像和构建参数仍为 CPU。
+
+GPU 流 worker 与 `cuda-mps` 共用私有 PID/IPC、0700 控制目录及容器内唯一 GPU（编号0），不使用 host 命名空间或更改 GPU compute mode。MPS driver 工具从宿主已有绝对路径只读挂载，缺失时不自动创建。正式 NUMA 目标由 `.tools/prod-stream-affinity` 提供，格式为 `CPU列表|内存节点列表`，必须先按正式 GPU 拓扑核对；部署入口在创建 worker 后、启动模型前应用，再逐容器核验。测试沿用独立 `.tools/test-stream-affinity` 的现有约束保存/恢复规则，不共享正式配置。
 
 ## 配置输入
 

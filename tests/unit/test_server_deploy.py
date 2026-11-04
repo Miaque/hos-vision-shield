@@ -65,6 +65,8 @@ def deployment(tmp_path):
     docker.write_text('''#!/usr/bin/env bash
 printf 'docker %s\\n' "$*" >> "$DEPLOY_TEST_LOG"
 case "$1" in
+  run)
+    if [[ "${DEPLOY_TEST_CPUSET_FAILURE:-}" == 1 ]]; then exit 17; fi ;;
   ps)
     if [[ "${DEPLOY_TEST_COLD:-}" != 1 || -f "$DEPLOY_TEST_CREATED" ]]; then
       printf 'worker-1\\nworker-2\\n'
@@ -409,11 +411,66 @@ def test_test_deployment_refuses_to_report_success_if_affinity_is_lost(deploymen
     assert '部署完成' not in result.stdout
 
 
-def test_production_deployment_does_not_use_test_mps_or_affinity(deployment):
+@pytest.mark.parametrize('cold', [False, True])
+def test_production_deployment_uses_its_own_affinity_before_starting_mps_clients(deployment, cold):
     d = deployment
-    d.env.update(DEPLOY_TEST_MPS='1')
+    d.env.update(DEPLOY_TEST_MPS='1', DEPLOY_TEST_COLD=str(int(cold)))
+    profile = d.server / '.tools/prod-stream-affinity'
+    profile.parent.mkdir()
+    profile.write_text('0-7,16-23|0\n', encoding='utf-8')
+    (profile.parent / 'test-stream-affinity').write_text('32-47,96-111|2\n', encoding='utf-8')
     result = d.run('--env', 'prod')
     assert result.returncode == 0, result.stdout + result.stderr
+    assert profile.read_text('utf-8') == '0-7,16-23|0\n'
+    assert (profile.parent / 'test-stream-affinity').read_text('utf-8') == '32-47,96-111|2\n'
+    commands = d.log.read_text('utf-8').splitlines()
+    positions = [next(i for i, command in enumerate(commands) if needle in command) for needle in (
+        ' build', 'docker run --rm --network none --pull never --cpuset-cpus 0-7,16-23 --cpuset-mems 0 --entrypoint /bin/true vision-shield:cpu',
+        ' stop stream-worker', ' --scale stream-worker=0', ' create --no-build stream-worker',
+        'docker update --cpuset-cpus 0-7,16-23 --cpuset-mems 0 worker-1 worker-2',
+        ' up -d --no-build --wait --wait-timeout 240')]
+    assert positions == sorted(positions)
+    assert all('com.docker.compose.project=vision-shield ' in command
+               and 'com.docker.compose.oneoff=False' in command
+               for command in commands if command.startswith('docker ps '))
+
+
+@pytest.mark.parametrize('profile_text', [None, '', '|', '0-7|', '|0', '0--7|0', '0-7|2;echo wrong'])
+def test_production_mps_rejects_missing_or_invalid_topology_before_stopping_workers(deployment, profile_text):
+    d = deployment
+    d.env.update(DEPLOY_TEST_MPS='1')
+    if profile_text is not None:
+        profile = d.server / '.tools/prod-stream-affinity'
+        profile.parent.mkdir()
+        profile.write_text(profile_text + '\n', encoding='utf-8')
+    result = d.run('--env', 'prod')
+    assert result.returncode != 0
     commands = d.log.read_text('utf-8')
-    assert 'docker ' not in commands and ' stop ' not in commands and ' create ' not in commands
-    assert not (d.server / '.tools/test-stream-affinity').exists()
+    assert ' stop ' not in commands and ' up ' not in commands
+    assert '部署完成' not in result.stdout
+
+
+def test_production_mps_refuses_success_if_affinity_is_lost(deployment):
+    d = deployment
+    d.env.update(DEPLOY_TEST_MPS='1', DEPLOY_TEST_LOST_AFFINITY='1')
+    profile = d.server / '.tools/prod-stream-affinity'
+    profile.parent.mkdir()
+    profile.write_text('0-7|0\n', encoding='utf-8')
+    result = d.run('--env', 'prod')
+    assert result.returncode != 0
+    assert '部署完成' not in result.stdout
+
+
+@pytest.mark.parametrize('cpus,mems', [('7-0', '0'), ('999999', '0'), ('0-7', '999999')])
+def test_production_mps_checks_host_affinity_before_stopping_workers(deployment, cpus, mems):
+    d = deployment
+    d.env.update(DEPLOY_TEST_MPS='1', DEPLOY_TEST_CPUSET_FAILURE='1')
+    profile = d.server / '.tools/prod-stream-affinity'
+    profile.parent.mkdir()
+    profile.write_text(f'{cpus}|{mems}\n', encoding='utf-8')
+    result = d.run('--env', 'prod')
+    assert result.returncode != 0
+    commands = d.log.read_text('utf-8')
+    assert ' stop ' not in commands and ' up ' not in commands
+    assert profile.read_text('utf-8') == f'{cpus}|{mems}\n'
+    assert '部署完成' not in result.stdout

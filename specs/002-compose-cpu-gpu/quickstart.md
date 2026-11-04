@@ -61,6 +61,8 @@ mkdir -p acceptance/cpu acceptance/gpu
 
 将 `.env.compose` 的 `MODEL_DIR`、`MEDIA_DIR` 改为上一步准备的目录，按实际部署填写 `BIND_ADDRESS`、`API_PORT`、`RTSP_PORT` 和 `RTSP_PUBLIC_BASE_URL`。`REDIS_URL` 必填现有带密码 Redis 的可达地址，密码须做 URL 编码；下方验证命令按 6 号数据库编写，使用其他编号时同步修改断言。文件权限设为 `600`。宿主 Redis 端口须允许 Docker 网络访问，持久化及淘汰策略另行核对，不由本项目修改。远程来源须填写 `SOURCE_ALLOWLIST`；授权主机名时也授权实际解析 IP/CIDR，空列表仅允许本地上传。GPU 模式按实际选卡填写 `GPU_DEVICE_ID`，推荐完整 UUID。
 
+正式 GPU 还须按[正式发布说明](../009-published-dependencies-parity/production-release.md)核对拓扑、MPS driver 工具并准备 `.tools/prod-stream-affinity`。GPU 启动与更新使用 Git 工作目录中的部署入口，以便在模型启动前应用 NUMA、按顺序替换 MPS 客户端；源码包先按第7节接入 Git。以下 Compose 数组仍用于配置、镜像、模型及状态验收，不用普通 `up` 代替 GPU 部署入口。
+
 以下 Bash 数组统一保存当前模式的命令，避免后续启动与停止使用不同文件组合：
 
 ```bash
@@ -114,7 +116,11 @@ docker run --rm --network none --gpus "device=$GPU_DEVICE_ID" --mount type=bind,
 ## 4. 启动与就绪
 
 ```bash
-"${dc[@]}" up -d
+if [ "$MODE" = gpu ]; then
+  bash scripts/deploy-server.sh --env prod
+else
+  "${dc[@]}" up -d
+fi
 "${dc[@]}" ps
 "${dc[@]}" logs --tail 100 file-worker stream-worker
 curl --fail http://192.168.1.104:8000/health/ready
@@ -254,14 +260,11 @@ bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 
 脚本拒绝未提交的跟踪文件修改、目标分支分叉或本地额外提交，不自动 stash、强制重置、备份或回滚，不输出包含凭据的展开配置。目标不存在时停止；切换与未跟踪文件冲突时由 Git 拒绝覆盖。只更新显式选择的目标分支，不合并到其他分支。配置、媒体和权重继续保留。脚本更新自身时，本次执行使用启动时已解析的脚本内容。验证使用真实 Bash 和临时 Git 仓库、替代 Compose 命令；没有执行真实 Docker 构建或服务器部署。
 
-CPU 部署仍可使用手动命令；测试环境 GPU 模式的手动命令与脚本主体对应如下，正式环境改用 `.env.compose`、`-p vision-shield` 并移除 `-f compose.test.yaml`：
+CPU 部署仍可使用手动 Compose 命令。GPU 的测试与正式环境均通过部署入口处理 MPS 生命周期和 NUMA 恢复，不以普通 `up` 替代；正式亲和性文件和首次入口同步见[正式发布说明](../009-published-dependencies-parity/production-release.md)：
 
 ```bash
-dc=(docker-compose --env-file .env.compose.test -p vision-shield-test -f compose.yaml -f compose.gpu.yaml -f compose.test.yaml)
-git pull --ff-only origin main &&
-"${dc[@]}" config --quiet &&
-"${dc[@]}" build &&
-"${dc[@]}" up -d --no-build --wait --wait-timeout 240
+bash scripts/deploy-server.sh --env test main
+bash scripts/deploy-server.sh --env prod main
 ```
 
 `--ff-only` 在服务器分支产生分叉时停止更新，不自动合并。服务器的环境差异分别保存在 `.env.compose.test` 和 `.env.compose`，代码变更在开发机提交；遇到本地修改冲突时先核对，不通过强制重置覆盖。开发机仅提交还不够，必须先推送到远程，服务器才能拉到该提交。

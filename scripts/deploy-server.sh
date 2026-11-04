@@ -86,27 +86,43 @@ main() {
 
     deploy_stage='更新容器并等待就绪（最多 240 秒）'
     printf '%s\n' "$deploy_stage"
-    local services=''
-    if [[ "$environment" == test ]]; then
-        services=$("${dc[@]}" config --services)
-    fi
+    local services
+    services=$("${dc[@]}" config --services)
     if grep -qx cuda-mps <<< "$services"; then
         # Only regular workers in this project; one-off diagnostic containers and replay stay untouched.
-        test_worker_ids() {
+        stream_worker_ids() {
             docker ps -aq --filter "label=com.docker.compose.project=$project" \
                 --filter label=com.docker.compose.service=stream-worker \
                 --filter label=com.docker.compose.oneoff=False
         }
         local ids affinity='' current worker cpus mems
-        local affinity_file='.tools/test-stream-affinity'
+        local affinity_file=".tools/$environment-stream-affinity"
         local -a workers=()
-        ids=$(test_worker_ids)
-        if [[ -n "$ids" ]]; then
+        ids=$(stream_worker_ids)
+        if [[ "$environment" == prod ]]; then
+            if [[ ! -s "$affinity_file" ]]; then
+                printf '请先按正式 GPU 拓扑准备 %s（CPU列表|内存节点列表）。\n' "$affinity_file" >&2
+                return 1
+            fi
+            affinity=$(< "$affinity_file")
+            affinity=${affinity%$'\r'}
+            if [[ ! "$affinity" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*\|[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
+                printf '正式流 worker 的 CPU/内存约束格式无效。\n' >&2
+                return 1
+            fi
+            IFS='|' read -r cpus mems <<< "$affinity"
+            # 由 Docker/内核在隔离 CPU 容器验证实际可用集合，失败时保留旧 worker。
+            if ! docker run --rm --network none --pull never --cpuset-cpus "$cpus" --cpuset-mems "$mems" \
+                    --entrypoint /bin/true "$project:cpu"; then
+                printf '正式 CPU/内存约束未通过宿主校验，原流 worker 未停止。\n' >&2
+                return 1
+            fi
+        elif [[ -n "$ids" ]]; then
             mapfile -t workers <<< "$ids"
             for worker in "${workers[@]}"; do
                 current=$(docker inspect --format '{{.HostConfig.CpusetCpus}}|{{.HostConfig.CpusetMems}}' "$worker")
                 if [[ -n "$affinity" && "$affinity" != "$current" ]]; then
-                    printf '测试流 worker 的 CPU/内存约束不同，停止部署以避免错误复制。\n' >&2
+                    printf '流 worker 的 CPU/内存约束不同，停止部署以避免错误复制。\n' >&2
                     return 1
                 fi
                 affinity="$current"
@@ -117,7 +133,7 @@ main() {
         fi
         if [[ -n "$affinity" ]]; then
             if [[ ! "$affinity" =~ ^[0-9,-]*\|[0-9,-]*$ ]]; then
-                printf '测试流 worker 的 CPU/内存约束格式无效。\n' >&2
+                printf '流 worker 的 CPU/内存约束格式无效。\n' >&2
                 return 1
             fi
             (umask 077; mkdir -p .tools; printf '%s\n' "$affinity" > "$affinity_file")
@@ -126,9 +142,9 @@ main() {
         "${dc[@]}" stop stream-worker
         "${dc[@]}" up -d --no-build --scale stream-worker=0
         "${dc[@]}" create --no-build stream-worker
-        ids=$(test_worker_ids)
+        ids=$(stream_worker_ids)
         if [[ -z "$ids" ]]; then
-            printf '未创建测试流 worker，停止部署。\n' >&2
+            printf '未创建流 worker，停止部署。\n' >&2
             return 1
         fi
         mapfile -t workers <<< "$ids"
@@ -141,7 +157,7 @@ main() {
             for worker in "${workers[@]}"; do
                 current=$(docker inspect --format '{{.HostConfig.CpusetCpus}}|{{.HostConfig.CpusetMems}}' "$worker")
                 if [[ "$current" != "$affinity" ]]; then
-                    printf '测试流 worker 的 CPU/内存约束未恢复。\n' >&2
+                    printf '流 worker 的 CPU/内存约束未恢复。\n' >&2
                     return 1
                 fi
             done

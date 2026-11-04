@@ -72,8 +72,8 @@ GPU 模式下，主模型与补充模型在调用线程顺序执行，随后按�
 ```bash
 # CPU
 docker-compose --env-file .env.compose -p vision-shield -f compose.yaml up -d --build
-# GPU：先在 .env.compose 填写 GPU_DEVICE_ID，推荐完整 GPU UUID
-docker-compose --env-file .env.compose -p vision-shield -f compose.yaml -f compose.gpu.yaml up -d --build
+# GPU：先填写 GPU_DEVICE_ID 并按正式拓扑准备 .tools/prod-stream-affinity
+bash scripts/deploy-server.sh --env prod
 ```
 
 日常更新可直接使用 Git 工作目录；从源码包切换可克隆新目录，或在原目录接入 Git，步骤见[Git 更新与重新构建](specs/002-compose-cpu-gpu/quickstart.md#7-git-更新与重新构建)。GPU 服务器在仓库根目录执行：
@@ -96,7 +96,9 @@ bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 
 升级共用 PyAV 时，从新发布镜像中取得 wheel 并计算文件 SHA-256，同时更新 Dockerfile 的镜像 digest、补充锁的来源及版本/哈希、构建版本校验；运行 `tests/unit/test_deployment_dependencies.py` 检查一致性。仅运行普通 `uv sync` 仍安装基础锁中的官方 PyAV，不等同于容器镜像的最终依赖环境。
 
-测试 Compose 启用 MPS 时，`bash scripts/deploy-server.sh --env test main` 在构建成功后保存普通 stream worker 当前的 CPU/内存节点约束，再停止这些 worker、重建 MPS、创建新 worker，在启动模型前恢复约束，最后等待就绪并核对约束未丢失。约束存于 Git 忽略的 `.tools/test-stream-affinity`，格式为单行 `CPU列表|内存节点列表`；现有 worker 的实际约束优先，无旧容器时使用保存值，新环境两者都没有则不绑定。首次手动设置 NUMA 后应运行部署入口保存；删除整个工作目录前须备份此文件。不同 worker 约束不一致时部署会在停机前拒绝。该流程仅作用于测试项目的普通流 worker，保留 one-off 实验容器及回放源；正式部署不启用此流程。完整迁移与回归记录见[依赖制品与测试环境一致性](specs/009-published-dependencies-parity/README.md)。
+GPU Compose 的正式与测试流 worker 共用私有 MPS 定义，仅流 worker 加入控制容器的 PID/IPC 和私有目录；文件 worker 保持独立。正式环境保留单卡预留，MPS 和流 worker 的 `CUDA_VISIBLE_DEVICES=0` 指容器内唯一的可见 GPU；测试覆盖仍保留原全卡兼容映射、所选 UUID 和附加组 1022。宿主机的两个 MPS driver 工具必须已存在且可执行，不由部署脚本安装或修改 GPU compute mode。
+
+部署入口在构建成功后停止所选项目的普通 stream worker、重建 MPS、创建新 worker，在启动模型前恢复 CPU/内存节点约束，最后等待就绪并核对约束。正式环境须先按正式 GPU 拓扑填写 `.tools/prod-stream-affinity`，格式为单行 `CPU列表|内存节点列表`，它是部署时应用的目标配置；缺失、空值或格式错误会在停 worker 前拒绝。测试环境继续使用 `.tools/test-stream-affinity`：现有 worker 实际约束优先，无旧容器时使用保存值，新环境两者都没有则不绑定；不同 worker 约束不一致时停止部署。两个文件均被 Git 忽略，迁移仓库目录时须保留，不能复制测试机编号作为正式默认值。流程不处理 one-off 实验容器或回放源。首次升级须先同步新版入口，不能依赖旧脚本自更新后在本次调用中采用新逻辑；完整步骤见[正式发布说明](specs/009-published-dependencies-parity/production-release.md)。
 
 测试流 worker 包含 NVIDIA 580 多卡宿主机的 NVDEC 临时兼容配置：用 `!override` 将设备预留替换为 `count: all`，并用 `CUDA_VISIBLE_DEVICES=${GPU_DEVICE_ID}` 固定应用计算卡，推荐填写完整 GPU UUID。这会赋予测试流容器全部 GPU 的访问权限，环境变量不提供设备隔离；文件 worker 和正式环境仍使用单卡预留。配置已纳入 `compose.test.yaml`，正常测试更新无需再加载服务器 `.tools/nvdec-workaround/` 中的临时覆盖文件；驱动修复后应移除此兼容配置并恢复单卡映射。
 

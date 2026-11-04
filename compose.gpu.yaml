@@ -1,4 +1,54 @@
 services:
+  cuda-mps:
+    image: vision-shield:cu126
+    init: true
+    restart: unless-stopped
+    user: "10001:10001"
+    network_mode: none
+    ipc: shareable
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      CUDA_MPS_PIPE_DIRECTORY: /data/runtime/cuda-mps/pipe
+      CUDA_MPS_LOG_DIRECTORY: /data/runtime/cuda-mps/log
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        mkdir -p /data/runtime/cuda-mps/pipe /data/runtime/cuda-mps/log;
+        chmod 700 /data/runtime/cuda-mps /data/runtime/cuda-mps/pipe /data/runtime/cuda-mps/log;
+        exec /usr/bin/nvidia-cuda-mps-control -f
+    volumes:
+      - type: bind
+        source: ${MEDIA_DIR:?请设置已准备且可写的媒体绝对目录}
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /usr/bin/nvidia-cuda-mps-control
+        target: /usr/bin/nvidia-cuda-mps-control
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /usr/bin/nvidia-cuda-mps-server
+        target: /usr/bin/nvidia-cuda-mps-server
+        read_only: true
+        bind:
+          create_host_path: false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}"]
+    healthcheck:
+      test: [CMD-SHELL, "echo get_server_list | nvidia-cuda-mps-control"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
   file-worker:
     image: vision-shield:cu126
     build:
@@ -20,6 +70,11 @@ services:
 
   stream-worker:
     image: vision-shield:cu126
+    pid: service:cuda-mps
+    ipc: service:cuda-mps
+    depends_on:
+      cuda-mps:
+        condition: service_healthy
     build:
       args:
         TORCH_BACKEND: cu126
@@ -28,6 +83,9 @@ services:
       INFERENCE_DEVICE: cuda
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
       GPU_DEVICE_ID: ${GPU_DEVICE_ID:?请指定一张 GPU 的卡号或完整 UUID}
+      CUDA_VISIBLE_DEVICES: "0"
+      CUDA_MPS_PIPE_DIRECTORY: /data/runtime/cuda-mps/pipe
+      CUDA_MPS_LOG_DIRECTORY: /data/runtime/cuda-mps/log
     deploy:
       replicas: 3
       resources:
