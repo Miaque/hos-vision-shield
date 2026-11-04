@@ -42,9 +42,11 @@ FROM ghcr.io/miaque/pyav-runtime:19.0.2-hos.1@sha256:37592ce2dc1b2c2e07bd64eb782
 
 FROM app-runtime AS rtsp-test
 USER root
+COPY deploy/requirements-rtsp-test.txt ./deploy/
 RUN --mount=from=dependencies,source=/usr/local/bin/uv,target=/usr/local/bin/uv \
     --mount=from=pyav-artifact,source=/opt/wheels,target=/wheels \
-    uv pip install --no-cache --no-index --no-deps --python /opt/venv/bin/python /wheels/*.whl \
+    uv pip install --no-cache --no-index --no-deps --require-hashes --find-links /wheels \
+        --python /opt/venv/bin/python -r deploy/requirements-rtsp-test.txt \
     && python -c "import av; from importlib.metadata import version; assert av.__version__ == version('av') == '19.0.2+hos.1' and av.ffmpeg_version_info == '9.0.2' and hasattr(av.container.OutputContainer, 'flush_mux')"
 USER 10001:10001
 

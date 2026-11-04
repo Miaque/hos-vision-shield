@@ -57,3 +57,27 @@ def test_image_dependency_layers_do_not_depend_on_source_or_readme():
     assert "COPY --from=dependencies /opt/venv /opt/venv" in application
     assert "COPY --from=builder /opt/venv" not in application
     assert "uv pip install" in application and "--no-deps /dist/*.whl" in application
+
+
+def test_rtsp_test_locks_pyav_source_version_hash_and_offline_install():
+    root = Path(__file__).resolve().parents[2]
+    lock = (root / "deploy/requirements-rtsp-test.txt").read_text("utf-8")
+    source = re.search(r"(?m)^# Source: (ghcr\.io/miaque/pyav-runtime:[^\s]+@sha256:[0-9a-f]{64})$", lock)[1]
+    entry = " ".join(line.rstrip("\\").strip() for line in lock.splitlines()
+                     if line.strip() and not line.startswith("#"))
+    pin = re.fullmatch(r"(av==[^\s]+)\s+--hash=sha256:([0-9a-f]{64})", entry)
+    assert pin, "测试 PyAV 必须精确锁定版本和 wheel SHA-256"
+    requirement = Requirement(pin[1])
+    version = next(iter(requirement.specifier)).version
+    assert f":{version.replace('+', '-')}@sha256:" in source
+    project = tomllib.loads((root / "pyproject.toml").read_text("utf-8"))
+    declared = next(Requirement(raw) for raw in project["project"]["dependencies"]
+                    if Requirement(raw).name == "av")
+    assert version in declared.specifier
+    dockerfile = (root / "deploy/Dockerfile").read_text("utf-8")
+    assert f"FROM {source} AS pyav-artifact" in dockerfile
+    stage = dockerfile.split("FROM app-runtime AS rtsp-test\n", 1)[1].split("\nFROM ", 1)[0]
+    assert "COPY deploy/requirements-rtsp-test.txt ./deploy/" in stage
+    assert "--require-hashes" in stage and "--no-index" in stage and "--no-deps" in stage
+    assert "--find-links /wheels" in stage and "-r deploy/requirements-rtsp-test.txt" in stage
+    assert "/wheels/*.whl" not in stage
