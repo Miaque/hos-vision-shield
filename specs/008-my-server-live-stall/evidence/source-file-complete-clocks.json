@@ -1,0 +1,612 @@
+[
+  {
+    "source": "rfm-01",
+    "video": {
+      "packets": 2208,
+      "pts_step_counts": {
+        "160": 1,
+        "640": 1750,
+        "656": 261,
+        "672": 36,
+        "624": 61,
+        "608": 28,
+        "5344": 1,
+        "688": 2,
+        "12544": 1,
+        "3584": 1,
+        "19184": 1,
+        "1": 60,
+        "277": 1,
+        "575": 1,
+        "9152": 1,
+        "47600": 1
+      },
+      "tiny_or_regress_steps": [
+        {
+          "packet_index_zero_based": 1302,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1303,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1304,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1305,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1306,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1307,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1308,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1309,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1310,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1311,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1312,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1313,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1314,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1315,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1316,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1317,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1318,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1319,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1320,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1321,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1322,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1323,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1324,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1325,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1326,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1327,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1328,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1329,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1330,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1331,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1332,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1333,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1334,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1335,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1336,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1337,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1338,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1339,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1340,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1341,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1342,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1343,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1344,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1345,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1346,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1347,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1348,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1349,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1350,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1351,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1352,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1353,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1354,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1355,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1356,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1357,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1358,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1359,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1360,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1555,
+          "step": 1
+        }
+      ],
+      "metadata": {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "has_b_frames": 0,
+        "r_frame_rate": "299/12",
+        "avg_frame_rate": "2208000/91937",
+        "time_base": "1/16000",
+        "duration": "91.937000"
+      },
+      "tiny_steps_packet_index_base": 0,
+      "tiny_step_count": 60
+    },
+    "audio": {
+      "packets": 694,
+      "pts_step_counts": {
+        "1024": 608,
+        "1028": 12,
+        "1020": 16,
+        "4220": 1,
+        "1032": 6,
+        "5352": 1,
+        "3652": 1,
+        "1040": 3,
+        "1012": 2,
+        "1036": 4,
+        "1008": 5,
+        "11740": 1,
+        "60": 1,
+        "1": 25,
+        "213": 1,
+        "876": 1,
+        "1016": 1,
+        "15196": 1,
+        "13620": 1,
+        "700": 1,
+        "546": 1
+      },
+      "tiny_or_regress_steps": [
+        {
+          "packet_index_zero_based": 411,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 412,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 413,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 414,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 415,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 416,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 417,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 418,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 419,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 420,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 421,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 422,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 423,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 424,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 425,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 426,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 427,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 428,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 429,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 666,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 667,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 668,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 669,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 670,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 671,
+          "step": 1
+        }
+      ],
+      "metadata": {
+        "codec_name": "aac",
+        "codec_type": "audio",
+        "sample_rate": "8000",
+        "r_frame_rate": "0/0",
+        "avg_frame_rate": "0/0",
+        "time_base": "1/8000",
+        "duration": "91.019000"
+      },
+      "tiny_steps_packet_index_base": 0,
+      "tiny_step_count": 25
+    }
+  },
+  {
+    "source": "rfm-02",
+    "video": {
+      "packets": 2230,
+      "pts_step_counts": {
+        "464": 1,
+        "656": 270,
+        "640": 1778,
+        "624": 61,
+        "672": 46,
+        "608": 36,
+        "848": 1,
+        "720": 1,
+        "11888": 1,
+        "1": 28,
+        "486": 1,
+        "122": 1,
+        "272": 1,
+        "10256": 1,
+        "404": 1,
+        "3776": 1
+      },
+      "tiny_or_regress_steps": [
+        {
+          "packet_index_zero_based": 882,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 883,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 884,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 885,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 886,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 887,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 888,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 889,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 890,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 891,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1139,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1140,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1141,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1142,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1143,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1144,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1884,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1885,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1886,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1887,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1888,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1889,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1890,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1891,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1892,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1893,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1894,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 1895,
+          "step": 1
+        }
+      ],
+      "metadata": {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "has_b_frames": 0,
+        "r_frame_rate": "299/12",
+        "avg_frame_rate": "1115000/44869",
+        "time_base": "1/16000",
+        "duration": "89.738000"
+      },
+      "tiny_steps_packet_index_base": 0,
+      "tiny_step_count": 28
+    },
+    "audio": {
+      "packets": 700,
+      "pts_step_counts": {
+        "1024": 643,
+        "1028": 9,
+        "956": 1,
+        "7100": 1,
+        "1032": 9,
+        "1020": 14,
+        "1036": 3,
+        "1008": 3,
+        "764": 1,
+        "60": 1,
+        "64": 5,
+        "1": 2,
+        "982": 1,
+        "452": 1,
+        "1116": 1,
+        "5548": 1,
+        "700": 1,
+        "272": 1,
+        "2404": 1
+      },
+      "tiny_or_regress_steps": [
+        {
+          "packet_index_zero_based": 281,
+          "step": 1
+        },
+        {
+          "packet_index_zero_based": 282,
+          "step": 1
+        }
+      ],
+      "metadata": {
+        "codec_name": "aac",
+        "codec_type": "audio",
+        "sample_rate": "8000",
+        "r_frame_rate": "0/0",
+        "avg_frame_rate": "0/0",
+        "time_base": "1/8000",
+        "duration": "89.686000"
+      },
+      "tiny_steps_packet_index_base": 0,
+      "tiny_step_count": 2
+    }
+  }
+]

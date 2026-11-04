@@ -1,0 +1,50 @@
+[
+  {
+    "group": 2,
+    "mode": "control",
+    "frames": 400,
+    "aac": 124,
+    "rtp_seconds": 21.398924530949444,
+    "ordered_input_vcl_equal": true
+  },
+  {
+    "group": 2,
+    "mode": "detail-serial",
+    "frames": 400,
+    "aac": 66,
+    "rtp_seconds": 20.909964018967003,
+    "ordered_input_vcl_equal": true
+  },
+  {
+    "group": 2,
+    "mode": "validation",
+    "frames": 400,
+    "aac": 124,
+    "rtp_seconds": 20.148829797748476,
+    "ordered_input_vcl_equal": true
+  },
+  {
+    "group": 3,
+    "mode": "control",
+    "frames": 400,
+    "aac": 124,
+    "rtp_seconds": 20.555324897635728,
+    "ordered_input_vcl_equal": true
+  },
+  {
+    "group": 3,
+    "mode": "non-mps-control",
+    "frames": 400,
+    "aac": 124,
+    "rtp_seconds": 37.95306379115209,
+    "ordered_input_vcl_equal": true
+  },
+  {
+    "group": 3,
+    "mode": "validation",
+    "frames": 400,
+    "aac": 124,
+    "rtp_seconds": 21.51851390907541,
+    "ordered_input_vcl_equal": true
+  }
+]

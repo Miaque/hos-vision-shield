@@ -1,0 +1,83 @@
+{
+  "start": {
+    "unix": 1793767427.4136536,
+    "monotonic": 14166.796,
+    "kind": "start",
+    "campaign": {
+      "unix": 1793767426.786308,
+      "monotonic": 3208145.267100446,
+      "seconds": 600,
+      "commit": "ca2bb46d9346e88822f17aff1f9986aebc3297d0",
+      "debug": false,
+      "mps": true,
+      "deadline_unix": 1793768026.786308,
+      "canonical_compose_sha256": "6245c0a556c12df74f5493d5d0697aa605b420d49a8a78eef3afcdc1dd789393",
+      "mps_service": "vision-shield-test-cuda-mps-1",
+      "affinity_profile_sha256": "5cdc022aeff3c3a716a49bc4bcdccb859925425a621e9f06050530c693d2b374",
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2",
+      "now": 1793767427.1746447
+    },
+    "clock_offset_seconds": -0.5299770832061768,
+    "clock_roundtrip_seconds": 0.06681180000305176,
+    "options": [
+      "--ignore-config",
+      "--intf=dummy",
+      "--no-video-title-show",
+      "--no-osd",
+      "--stats",
+      "--rtsp-tcp",
+      "--network-caching=300"
+    ],
+    "version": "3.0.24 Vetinari",
+    "limit": "Video displayed counts include redraws. Stats are periodic aggregates, not per-frame presentation times."
+  },
+  "sampling_stopped": 1793768026.7866416,
+  "released": 1793768027.0703557,
+  "streams": {
+    "0": {
+      "epochs": {
+        "1": {
+          "i_decoded_video": 28304,
+          "i_decoded_audio": 9091,
+          "i_displayed_pictures": 14160,
+          "i_lost_pictures": 601,
+          "i_played_abuffers": 4512,
+          "i_lost_abuffers": 33,
+          "i_demux_discontinuity": 6
+        }
+      },
+      "state_samples": {
+        "1": 1,
+        "3": 5965
+      }
+    },
+    "1": {
+      "epochs": {
+        "1": {
+          "i_decoded_video": 20755,
+          "i_decoded_audio": 6818,
+          "i_displayed_pictures": 10968,
+          "i_lost_pictures": 146,
+          "i_played_abuffers": 3384,
+          "i_lost_abuffers": 24,
+          "i_demux_discontinuity": 6
+        },
+        "2": {
+          "i_decoded_video": 4055,
+          "i_decoded_audio": 1353,
+          "i_displayed_pictures": 2154,
+          "i_lost_pictures": 11,
+          "i_played_abuffers": 673,
+          "i_lost_abuffers": 3,
+          "i_demux_discontinuity": 2
+        }
+      },
+      "state_samples": {
+        "0": 1,
+        "3": 5954,
+        "6": 11
+      }
+    }
+  }
+}

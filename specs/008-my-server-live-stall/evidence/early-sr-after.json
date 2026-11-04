@@ -1,0 +1,24 @@
+[
+  {
+    "flow": [
+      "wire-3.jsonl",
+      "10.0.15.9:60998"
+    ],
+    "first_sr": 3137912.206600189,
+    "first_wire": 3137912.207079649,
+    "first_receive": 3137912.36826884,
+    "prefix_frames": 4,
+    "prefix_seconds": 0.16071534156799316
+  },
+  {
+    "flow": [
+      "wire-2.jsonl",
+      "10.0.15.8:51494"
+    ],
+    "first_sr": 3137944.2943952084,
+    "first_wire": 3137944.294859886,
+    "first_receive": 3137945.293265773,
+    "prefix_frames": 6,
+    "prefix_seconds": 0.9977476596832275
+  }
+]

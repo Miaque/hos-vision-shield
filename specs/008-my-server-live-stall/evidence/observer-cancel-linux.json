@@ -1,0 +1,8 @@
+{
+  "start": 1793781323.5950823,
+  "end": 1793781327.693899,
+  "returncode": 0,
+  "code_sha256": "ac4b71ba38c4aabe14d13d605d8732d3a1fdbb24dc8f2b753249eefab1c05f99",
+  "gpu_used": false,
+  "result": "{\"passed\": 10, \"cases\": [\"test_close_cancels_a_silent_rtsp_peer_before_the_read_timeout\", \"test_real_rtsp_reader_is_bounded_and_stops_its_socket\"], \"rounds\": 5}"
+}

@@ -1,0 +1,62 @@
+{
+  "rfm01": {
+    "1": {
+      "anchor": {
+        "output_unix": 1793761910.7903557,
+        "source_unix": 1793761902.1368387,
+        "lag": 8.653517007827759
+      },
+      "matched_units": 4457,
+      "observed_seconds": 591.208621263504,
+      "first_lag_median": 8.573388576507568,
+      "last_lag_median": 9.728716373443604,
+      "max_lag": 28.646939039230347,
+      "lag_growth_seconds_per_minute": 1.647792530271248,
+      "ordinal_steps": {
+        "1": 4507,
+        "2": 6
+      }
+    }
+  },
+  "rfm02": {
+    "3": {
+      "anchor": {
+        "output_unix": 1793761937.3632338,
+        "source_unix": 1793761936.5801163,
+        "lag": 0.7831175327301025
+      },
+      "matched_units": 3014,
+      "observed_seconds": 472.7044324874878,
+      "first_lag_median": 0.7726989984512329,
+      "last_lag_median": 68.8149197101593,
+      "max_lag": 78.0070915222168,
+      "lag_growth_seconds_per_minute": 10.440136231975847,
+      "ordinal_steps": {
+        "1": 3005,
+        "2": 4,
+        "30": 1,
+        "38": 1,
+        "37": 1,
+        "44": 1
+      }
+    },
+    "7": {
+      "anchor": {
+        "output_unix": 1793762414.5726755,
+        "source_unix": 1793762413.4451585,
+        "lag": 1.1275169849395752
+      },
+      "matched_units": 546,
+      "observed_seconds": 87.44016861915588,
+      "first_lag_median": 1.637184739112854,
+      "last_lag_median": 17.765941977500916,
+      "max_lag": 18.15204668045044,
+      "lag_growth_seconds_per_minute": 13.013010033713941,
+      "ordinal_steps": {
+        "1": 544,
+        "2": 1
+      }
+    }
+  },
+  "method": "Unwrap unique source AAC hashes across loops. Anchor within 60 seconds only at a fresh attempt; keep that offset across the entire connection. Actual source RTP arrival to same AU output RTP arrival, not mux or RTCP wall-clock extrapolation."
+}

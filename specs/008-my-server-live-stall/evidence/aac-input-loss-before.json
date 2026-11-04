@@ -1,0 +1,48 @@
+{
+  "video_frames": 400,
+  "raw_demux_aac": 124,
+  "missing_pts_dts": 58,
+  "audio_clock_entered": 66,
+  "mux_accepted": 66,
+  "rtp_received": 66,
+  "all_accepted_delivered": true,
+  "first_six_clocks": [
+    {
+      "pts": 272637,
+      "dts": 272637,
+      "duration": 0,
+      "time_base": "1/8000"
+    },
+    {
+      "pts": null,
+      "dts": null,
+      "duration": 0,
+      "time_base": "1/8000"
+    },
+    {
+      "pts": 274685,
+      "dts": 274685,
+      "duration": 0,
+      "time_base": "1/8000"
+    },
+    {
+      "pts": null,
+      "dts": null,
+      "duration": 0,
+      "time_base": "1/8000"
+    },
+    {
+      "pts": 276733,
+      "dts": 276733,
+      "duration": 0,
+      "time_base": "1/8000"
+    },
+    {
+      "pts": null,
+      "dts": null,
+      "duration": 0,
+      "time_base": "1/8000"
+    }
+  ],
+  "note": "Original image ad83daa; auxiliary detail serial trial exposes metadata loss before mux. Do not attribute audio loss to the scheduling change."
+}

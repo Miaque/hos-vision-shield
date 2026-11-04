@@ -1,0 +1,11 @@
+{
+  "source": "Captured real RTSP deaggregation metadata and original matching AAC AUs",
+  "units": 124,
+  "original_missing_clocks": 58,
+  "recovered_audio_packets": 58,
+  "valid_source_clocks_unchanged": true,
+  "all_recovered_intervals_exact": true,
+  "all_payloads_unchanged": true,
+  "codec_interval": "16/125",
+  "note": "Deterministic replay of the observed fault; not a throughput or new live-capture result"
+}

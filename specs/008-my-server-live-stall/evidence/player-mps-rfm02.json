@@ -1,0 +1,18 @@
+{
+  "start_unix": 1793755424.6079655,
+  "last_status_unix": 1793756023.0117123,
+  "exit_unix": 1793756023.0518885,
+  "observed_seconds": 598.403746843338,
+  "attempts": 3,
+  "status_samples": 17457,
+  "abs_av": {
+    "p50": 0.355,
+    "p95": 0.493,
+    "p99": 1.108,
+    "max": 8.471
+  },
+  "empty_video_queue_fraction": 0.7216589333791602,
+  "max_fd": 0,
+  "ui_observed": true,
+  "ui_note": "Both actual windows advanced with masked plates; no per-frame presentation count"
+}

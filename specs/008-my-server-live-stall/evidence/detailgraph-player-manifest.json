@@ -1,0 +1,18 @@
+{
+  "vlc-detailgraph-final.jsonl": {
+    "bytes": 5862632,
+    "sha256": "b0a87d16489fbd7b078399a2cda613f0b4bb13a4e16d181c1afdb35ac1fdceb0"
+  },
+  "vlc-detailgraph-final.log": {
+    "bytes": 13618,
+    "sha256": "9a0f822d07a1c77255249081925ed00b5789d190c0e3d13a29b10d8a36543f54"
+  },
+  "player-detailgraph-rfm01\\player.jsonl": {
+    "bytes": 3360523,
+    "sha256": "aba99c513d9a78dedc548edd45d185fd7d72e1be5aaf568df82cbb734df028fd"
+  },
+  "player-detailgraph-rfm02\\player.jsonl": {
+    "bytes": 3452277,
+    "sha256": "203ed8bfa517d3ef9ac6f8b9172aa6637f9d5b0467907d8c9d38d7ecea199962"
+  }
+}

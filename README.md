@@ -5,6 +5,7 @@ Python/FastAPI + Taskiq 媒体脱敏项目，支持图片、视频与 RTSP/RTMP 
 项目以 `main` 分支作为主干。
 
 当前进度见 [任务清单](specs/001-media-redaction/tasks.md) 与 [验证记录](specs/001-media-redaction/validation/gates.md)。
+车牌优化的采纳范围、完整实验报告与继续优化入口见[车牌成果整合与实验档案](specs/008-my-server-live-stall/INTEGRATION.md)。
 已接通上传/URL文件任务、结果下载、取消、默认 RTSP 输出、可选 RTMP 输出及断流/worker重启恢复。API与任务控制使用异步I/O；模型推理、编解码在受控子进程中执行。
 
 ## 安装 Python 依赖
@@ -21,7 +22,7 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 GPU Compose 选用 `DETECTION_BACKEND=quality_yolo`，用轻量 YOLO 人脸候选替换 EgoBlur 人脸，保留 EgoBlur 车牌、YuNet/HyperLPR、现有确认和跟踪规则。本机可在 CUDA 环境显式选择该后端。新权重随版本包交付，来源、哈希、GPL-3.0 许可与导出方法见[模型说明](src/vision_shield/detection/assets/README.md)。原 `quality` 和 CPU 默认值保留；该后端的目标服务器吞吐须单独实测，不能由本地片段速度推定双路达标。
 
-`quality_yolo`在计算能力主版本至少8的GPU上使用FP16车牌模型参数和自动混合精度，沿用原Gen1完整执行图，保留FP32归一化、FP32输出坐标/分数及最多1000个ROI候选，撤回服务器实测没有收益的512候选裁减；较旧GPU及其他后端保持原路径。ONNX精度设置不变。精度变化可能改变临界分数及框，效果和吞吐均须在目标服务器验证，见[时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)。
+`quality_yolo`在计算能力主版本至少8的GPU上使用FP16车牌模型参数和自动混合精度；固定形状的Gen1骨干通过CUDA Graph重放，最多缓存两种形状，其他形状使用原骨干路径。保留原动态检测头、FP32归一化、FP32输出坐标/分数及最多1000个ROI候选，撤回服务器实测没有收益的512候选裁减；较旧GPU及其他后端保持原路径。ONNX精度设置不变。精度变化可能改变临界分数及框，效果和吞吐均须在目标服务器验证，见[时序优化记录](specs/002-compose-cpu-gpu/temporal-optimization.md)。
 
 CUDA补充车牌检测恢复原有视图逐张推理，撤回服务器实测没有收益的视图合批。保留全部检测区域、letterbox、阈值、跨模型确认与逐帧跟踪；NVDEC、GPU预处理/推理/遮罩和NVENC路径保持。完整4K双路两次基线验收含初始化约13.0–13.6 FPS，尚未达到每路15 FPS。
 
@@ -60,7 +61,7 @@ Remove-Item Env:RUN_GPU_TESTS
 验证使用本地四个模型和 `samples/robot-quality` 中已标注样例，检查模型校验和、真实 GPU 推理和遮挡区域。GPU 不可用或推理失败会报错，不回退 CPU。更新依赖后须重启已有进程；本机 GPU 验证不代表服务器 x86_64 Compose 部署已通过。
 
 本机已完成真实模型、图片/视频子进程及同图 CPU/GPU 对比，边界与结果见 [GTX 1080 验证记录](specs/002-compose-cpu-gpu/local-gpu.md)。
-GPU 模式下，两路独立的全图检测同时执行，随后按原顺序进行局部复核。此前 CPU 补充检测的调度基线见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)，四模型 CUDA 迁移与部署见 [CUDA 补充检测](specs/002-compose-cpu-gpu/cuda-detail.md)。
+GPU 模式下，主模型与补充模型在调用线程顺序执行，随后按原顺序进行局部复核；补充模型内部的人脸/车牌调度保留。此前 CPU 补充检测的调度基线见 [GPU 同效果优化记录](specs/002-compose-cpu-gpu/gpu-performance.md)，四模型 CUDA 迁移与部署见 [CUDA 补充检测](specs/002-compose-cpu-gpu/cuda-detail.md)。
 
 ## 服务器 Docker Compose
 

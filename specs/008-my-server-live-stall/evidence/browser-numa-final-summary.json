@@ -1,0 +1,242 @@
+{
+  "start_unix": 1793767427.3271806,
+  "deadline_unix": 1793768026.786308,
+  "stopped_unix": 1793768026.7901807,
+  "seconds": 599.4591274261475,
+  "config": {
+    "maxBufferLength": 2,
+    "maxMaxBufferLength": 4,
+    "backBufferLength": 3,
+    "liveSyncDurationCount": 2,
+    "maxLiveSyncPlaybackRate": 1
+  },
+  "streams": {
+    "0": {
+      "callback_frames": 8794,
+      "callback_fps": 14.669890902751177,
+      "missed_presented_callbacks": 3919,
+      "presentation_gaps": {
+        "p50": 0.06929999999999836,
+        "p95": 0.10650000000003956,
+        "p99": 0.1414000000000044,
+        "max": 3.9804000000000315,
+        "min": 0.01710000000002765,
+        "count": 8793
+      },
+      "stalls": {
+        "0.2": 61,
+        "0.5": 47,
+        "1": 35
+      },
+      "presented_counter_non_increases": 0,
+      "submitted_frames_lower_bound": 12713,
+      "submitted_fps_lower_bound": 21.207450880904677,
+      "consecutive_presented_gaps": {
+        "p50": 0.03559999999993124,
+        "p95": 0.07100000000002638,
+        "p99": 0.31690000000000396,
+        "max": 3.9804000000000315,
+        "min": 0.01710000000002765,
+        "count": 5144
+      },
+      "consecutive_presented_stalls": {
+        "0.2": 55,
+        "0.5": 44,
+        "1": 33
+      },
+      "callback_window_fps": {
+        "1": {
+          "p50": 15.0,
+          "p95": 25.0,
+          "p99": 26.0,
+          "max": 27.0,
+          "min": 0.0,
+          "count": 5984
+        },
+        "5": {
+          "p50": 14.8,
+          "p95": 22.0,
+          "p99": 24.8,
+          "max": 25.2,
+          "min": 3.2,
+          "count": 5944
+        }
+      },
+      "waiting_seconds": [
+        0.375,
+        1.1099998950958252,
+        0.12199997901916504,
+        1.1150000095367432,
+        3.9130001068115234,
+        0.017000198364257812,
+        0.003999948501586914,
+        1.3629999160766602,
+        2.8359999656677246,
+        0.07999992370605469,
+        0.3259999752044678,
+        2.432000160217285,
+        0.4200000762939453,
+        0.627000093460083,
+        0.568000078201294,
+        1.002000093460083
+      ],
+      "event_counts": {
+        "waiting": 21,
+        "hls_error": 35,
+        "seeking": 7,
+        "seeked": 6,
+        "playing": 16
+      },
+      "visibility": {
+        "visible": 8794
+      },
+      "final_player_status": [
+        {
+          "stream": 0,
+          "time": 599.900404,
+          "ready": 4,
+          "paused": false,
+          "rate": 1,
+          "buffered": [
+            [
+              594.859756,
+              603.804948
+            ]
+          ],
+          "quality": {
+            "totalVideoFrames": 13597,
+            "droppedVideoFrames": 873
+          }
+        }
+      ],
+      "media_time_non_increases": 0
+    },
+    "1": {
+      "callback_frames": 8020,
+      "callback_fps": 13.378726977491977,
+      "missed_presented_callbacks": 4002,
+      "presentation_gaps": {
+        "p50": 0.06990000000007512,
+        "p95": 0.10660000000001446,
+        "p99": 0.1419999999999959,
+        "max": 9.011700000000019,
+        "min": 0.016999999999995907,
+        "count": 8019
+      },
+      "stalls": {
+        "0.2": 56,
+        "0.5": 35,
+        "1": 20
+      },
+      "presented_counter_non_increases": 0,
+      "submitted_frames_lower_bound": 12022,
+      "submitted_fps_lower_bound": 20.054745102669397,
+      "consecutive_presented_gaps": {
+        "p50": 0.035599999999988086,
+        "p95": 0.07119999999997617,
+        "p99": 0.22960000000006175,
+        "max": 9.011700000000019,
+        "min": 0.016999999999995907,
+        "count": 4380
+      },
+      "consecutive_presented_stalls": {
+        "0.2": 47,
+        "0.5": 32,
+        "1": 17
+      },
+      "callback_window_fps": {
+        "1": {
+          "p50": 15.0,
+          "p95": 21.0,
+          "p99": 25.0,
+          "max": 26.0,
+          "min": 0.0,
+          "count": 5984
+        },
+        "5": {
+          "p50": 14.8,
+          "p95": 19.0,
+          "p99": 20.4,
+          "max": 21.6,
+          "min": 0.0,
+          "count": 5944
+        }
+      },
+      "waiting_seconds": [
+        0.47699999809265137,
+        0.26399993896484375,
+        1.1559998989105225,
+        5.141999959945679,
+        0.11999988555908203,
+        0.6469998359680176,
+        2.5319998264312744,
+        6.583999872207642,
+        0.11899995803833008,
+        0.23399996757507324,
+        0.5369999408721924,
+        1.4300000667572021,
+        2.2330000400543213,
+        3.56000018119812,
+        8.567000150680542,
+        0.11800003051757812,
+        0.3900001049041748,
+        0.1790001392364502,
+        2.187999963760376,
+        7.252999782562256,
+        0.22900009155273438,
+        0.7130000591278076,
+        0.7960000038146973,
+        1.4010000228881836,
+        8.220999956130981,
+        0.5069999694824219,
+        0.2049999237060547,
+        0.28799986839294434,
+        1.6140000820159912,
+        3.694000005722046,
+        2.7009999752044678,
+        3.5230000019073486,
+        4.764999866485596
+      ],
+      "event_counts": {
+        "waiting": 40,
+        "hls_error": 73,
+        "seeking": 12,
+        "seeked": 10,
+        "playing": 33
+      },
+      "visibility": {
+        "visible": 8020
+      },
+      "final_player_status": [
+        {
+          "stream": 1,
+          "time": 100.278852,
+          "ready": 2,
+          "paused": false,
+          "rate": 1,
+          "buffered": [
+            [
+              97.607622,
+              103.33055
+            ]
+          ],
+          "quality": {
+            "totalVideoFrames": 2262,
+            "droppedVideoFrames": 114
+          }
+        }
+      ],
+      "media_time_non_increases": 0
+    }
+  },
+  "event_counts": {
+    "status": 599,
+    "waiting": 61,
+    "hls_error": 108,
+    "seeking": 19,
+    "seeked": 16,
+    "playing": 49,
+    "ended": 1
+  },
+  "limit": "Callbacks prove new frames submitted for composition, not panel scanout. A gap containing missed callbacks is only an upper bound on a presentation stall. Callback FPS excludes frames whose callbacks were missed; the submitted lower bound includes positive presentedFrames counter jumps, without inventing their individual times. Consecutive presented gaps exclude pairs containing missed callbacks or epoch changes. Neither counter is a count of distinct source pictures after player seeks. Player seeks and dropped frames are reported separately and never count as application integrity acceptance."
+}

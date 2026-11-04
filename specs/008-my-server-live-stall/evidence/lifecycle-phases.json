@@ -1,0 +1,250 @@
+[
+  {
+    "task": "e9d6a3ab-3843-48f4-8083-7dc8f89759b1",
+    "returncode": 0,
+    "phase": "source_read",
+    "attempt_id": "dcf0685b20754ad8aa9d8a2443d58141",
+    "started_at_unix": 1793696023.6188,
+    "reason": "source_eof",
+    "first_output_media_monotonic": 3136746.7164215,
+    "e0_boundaries": {
+      "media_execution_started": 3136742.4442616,
+      "media_execution_completed": 3136965.6630066,
+      "publisher_prepare_started": 3136742.165157,
+      "publisher_close_started": 3136965.6630193,
+      "worker_attempt_ending": 3136965.7904171,
+      "retry_wait_completed": 3136965.863481,
+      "source_validation_completed": 3136742.1651519,
+      "first_output_received": 3136746.716861,
+      "publisher_prepare_completed": 3136742.4227914,
+      "retry_wait_started": 3136965.8633499,
+      "source_validation_started": 3136742.121547,
+      "publisher_close_completed": 3136965.7904108
+    },
+    "started_monotonic": 3136742.0995977,
+    "generation": 4,
+    "run_id": "cf3d73f5a4ef45f08d9c09cf644a5689",
+    "ended_monotonic": 3136964.9555388,
+    "ended_at_unix": 1793696247.3096,
+    "lifecycle": [
+      {
+        "sequence": 1,
+        "name": "media_attempt_enter",
+        "monotonic": 3136743.0586149,
+        "worker_attempt_started": 3136742.0995977
+      },
+      {
+        "sequence": 2,
+        "name": "publish_open_started",
+        "monotonic": 3136743.0589953
+      },
+      {
+        "sequence": 3,
+        "name": "publish_open_completed",
+        "monotonic": 3136743.0592822
+      },
+      {
+        "sequence": 4,
+        "name": "source_open_started",
+        "monotonic": 3136743.0637968
+      },
+      {
+        "sequence": 5,
+        "name": "source_open_completed",
+        "monotonic": 3136743.2189671
+      },
+      {
+        "sequence": 6,
+        "name": "source_validated",
+        "video_time_base": "1/90000",
+        "monotonic": 3136743.2192485,
+        "video_average_rate": "25/1",
+        "audio_sample_rate": 8000,
+        "audio_time_base": "1/8000"
+      },
+      {
+        "mux_monotonic": 3136746.7162376,
+        "name": "first_video_mux_completed",
+        "sequence": 7,
+        "monotonic": 3136746.7164103
+      },
+      {
+        "sequence": 8,
+        "name": "decoder_drain_packet",
+        "monotonic": 3136964.5548351
+      },
+      {
+        "sequence": 9,
+        "name": "demux_eof",
+        "monotonic": 3136964.5549774
+      },
+      {
+        "sequence": 10,
+        "name": "reader_eof_set",
+        "monotonic": 3136964.5549955
+      },
+      {
+        "sequence": 11,
+        "name": "encoder_flush_started",
+        "monotonic": 3136964.9551344
+      },
+      {
+        "sequence": 12,
+        "name": "encoder_flush_completed",
+        "monotonic": 3136964.9552547
+      },
+      {
+        "sequence": 13,
+        "name": "publish_close_started",
+        "monotonic": 3136964.955263
+      },
+      {
+        "sequence": 14,
+        "name": "publish_close_completed",
+        "monotonic": 3136964.9555042
+      },
+      {
+        "sequence": 15,
+        "phase": "source_read",
+        "name": "media_ending",
+        "monotonic": 3136964.9555161,
+        "reason": "source_eof"
+      },
+      {
+        "sequence": 16,
+        "name": "source_closed",
+        "monotonic": 3136964.9559465
+      },
+      {
+        "sequence": 17,
+        "name": "reader_join_completed",
+        "monotonic": 3136964.9562075,
+        "alive": false
+      }
+    ]
+  },
+  {
+    "task": "1aed319f-e680-4f52-ad70-cd9b0be0a220",
+    "returncode": 0,
+    "phase": "source_read",
+    "attempt_id": "d38214a8dc2f49f7a0ba0583691910f5",
+    "started_at_unix": 1793696025.0922,
+    "reason": "source_eof",
+    "first_output_media_monotonic": 3136747.7333284,
+    "e0_boundaries": {
+      "media_execution_started": 3136744.0050848,
+      "media_execution_completed": 3137013.9289169,
+      "publisher_prepare_started": 3136743.666467,
+      "publisher_close_started": 3137013.9289467,
+      "worker_attempt_ending": 3137014.1098712,
+      "retry_wait_completed": 3137014.2501128,
+      "publisher_prepare_completed": 3136743.9608174,
+      "first_output_received": 3136747.7337652,
+      "source_validation_completed": 3136743.666461,
+      "retry_wait_started": 3137014.249907,
+      "source_validation_started": 3136743.6380577,
+      "publisher_close_completed": 3137014.1098639
+    },
+    "started_monotonic": 3136743.5729735,
+    "generation": 12,
+    "run_id": "a8bd42b476004b5ab52e0e321e6b4942",
+    "ended_monotonic": 3137013.3542251,
+    "ended_at_unix": 1793696295.6291,
+    "lifecycle": [
+      {
+        "sequence": 1,
+        "name": "media_attempt_enter",
+        "monotonic": 3136744.6337674,
+        "worker_attempt_started": 3136743.5729735
+      },
+      {
+        "sequence": 2,
+        "name": "publish_open_started",
+        "monotonic": 3136744.7220562
+      },
+      {
+        "sequence": 3,
+        "name": "publish_open_completed",
+        "monotonic": 3136744.7229005
+      },
+      {
+        "sequence": 4,
+        "name": "source_open_started",
+        "monotonic": 3136744.7342859
+      },
+      {
+        "sequence": 5,
+        "name": "source_open_completed",
+        "monotonic": 3136745.0212362
+      },
+      {
+        "sequence": 6,
+        "name": "source_validated",
+        "video_time_base": "1/90000",
+        "monotonic": 3136745.0216018,
+        "video_average_rate": "25/1",
+        "audio_sample_rate": 8000,
+        "audio_time_base": "1/8000"
+      },
+      {
+        "mux_monotonic": 3136747.7332501,
+        "name": "first_video_mux_completed",
+        "sequence": 7,
+        "monotonic": 3136747.7333211
+      },
+      {
+        "sequence": 8,
+        "name": "decoder_drain_packet",
+        "monotonic": 3137012.4489766
+      },
+      {
+        "sequence": 9,
+        "name": "demux_eof",
+        "monotonic": 3137012.8371384
+      },
+      {
+        "sequence": 10,
+        "name": "reader_eof_set",
+        "monotonic": 3137012.8372049
+      },
+      {
+        "sequence": 11,
+        "name": "encoder_flush_started",
+        "monotonic": 3137013.3538682
+      },
+      {
+        "sequence": 12,
+        "name": "encoder_flush_completed",
+        "monotonic": 3137013.3539609
+      },
+      {
+        "sequence": 13,
+        "name": "publish_close_started",
+        "monotonic": 3137013.3539655
+      },
+      {
+        "sequence": 14,
+        "name": "publish_close_completed",
+        "monotonic": 3137013.3541906
+      },
+      {
+        "sequence": 15,
+        "phase": "source_read",
+        "name": "media_ending",
+        "monotonic": 3137013.354201,
+        "reason": "source_eof"
+      },
+      {
+        "sequence": 16,
+        "name": "source_closed",
+        "monotonic": 3137013.3547639
+      },
+      {
+        "sequence": 17,
+        "name": "reader_join_completed",
+        "monotonic": 3137013.3550842,
+        "alive": false
+      }
+    ]
+  }
+]

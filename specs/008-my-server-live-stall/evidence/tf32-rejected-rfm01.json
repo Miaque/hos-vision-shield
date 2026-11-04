@@ -1,0 +1,10 @@
+{
+  "source": "rfm-01.mp4",
+  "frames": 2208,
+  "identical_yuv_and_pts": true,
+  "mismatches": [],
+  "forced_incomplete_flushes": 22,
+  "output_digest": "446d8417308573719e04e33889f1d35c8dde4d0e849acd3c94274f4eff01d623",
+  "note": "Quality equivalence on source pictures; not a live throughput measurement",
+  "matches_preexisting_golden": false
+}
