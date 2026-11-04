@@ -32,5 +32,5 @@ def capture(path, seconds):
 if __name__ == '__main__':
     assert len(sys.argv) == 3
     seconds = float(sys.argv[2])
-    assert 0 < seconds <= 3600
+    assert 0 < seconds <= 600
     capture(Path(sys.argv[1]), seconds)

@@ -7,7 +7,8 @@ from vision_shield.media.rtsp_observer import nal_parts
 
 
 class RTSPCapture:
-    def __init__(self):
+    def __init__(self, packet_limit=4096):
+        self.packet_limit = packet_limit
         self.listener = socket.socket()
         self.listener.bind(('127.0.0.1', 0))
         self.listener.listen(1)
@@ -64,7 +65,7 @@ class RTSPCapture:
                                 break
                             channel, packet, buf = buf[1], buf[4:4+length], buf[4+length:]
                             at = time.monotonic()
-                            assert len(self.packets) < 4096
+                            assert len(self.packets) < self.packet_limit
                             if channel % 2 == 0:
                                 self.packets.append(dict(channel=channel, packet=packet, at=at))
                             else:

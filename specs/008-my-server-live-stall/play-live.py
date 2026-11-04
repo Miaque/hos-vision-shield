@@ -22,6 +22,7 @@ def status(line):
 
 
 def play(binary, url, directory, seconds):
+    assert 0 < seconds <= 600
     directory.mkdir(parents=True, exist_ok=True)
     deadline, attempt, written = time.monotonic() + seconds, 0, 0
     with (directory / 'player.jsonl').open('w', encoding='utf-8') as output:

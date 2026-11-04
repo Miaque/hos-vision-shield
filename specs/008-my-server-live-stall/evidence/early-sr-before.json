@@ -1,0 +1,24 @@
+[
+  {
+    "flow": [
+      "wire-3.jsonl",
+      "10.0.15.9:60990"
+    ],
+    "first_video_wire": 3137016.5746233463,
+    "first_sr_wire": 3137016.574211359,
+    "first_received": 3137021.610527253,
+    "missing_prefix_seconds": 5.034584045410156,
+    "missing_picture_count": 108
+  },
+  {
+    "flow": [
+      "wire-2.jsonl",
+      "10.0.15.8:51422"
+    ],
+    "first_video_wire": 3136967.5612642765,
+    "first_sr_wire": 3136967.560782671,
+    "first_received": 3136972.630595696,
+    "missing_prefix_seconds": 5.06818962097168,
+    "missing_picture_count": 62
+  }
+]

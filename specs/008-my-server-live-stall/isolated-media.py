@@ -83,7 +83,7 @@ def run(root, source, seconds, mode='no-model', aligned_frames=0):
         streams.av.open = lambda url, *a, **kw: Reader(original_open(url, *a, **kw)) if url == source else original_open(url, *a, **kw)
     timer.start()
     try:
-        with peer.RTSPCapture() as capture:
+        with peer.RTSPCapture(packet_limit=16384) as capture:
             process_stream(source, capture.url, detector, config, stop, events.append)
     finally:
         stop.set()

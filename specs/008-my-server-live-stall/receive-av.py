@@ -13,6 +13,7 @@ from vision_shield.media.rtsp_observer import nal_parts, picture_digest
 
 
 def receive(path, url, seconds):
+    assert 0 < seconds <= 600
     deadline, connection, written = time.monotonic() + seconds, 0, 0
     with path.open('w', encoding='utf-8') as output:
         def record(kind, **data):

@@ -67,7 +67,7 @@ def main(root, group='final-diagnostic', task_id=None):
             result['reception'][f'{name}/{role}'] = dict(analysis.reception(values),
                 counts=dict(Counter(v['kind'] for v in values)))
             result['rtcp'][f'{name}/{role}'] = clocks(values)
-            if name.startswith('serial-formal-'):
+            if name.startswith(('serial-formal-', 'aac-formal-')):
                 start = json.loads((path.parent/'start.json').read_text())
                 result['formal_phases'][f'{name}/{role}'] = reception_window(
                     values, start.get('rtp_started_unix', start['unix']), start['unix'] + start['seconds'])
