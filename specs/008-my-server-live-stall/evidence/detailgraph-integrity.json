@@ -1,0 +1,27 @@
+{
+  "rfm01": {
+    "output_audio": 4478,
+    "known_source_aac": 694,
+    "unknown_payloads": 0,
+    "record_kinds": {
+      "open": 1,
+      "frame": 14267,
+      "audio": 4478,
+      "sr": 120
+    },
+    "limit": "Payload membership is not proof of no source-to-output AU loss or no sample-duration overlap"
+  },
+  "rfm02": {
+    "output_audio": 4044,
+    "known_source_aac": 700,
+    "unknown_payloads": 0,
+    "record_kinds": {
+      "open": 2,
+      "frame": 12912,
+      "audio": 4044,
+      "sr": 121,
+      "error": 4
+    },
+    "limit": "Payload membership is not proof of no source-to-output AU loss or no sample-duration overlap"
+  }
+}

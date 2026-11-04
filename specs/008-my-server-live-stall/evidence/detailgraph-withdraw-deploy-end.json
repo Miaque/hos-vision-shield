@@ -1,0 +1,12 @@
+{
+  "start": 1793783136.126254,
+  "workers_pre_stopped": 1793783140.0514753,
+  "end": 1793783212.835179,
+  "commit": "7794f02d91cf9deccfa2ee170778bac278e18a66",
+  "tag": "cand-20261104-myserver-observer-stop-01",
+  "retained_fix": "bounded observer cancellation only",
+  "withdrawn": "HyperLPR CUDA graph",
+  "source_unchanged": true,
+  "cpuset_cpus": "32-47,96-111",
+  "cpuset_mems": "2"
+}

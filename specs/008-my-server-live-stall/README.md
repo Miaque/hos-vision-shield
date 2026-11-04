@@ -3,7 +3,7 @@
 起点：`dd9f560a801d3bc2ab8e5fa3b194b20d81d02d59`。实验分支：`feature/my-server-live-stall`。
 授权范围仅为 my-server 的独立测试栈，不访问 gpu-server，不修改重播推流器。
 
-**最新已部署代码为 `ca2bb46d9346e88822f17aff1f9986aebc3297d0`，标签 `cand-20261104-myserver-numa-01`，DEBUG=false，三个测试 stream worker 已应用 NUMA node 2 配置。专项尚未完成。** 以下较早结果保留为历史对照；最新完整 600 秒复核见文末。第二路实际 RTP 输出约 22.14 FPS，仍持续积压，播放器和 25 FPS 验收尚未通过。
+**当前已部署代码为 `7794f02d91cf9deccfa2ee170778bac278e18a66`，标签 `cand-20261104-myserver-observer-stop-01`，DEBUG=false，三个测试 stream worker 保留 NUMA node 2 配置。专项尚未完成。** 无收益的 HyperLPR 图重放已撤回，仅保留本轮诊断接收器停止修复。最新 600 秒是被撤候选 `26522cd` 的失败复核，第二路 21.52 FPS 且持续积压；这不是回退后的新吞吐验收。播放器和 25 FPS 门槛仍未通过，较早各轮证据分别保留。
 
 2026-11-04 已完成隔离 MPS、AAC 输入时钟修复和 NUMA 配置的各轮双流 600 秒复核，运行参数用 SHA256 固定。MPS 已纳入测试 Compose；NUMA 是追加的机器专用 Docker 配置，Compose 重建后须重新应用。正式栈配置不变，部署代码、配置试验及实际接收结果分别记录。
 
@@ -351,3 +351,7 @@ FFplay 沿原截止观测约 599.72/599.73 s，连接 2/5 次；绝对 A-V 中�
 浏览器初始化报 `Hls is not defined`，没有有效呈现回调。之后 Computer Use 因无法可靠确认 Windows 浏览器 URL 而停止，本轮未继续界面操作；没有以该失败窗口伪造浏览器 FPS，亦未重置采集截止。临时代理和 SSH 隧道已关闭。[浏览器未完成项](evidence/browser-detailgraph-unavailable.json)
 
 按撤销无效改动的约定，回退单张 HyperLPR 图重放及其专用测试，保留已验证的诊断接收器停止修复。原视频、全部候选证据、不可变标签与上述质量对照保留。回退后定向 26 passed；不叠加 ROI、像素图、布局或缓存原型。恢复候选标签为 `cand-20261104-myserver-observer-stop-01`，部署后仍需核对实际指纹；本轮约五次素材循环，**不作长期稳定性通过结论**。
+
+回退实际完成于 **17:06:52.835179**。这次在调用原部署入口前先停止三个自有 stream worker，没有再触发 MPS 命名空间停止竞态；随后恢复原 cpuset。最终 API 与三个 worker 各 48 个模块均匹配 `7794f02`，原生 mux 指纹不变、两个原任务 ready 且继续输出，源容器身份和启动时间不变。此项是回退后的健康与指纹核验，没有额外重跑或延长本轮 600 秒。[回退执行](evidence/detailgraph-withdraw-deploy-end.json)、[最终运行状态](evidence/detailgraph-withdraw-installed-source.json)
+
+本轮接收的 4478/4044 个输出 AAC AU 均匹配原素材载荷集合，未知载荷为零；这不代表源到输出无 AU 缺失或采样时长不重叠。[载荷完整性边界](evidence/detailgraph-integrity.json) 若需撤回接收器停止修复，可回到 `cand-20261104-myserver-numa-01`：先停止自有 stream worker，再调用原 `deploy-server.sh --env test --tag ...`，完成后先停 worker、恢复 `numa-profile.json` 的 CPU/内存集合，再启动；不使用 `--remove-orphans`，不停止源推流器。两次部署中断和回退日志保留在服务器诊断根目录的 `detailgraph-deploy*.log`、`detailgraph-withdraw-deploy.log`。
