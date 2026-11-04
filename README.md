@@ -96,6 +96,8 @@ bash scripts/deploy-server.sh --env prod --tag exp-20261023-b-deploy-02
 
 升级测试 PyAV 时，从新发布镜像中取得 wheel 并计算文件 SHA-256，同时更新 Dockerfile 的镜像 digest、补充锁的来源及版本/哈希、构建版本校验；运行 `tests/unit/test_deployment_dependencies.py` 检查一致性。仅运行普通 `uv sync` 仍安装基础锁中的官方 PyAV，不等同于测试镜像的最终依赖环境。
 
+测试 Compose 启用 MPS 时，`bash scripts/deploy-server.sh --env test main` 在构建成功后保存普通 stream worker 当前的 CPU/内存节点约束，再停止这些 worker、重建 MPS、创建新 worker，在启动模型前恢复约束，最后等待就绪并核对约束未丢失。约束存于 Git 忽略的 `.tools/test-stream-affinity`，格式为单行 `CPU列表|内存节点列表`；现有 worker 的实际约束优先，无旧容器时使用保存值，新环境两者都没有则不绑定。首次手动设置 NUMA 后应运行部署入口保存；删除整个工作目录前须备份此文件。不同 worker 约束不一致时部署会在停机前拒绝。该流程仅作用于测试项目的普通流 worker，保留 one-off 实验容器及回放源；正式部署不启用此流程。完整迁移与回归记录见[依赖制品与测试环境一致性](specs/009-published-dependencies-parity/README.md)。
+
 测试流 worker 包含 NVIDIA 580 多卡宿主机的 NVDEC 临时兼容配置：用 `!override` 将设备预留替换为 `count: all`，并用 `CUDA_VISIBLE_DEVICES=${GPU_DEVICE_ID}` 固定应用计算卡，推荐填写完整 GPU UUID。这会赋予测试流容器全部 GPU 的访问权限，环境变量不提供设备隔离；文件 worker 和正式环境仍使用单卡预留。配置已纳入 `compose.test.yaml`，正常测试更新无需再加载服务器 `.tools/nvdec-workaround/` 中的临时覆盖文件；驱动修复后应移除此兼容配置并恢复单卡映射。
 
 首次使用须先同步支持 `--env` 的新版脚本，旧版无参数调用仍可能操作正式环境。测试环境配置可从 `deploy/compose.env.example` 复制为 `.env.compose.test`，指定测试 GPU（如 `GPU_DEVICE_ID=5`，推荐使用完整 UUID），并单独设置 API/RTSP/HLS 端口、`RTSP_PUBLIC_BASE_URL`、Redis 数据库和媒体目录；模型目录可只读共享。测试通知须使用独立目标，或保持 `NOTIFICATION_TARGETS=[]`。脚本不自动生成环境配置。

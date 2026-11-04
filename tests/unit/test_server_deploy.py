@@ -55,11 +55,33 @@ def deployment(tmp_path):
         '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$DEPLOY_TEST_LOG"\n'
         'for arg in "$@"; do\n'
         '  if [[ "$arg" == "${DEPLOY_TEST_FAIL:-}" ]]; then exit 17; fi\n'
-        'done\n', encoding="utf-8", newline="\n",
+        'done\n'
+        'if [[ "$*" == *"config --services"* && "${DEPLOY_TEST_MPS:-}" == 1 ]]; then echo cuda-mps; fi\n'
+        'if [[ "$*" == *"create --no-build stream-worker"* ]]; then touch "$DEPLOY_TEST_CREATED"; fi\n',
+        encoding="utf-8", newline="\n",
     )
     compose.chmod(0o755)
+    docker = binaries / "docker"
+    docker.write_text('''#!/usr/bin/env bash
+printf 'docker %s\\n' "$*" >> "$DEPLOY_TEST_LOG"
+case "$1" in
+  ps)
+    if [[ "${DEPLOY_TEST_COLD:-}" != 1 || -f "$DEPLOY_TEST_CREATED" ]]; then
+      printf 'worker-1\\nworker-2\\n'
+    fi ;;
+  inspect)
+    if [[ -f "$DEPLOY_TEST_UPDATED" && "${DEPLOY_TEST_LOST_AFFINITY:-}" == 1 ]]; then echo '|'
+    elif [[ -f "$DEPLOY_TEST_UPDATED" ]]; then cat "$DEPLOY_TEST_UPDATED"
+    elif [[ "${DEPLOY_TEST_MIXED:-}" == 1 && "${!#}" == worker-2 ]]; then echo '0-3|0'
+    else echo '32-47,96-111|2'; fi ;;
+  update)
+    printf '%s|%s\\n' "$3" "$5" > "$DEPLOY_TEST_UPDATED" ;;
+esac
+''', encoding="utf-8", newline="\n")
+    docker.chmod(0o755)
     log = tmp_path / "compose.log"
-    env.update(DEPLOY_TEST_LOG=log.as_posix(),
+    env.update(DEPLOY_TEST_LOG=log.as_posix(), DEPLOY_TEST_CREATED=(tmp_path / 'created').as_posix(),
+               DEPLOY_TEST_UPDATED=(tmp_path / 'updated').as_posix(),
                PATH=os.pathsep.join([str(binaries), str(Path(bash).parent),
                                      str(Path(bash).parents[1] / "usr/bin"), env["PATH"]]))
 
@@ -94,7 +116,7 @@ def test_server_deployment_pulls_builds_and_waits_without_touching_data(
     assert all(command.startswith(prefix + " ") for command in commands[1:])
     assert commands[1].endswith(" config --quiet")
     assert commands[2].endswith(" build")
-    assert commands[3].endswith(" up -d --no-build --wait --wait-timeout 240")
+    assert any(command.endswith(" up -d --no-build --wait --wait-timeout 240") for command in commands)
     assert "部署完成" in result.stdout
     assert f"环境：{environment}" in result.stdout
 
@@ -334,3 +356,64 @@ def test_server_deployment_rejects_unknown_or_invalid_tag(deployment, args):
     assert d.git("rev-parse", "HEAD", cwd=d.server) == original
     if d.log.exists():
         assert " build" not in d.log.read_text("utf-8")
+
+
+@pytest.mark.parametrize('cold', [False, True])
+def test_test_deployment_restores_affinity_before_starting_mps_clients(deployment, cold):
+    d = deployment
+    d.env.update(DEPLOY_TEST_MPS='1', DEPLOY_TEST_COLD=str(int(cold)))
+    profile = d.server / '.tools/test-stream-affinity'
+    if cold:
+        profile.parent.mkdir()
+        profile.write_text('32-47,96-111|2\n', encoding='utf-8')
+    result = d.run()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert profile.read_text('utf-8') == '32-47,96-111|2\n'
+    commands = d.log.read_text('utf-8').splitlines()
+    positions = [next(i for i, command in enumerate(commands) if needle in command) for needle in (
+        ' build', ' stop stream-worker', ' --scale stream-worker=0', ' create --no-build stream-worker',
+        'docker update --cpuset-cpus 32-47,96-111 --cpuset-mems 2 worker-1 worker-2',
+        ' up -d --no-build --wait --wait-timeout 240')]
+    assert positions == sorted(positions)
+    assert all('--filter label=com.docker.compose.oneoff=False' in command
+               for command in commands if command.startswith('docker ps '))
+    assert '--remove-orphans' not in '\n'.join(commands)
+
+
+def test_test_deployment_rejects_differing_affinity_before_stopping_workers(deployment):
+    d = deployment
+    d.env.update(DEPLOY_TEST_MPS='1', DEPLOY_TEST_MIXED='1')
+    result = d.run()
+    assert result.returncode != 0
+    assert ' stop ' not in d.log.read_text('utf-8')
+    assert ' up ' not in d.log.read_text('utf-8')
+
+
+def test_failed_build_does_not_stop_mps_clients_or_overwrite_saved_affinity(deployment):
+    d = deployment
+    d.env.update(DEPLOY_TEST_MPS='1', DEPLOY_TEST_FAIL='build')
+    profile = d.server / '.tools/test-stream-affinity'
+    profile.parent.mkdir()
+    profile.write_text('32-47,96-111|2\n', encoding='utf-8')
+    result = d.run()
+    assert result.returncode != 0
+    assert ' stop ' not in d.log.read_text('utf-8')
+    assert profile.read_text('utf-8') == '32-47,96-111|2\n'
+
+
+def test_test_deployment_refuses_to_report_success_if_affinity_is_lost(deployment):
+    d = deployment
+    d.env.update(DEPLOY_TEST_MPS='1', DEPLOY_TEST_LOST_AFFINITY='1')
+    result = d.run()
+    assert result.returncode != 0
+    assert '部署完成' not in result.stdout
+
+
+def test_production_deployment_does_not_use_test_mps_or_affinity(deployment):
+    d = deployment
+    d.env.update(DEPLOY_TEST_MPS='1')
+    result = d.run('--env', 'prod')
+    assert result.returncode == 0, result.stdout + result.stderr
+    commands = d.log.read_text('utf-8')
+    assert 'docker ' not in commands and ' stop ' not in commands and ' create ' not in commands
+    assert not (d.server / '.tools/test-stream-affinity').exists()
