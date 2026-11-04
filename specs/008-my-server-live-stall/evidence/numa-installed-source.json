@@ -1,0 +1,82 @@
+{
+  "unix": 1793767184.954403,
+  "commit": "ca2bb46d9346e88822f17aff1f9986aebc3297d0",
+  "containers": [
+    {
+      "name": "vision-shield-test-api-1",
+      "image": "sha256:95484af865be076d5c006ec1077eb7e20891a3ac925519c3b97c4567fe4989e9",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "cpuset_cpus": "",
+      "cpuset_mems": ""
+    },
+    {
+      "name": "vision-shield-test-stream-worker-1",
+      "image": "sha256:b20653788c34c0701f9c7a852fe8edad668a42d50c6f521b83b45173f92fcc1b",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2"
+    },
+    {
+      "name": "vision-shield-test-stream-worker-2",
+      "image": "sha256:b20653788c34c0701f9c7a852fe8edad668a42d50c6f521b83b45173f92fcc1b",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2"
+    },
+    {
+      "name": "vision-shield-test-stream-worker-3",
+      "image": "sha256:b20653788c34c0701f9c7a852fe8edad668a42d50c6f521b83b45173f92fcc1b",
+      "modules": 48,
+      "mismatches": [],
+      "native_output_sha256": "df08bff3a5286db1d07155eb4bbcabca640fe94211e8b5d47bc380ca8e7f0672",
+      "flush": true,
+      "cpuset_cpus": "32-47,96-111",
+      "cpuset_mems": "2"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "1aed319f-e680-4f52-ad70-cd9b0be0a220",
+      "state": "running",
+      "ready": true,
+      "health": {
+        "observed_at": "2026-11-04 12:39:44",
+        "last_output_at": "2026-11-04 12:39:42",
+        "valid_until": "2026-11-04 12:40:03",
+        "lease_valid": true,
+        "generation": 20
+      },
+      "stats": {
+        "processed_frames": 2967,
+        "dropped_frames": 0,
+        "elapsed_seconds": 126.5341624571
+      }
+    },
+    {
+      "id": "e9d6a3ab-3843-48f4-8083-7dc8f89759b1",
+      "state": "running",
+      "ready": true,
+      "health": {
+        "observed_at": "2026-11-04 12:39:44",
+        "last_output_at": "2026-11-04 12:39:42",
+        "valid_until": "2026-11-04 12:40:04",
+        "lease_valid": true,
+        "generation": 12
+      },
+      "stats": {
+        "processed_frames": 2891,
+        "dropped_frames": 0,
+        "elapsed_seconds": 134.97800505627
+      }
+    }
+  ]
+}

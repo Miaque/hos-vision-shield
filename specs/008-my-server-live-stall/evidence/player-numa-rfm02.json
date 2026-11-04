@@ -1,0 +1,24 @@
+{
+  "start_unix_server_estimate": 1793767426.934351,
+  "last_status_unix_server_estimate": 1793768026.792745,
+  "exit_unix_server_estimate": 1793768026.8073692,
+  "observed_seconds": 599.8590000000004,
+  "clock_offset_seconds": -0.5366032123565674,
+  "clock_roundtrip_seconds": 0.04688668251037598,
+  "attempts": 3,
+  "status_samples": 17112,
+  "clock_types": {
+    "A-V": 17112
+  },
+  "abs_av": {
+    "p50": 0.224,
+    "p95": 0.484,
+    "p99": 0.594,
+    "max": 3.636,
+    "min": 0.0,
+    "count": 17112
+  },
+  "empty_video_queue_fraction": 0.5718209443665264,
+  "max_fd": 0,
+  "note": "Native FFplay status only; not new-picture presentation count. Server time is calibrated from the loopback campaign request."
+}

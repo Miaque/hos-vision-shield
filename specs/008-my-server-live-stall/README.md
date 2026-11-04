@@ -3,9 +3,9 @@
 起点：`dd9f560a801d3bc2ab8e5fa3b194b20d81d02d59`。实验分支：`feature/my-server-live-stall`。
 授权范围仅为 my-server 的独立测试栈，不访问 gpu-server，不修改重播推流器。
 
-**最新已部署代码为 `debc02de745a9df82b427c754fe6128cb126461d`，标签 `cand-20261104-myserver-aac-clock-01`，DEBUG=false。专项尚未完成。** 以下较早结果保留为历史对照；最新完整 600 秒复核见文末。共享 GPU 4 的两路输出仍未达到 25 FPS，播放器缓冲、持续积压及恢复后的音画同步仍须解决。
+**最新已部署代码为 `ca2bb46d9346e88822f17aff1f9986aebc3297d0`，标签 `cand-20261104-myserver-numa-01`，DEBUG=false，三个测试 stream worker 已应用 NUMA node 2 配置。专项尚未完成。** 以下较早结果保留为历史对照；最新完整 600 秒复核见文末。第二路实际 RTP 输出约 22.14 FPS，仍持续积压，播放器和 25 FPS 验收尚未通过。
 
-2026-11-04 已完成隔离 MPS 及 AAC 输入时钟修复后的两轮双流 600 秒复核，运行参数用 SHA256 固定；结果及仍存缺口见文末。MPS 已纳入测试 Compose，正式栈配置不变。部署代码提交、配置试验及实际接收结果分别记录。
+2026-11-04 已完成隔离 MPS、AAC 输入时钟修复和 NUMA 配置的各轮双流 600 秒复核，运行参数用 SHA256 固定。MPS 已纳入测试 Compose；NUMA 是追加的机器专用 Docker 配置，Compose 重建后须重新应用。正式栈配置不变，部署代码、配置试验及实际接收结果分别记录。
 
 ## 验证顺序
 
@@ -260,17 +260,45 @@ GPU 4 位于 PCI `0000:98:00.0`、NUMA node 2，对应 CPU 为 `32-47,96-111`。
 
 在相同 CPU/内存节点配置下，重新核验 rfm-01 的 2208 帧、rfm-02 的 2230 帧；完整 YUV+PTS digest 均与原基准相同，包含各 22 次强制不完整窗口与 EOF，两个进程正常退出。此项只证明遮挡、顺序与前视结果一致，不替代实时吞吐验收。[质量 1](evidence/numa-quality-rfm01.json)、[质量 2](evidence/numa-quality-rfm02.json)
 
-候选配置固定在 [numa-profile.json](numa-profile.json)。继续使用原部署入口；随后仅给列出的三个测试 stream worker 应用 Docker `--cpuset-cpus 32-47,96-111 --cpuset-mems 2` 并重启，使新分配的 host 内存使用该节点。没有设置 CPU 独占或 GPU compute mode，不修改源推流器、MPS 服务或其他用户任务。Docker Compose 重建容器后需重新应用此机器专用配置，不能假定 HostConfig 修改会自动写回 Compose。正式双流 600 秒复核尚待执行。
+候选配置固定在 [numa-profile.json](numa-profile.json)。已使用原部署入口，再给列出的三个测试 stream worker 应用 Docker `--cpuset-cpus 32-47,96-111 --cpuset-mems 2` 并重启；内核实际 CPU 集与内存节点逐个核对一致。没有设置 CPU 独占或 GPU compute mode，未修改源推流器、MPS 服务或其他用户任务。Docker Compose 重建容器后须重新应用此机器专用配置，不能假定 HostConfig 修改会自动写回 Compose。正式双流 600 秒结果见下文。
 
-应用前的容器 ID、镜像、原 CPU/内存约束已保存在服务器诊断根目录的 `numa-profile-before-20261104.json`（0600）。原配置的两个 cpuset 值都是空字符串；回退配置可在 my-server 执行：
+应用前的容器 ID、镜像、原 CPU/内存约束已保存在服务器诊断根目录的 `numa-profile-before-20261104.json`（0600）。原配置的两个 cpuset 值都是空字符串。追加检查发现 `docker update --cpuset-cpus '' --cpuset-mems ''` 会忽略空值，不能作为回退命令；已用独立、未启动的 CPU 辅助容器重现，再用 Compose 重新创建验证恢复空约束和全部 128 个 CPU、四个内存节点，未为此检查改动实时 worker。仅撤回 NUMA 配置、保留当前图像及代码，可在 my-server 仓库目录执行：
 
 ```bash
-docker update --cpuset-cpus '' --cpuset-mems '' vision-shield-test-stream-worker-1 vision-shield-test-stream-worker-2 vision-shield-test-stream-worker-3
-docker restart --timeout 20 vision-shield-test-stream-worker-1 vision-shield-test-stream-worker-2 vision-shield-test-stream-worker-3
+docker-compose --env-file .env.compose.test -p vision-shield-test -f compose.yaml -f compose.gpu.yaml -f compose.test.yaml up -d --no-build --no-deps --force-recreate --scale stream-worker=3 stream-worker
 ```
+
+本次直接修改运行中容器的 cpuset 约耗 72.9 s，随后重启和核对约 14.4 s，均发生在正式采集前。后续应用时先停止这三个自有 worker，再 update、start，避免在运行中调整内存节点。此项是部署成本，不混入自然 EOF 的恢复时间。[实际应用与内核配置](evidence/numa-profile-applied-20261104.json)
 
 本轮其他尝试均未保留：完全相同局部输入的缓存探针没有命中重复；两槽改四槽在首段 400 帧为 16.006→16.003 s，在多车 800 帧为 40.954→41.301 s，无实际优势；TorchScript 优化执行的算子中位数仅改善约 6%～9%，且部分输出数值变化。CPU 结果校验候选观测到 800 帧 49.783 s、原版 47.941 s，AAC 为 247/250 个，但追加原文件校验发现候选从所选包 758 起有 14 个 VCL 哈希不一致，这对性能比较无效，不能把差值归因于代码，也不宣称完整性通过。相关代码和专用测试已撤销，运行版本未混入这些改动。[未保留候选](evidence/rejected-20261104.json) 四槽候选的全量单元测试曾为 1 failed、987 passed、96 skipped，失败仍是已有 Windows RTSP 接收器退出时限测试；未修改门槛，定向重测 1 passed。该候选未部署。
 
 还确认了原素材的时间轴问题：完整读取两段原文件的所有包，视频存在连续多个 PTS 只前进 1 个 `1/16000` tick 的范围，换算为 RTP 正是交替约 5～6 个 90 kHz tick；AAC 也有成串单采样 tick 间隔。文件时间戳本身如此，不是本轮解码或输出新产生的压缩。所有原文件与推流命令保持不变，尚未通过重写这些时间戳处理播放异常。[原文件完整时钟分布与异常位置](evidence/source-file-complete-clocks.json)
 
 为补充原生 RTSP 播放观测，准备了 [VLC 采集器](capture-vlc.py)：使用官方 3.0.24 便携版、原音频路径、固定 1 倍速、300 ms 网络缓存，沿统一截止点采集。已进行一次 40 秒原生媒体兼容预览，两轨均解码，Direct3D11 输出和音频播放计数推进。但 VLC 的 displayed 计数也包含旧画面重绘，不能用它制造新画面 FPS；统计还按周期更新，不能据此计算 200 ms 级逐帧间隔。独立 RTP 和浏览器新画面回调仍分别保留。[VLC 计数实现](https://github.com/videolan/vlc/blob/3.0.24/src/video_output/video_output.c#L1099)
+
+## NUMA 完整双流 600 秒复核（2026-11-04，UTC+8）
+
+固定 `ca2bb46`，DEBUG=false，音频开启，5 Mbps，GPU 4 继续共享。统一起点 **12:43:46.786308**，截止 **12:53:46.786308**；停止信号下发于 **12:53:46.786654**，四个采集器全部退出于 **12:53:46.790031**，实际单调时钟时长 600.003722 s。统计窗口始终是原始 600 秒，不因播放器启动或本轮后续分析重新计时。[采集与资源](evidence/numa-round-600.json)
+
+| 接收流 | 完整画面 / 600 秒 FPS | 间隔 P99 / max（ms） | >200 / 500 / 1000 ms | 1 秒 / 5 秒 FPS 中位数 | 5 秒最低 FPS |
+|---|---|---|---|---|---|
+| rfm-01 原始 | 14361 / 23.94 | 170.92 / 3019.57 | 48 / 40 / 20 | 25 / 24.8 | 9.8 |
+| rfm-01 脱敏 | 14499 / 24.17 | 204.64 / 2232.23 | 150 / 21 / 8 | 24 / 22.6 | 9.8 |
+| rfm-02 原始 | 14920 / 24.87 | 170.84 / 907.20 | 27 / 19 / 0 | 25 / 24.8 | 20.6 |
+| rfm-02 脱敏 | 13283 / 22.14 | 150.18 / 2020.23 | 66 / 7 / 1 | 22 / 21.8 | 12.0 |
+
+相较此前 AAC 时钟轮的 rfm-02 20.06 FPS、5 秒最低 2.2 FPS，本轮有所改善；但不同轮的初始积压、内容相位和共享负载不能视为完全一致，不把差值全部归因于配置。rfm-01 输出数高于同 wall-time 原流，包含此前已接收画面的积压释放，不能据此宣称超过源的持续速率。源约 24 FPS 的长期平均值与正常供帧窗口约 25 FPS 也须分开。
+
+按唯一 AAC 载荷标识持续展开、连接内固定循环偏移：rfm-01 同 AU 延迟约 7.95→3.46 s，最大 9.56 s，呈周期波动；rfm-02 第一连接约 46.76→86.06 s，恢复后另一连接又从约 0.87→15.11 s，后者增长约 **7.54 s/min**，仍不能追回额外延迟。原流该段持续接收；第二路恢复前还有内容序号缺口。**持续性与 25 FPS 验收失败。**[同内容时间线](evidence/numa-content-lag.json)
+
+GPU 利用率 120 次采样中位数 59%、P95 72%、max 77%；两个活动 worker CPU 中位数约 294%/262%，空闲 worker 约 0.29%，MediaMTX 约 13.33%。本轮比前轮多了两个 VLC 读取客户端，媒体服务器负载条件已有变化，不能忽略。API 与三个 stream worker 的 48 个已安装 Python 模块均逐项匹配候选，原生 mux 模块 SHA256 不变；三个 worker 的内核 CPU/内存集合均与 profile 一致。[运行源码](evidence/numa-installed-source.json)
+
+FFplay 沿同一截止点观测约 599.84/599.86 s，分别 1/3 次连接，所有有效状态均为 A-V 时钟，fd 最大为 0。两路绝对 A-V 中位数/P95/max 为 **0.014/0.347/1.396 s**、**0.224/0.484/3.636 s**，空视频队列约 25.2%/57.2%。Windows 本地时钟比服务器快约 0.537 s，报告同时保留校准偏移和约 46.9 ms 的请求往返；不能把本地原始 UTC 当成已同步服务器时刻。[FFplay 1](evidence/player-numa-rfm01.json)、[FFplay 2](evidence/player-numa-rfm02.json)
+
+浏览器归档从 **12:43:47.327181 至 12:53:46.790181**，有效 599.459 s，记录 8794/8020 次新画面回调，全部处于 visible 状态。根据同 epoch 单调递增的 `presentedFrames`，计入漏回调期间已提交的画面，保守提交计数下界为 12713/12022（约 21.21/20.05 次/s）；这些不是播放器跳转后的不同源帧总数，不能作为无丢帧验收。进一步只比较计数相邻、无漏回调的呈现对，仍有 >500 ms 停顿 **44/32 次**、>1 s **33/17 次**，最大 **3.98/9.01 s**；waiting 为 21/40 次。**播放器验收仍未通过**，HLS 时轴和客户端因素还须与原生 RTSP 分开定位。[浏览器证据](evidence/browser-numa-final-summary.json)、[presentedFrames 定义](https://wicg.github.io/video-rvfc/)
+
+VLC 于 12:53:46.786642 停止采样、12:53:47.070356 释放资源，第二路发生一次播放器重连。其原始计数记录视频 lost 601/157、音频 lost buffer 33/27；displayed 包含旧画面重绘，不将它当作有效输出 FPS，也不把 decoded 计数直接外推为不同源帧数。[原生 RTSP 播放器](evidence/vlc-numa-summary.json)、[播放器原始文件清单](evidence/numa-player-manifest.json)
+
+两路输出连接内视频和 AAC RTP 时间戳递增，仍不能据此证明输入背压之前没有丢失、AAC 没有样本时长重叠或播放器未丢弃。完整源时间轴中已确认的压缩间隔保持原样，未强制重写全部 PTS。4438 帧质量对比通过的范围仍有效；本轮没有改变检测、LK、阈值、遮挡或前视逻辑。只覆盖约 5 次循环，不作长期稳定性通过结论。
+
+原始证据与 SHA256 清单保存在服务器 `numa-formal-rfm01-20261104/`、`numa-formal-rfm02-20261104/`，浏览器原始文件为同诊断根目录的 `browser-numa-final.json`。采集和播放器都已按原截止停止，临时 loopback 代理与 SSH 隧道已关闭，两路脱敏任务继续运行。保留 NUMA 配置，继续处理第二路容量和播放停顿；未把本轮宣布为专项完成。

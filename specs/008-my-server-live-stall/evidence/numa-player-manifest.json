@@ -1,0 +1,18 @@
+{
+  "vlc-numa-final.jsonl": {
+    "bytes": 5853461,
+    "sha256": "51771702012d2991a5d27232e81d448a1eaf59b9b29ff2976142b7e8e22f787c"
+  },
+  "vlc-numa-final.log": {
+    "bytes": 14897,
+    "sha256": "eb14b5fe51c84b9a0448b1e251c590737ec06133f5b6b87703e952dc5c129791"
+  },
+  "player-numa-rfm01\\player.jsonl": {
+    "bytes": 3361389,
+    "sha256": "a1beef85011ef1a610317a79695e97ac207f903c68e0de7712e058eab931c2f4"
+  },
+  "player-numa-rfm02\\player.jsonl": {
+    "bytes": 3469238,
+    "sha256": "f6752b0da7407d0766313f4501ff49925a9a1f9d5c953d8ddeac3b2bfb978365"
+  }
+}
