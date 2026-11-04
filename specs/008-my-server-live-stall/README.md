@@ -220,7 +220,7 @@ rfm-02 输入连接 `10.0.15.1:36876`、源 session `cb41e717` 在 09:23:03 订�
 
 ## AAC 输入修复后的完整复核（2026-11-04，UTC+8）
 
-固定 `debc02d`，测试 Compose 的 MPS 及音频开启，DEBUG=false。统一起点 **11:11:42.033859**，截止 **11:21:42.033859**，采集停止完成 **11:21:42.036257**（晚约 2.4 ms），RTP、状态和资源采集保持原始 600 秒截止点，没有重新计时。源推流器未改动，两路脱敏任务继续运行。部署 API 与三个 stream worker 的 48 个 Python 模块逐项匹配 Git；原生输出模块的 SHA256 和镜像指纹另存。[源码与镜像](evidence/aac-clock-installed-source.json)
+固定 `debc02d`，测试 Compose 的 MPS 及音频开启，DEBUG=false。统一起点 **11:11:42.033859**，截止 **11:21:42.033859**，停止信号下发于 **11:21:42.036257**（晚约 2.4 ms）。四个采集器退出后才写入的首份 end.json，其文件 mtime 为 **11:21:42.036570**，是全部退出完成的上界。RTP、状态和资源采集保持原始 600 秒截止点，没有重新计时。源推流器未改动，两路脱敏任务继续运行。部署 API 与三个 stream worker 的 48 个 Python 模块逐项匹配 Git；原生输出模块的 SHA256 和镜像指纹另存。[源码与镜像](evidence/aac-clock-installed-source.json)
 
 | 接收流 | 完整画面 / 600 秒 FPS | 间隔 P99 / max（ms） | >200 / 500 / 1000 ms | 1 秒 / 5 秒 FPS 中位数 | 5 秒最低 FPS |
 |---|---|---|---|---|---|
@@ -241,8 +241,36 @@ FFplay 首次控制器因启动元数据尚未可读而退出，失败日志保�
 
 后续 DEBUG=true 局部采集从 **11:23:28.230 至 11:28:28.230**，采集停止晚约 2.9 ms，11:29:05.452 已自动恢复 DEBUG=false。不同诊断组独立分析，未将该组成本算入正式 600 秒结果。rfm-01 同帧匹配 2990 个，mux 开始→内核出口 P99 0.898 ms、max 35.547 ms；出口→独立接收 P99 1.852 ms、max 4.377 ms。rfm-02 同帧匹配 2647 个，对应 P99 0.611/1.836 ms，max 1.314/3.356 ms。先前 mux 后秒级滞留仍保持修复；源接收到解码完成的延迟中位数却已达 46.35/41.43 s，主要积压在更早的输入读取与处理链路。
 
-局部主线程非重叠成本 rfm-01 约 51.17 ms/帧，rfm-02 两个 attempt 约 67.72/63.57 ms/帧。主车牌约 14.24 / 20.84～20.08 ms，detail 车牌约 8.98 / 11.38～10.57 ms；主车牌平均调用 1.29 / 1.71～1.76 次/帧，detail 车牌 2.10 / 2.45～2.50 次/帧，含现有局部复核。前视发现本身不足 0.1 ms/帧，不是本轮主要成本；不将异步 worker 模型耗时与主线程等待重复相加。[rfm-01 同帧与成本](evidence/aac-clock-rfm01-timeline.json)、[rfm-02 同帧与成本](evidence/aac-clock-rfm02-timeline.json)
+局部主线程非重叠成本 rfm-01 约 51.17 ms/帧，rfm-02 两个 attempt 约 67.72/63.57 ms/帧。主车牌约 14.24 / 20.84～20.08 ms，detail 车牌约 8.98 / 11.38～10.57 ms；主车牌平均调用 1.29 / 1.71～1.76 次/帧，detail 车牌 2.10 / 2.45～2.50 次/帧，含现有局部复核。`op:lookahead-discover` 的独占开销不足 0.1 ms/帧，但其内部模型耗时已分配到各 forward 项，不能据此排除前视补查的总成本，须进一步按调用来源归属。不将异步 worker 模型耗时与主线程等待重复相加。[rfm-01 同帧与成本](evidence/aac-clock-rfm01-timeline.json)、[rfm-02 同帧与成本](evidence/aac-clock-rfm02-timeline.json)
 
 RPN 固定前缀 CUDA Graph 私有原型在 96 个变化输入上保持张量逐项一致，但典型形状只改善约 2%～7%，另一个回退形状变慢；复杂度不足以换取这点不稳定收益，未部署，也不叠加到现有实现中。仍须继续解决第二路吞吐、输入背压、自然恢复和音画同步；不通过减少遮挡复核、静默丢帧、重复画面、伪造 PTS 或加大缓存掩盖缺口。
 
 本轮覆盖约 5 次视频循环，**不作长期稳定性通过结论**。完整原始证据及 SHA256 清单在服务器诊断根目录的 `aac-clock-formal-rfm01-20261104/`、`aac-clock-formal-rfm02-20261104/`；浏览器原始证据为同目录 `browser-aac-clock-final.json`，仅安全汇总进入 Git。原部署入口可回退到 `cand-20261103-myserver-aac-tail-01`；切换不使用 MPS 的旧 worker 后，须确认私有 MPS 已无客户端才停止 `vision-shield-test-cuda-mps-1`，不停止重播源或无关任务。main 未合并。
+
+## NUMA 调度候选与继续定位（2026-11-04）
+
+GPU 4 位于 PCI `0000:98:00.0`、NUMA node 2，对应 CPU 为 `32-47,96-111`。测试 worker 原来的 CpusetCpus/CpusetMems 均为空。保持既有两路运行，隔离第三路按正式 worker 的 `run_inference` 预检暖机；使用源文件零基视频包 1000～1799 的同内容 800 帧，交换执行顺序对照。所有视频 VCL 顺序和 250 个 AAC 载荷哈希均逐项相同。
+
+| 对照 | 不限制 CPU/内存节点 | 绑定 node 2 的 CPU 与内存 | 改善接收跨度 |
+|---|---|---|---|
+| control → NUMA | 46.194 s | 42.759 s | 7.4% |
+| NUMA → control | 50.534 s | 40.334 s | 20.2% |
+
+另外一组单变量内存节点对照，仅绑定 CPU 为 46.066 s，CPU 与内存同时绑定为 41.128 s。因此候选须包含内存节点设置。以上均为实际 RTSP 接收跨度，含实时供帧和处理，不是文件 FPS；共享负载仍有变化，尚不能外推为正式双流 25 FPS 已通过。六次 NUMA 相关接收还逐项对照了原文件 1000～1799 包的完整 VCL 哈希，全部一致。[隔离对照](evidence/numa-isolated-summary.json)、[原文件逐包校验](evidence/aux-exact-source-check.json)
+
+在相同 CPU/内存节点配置下，重新核验 rfm-01 的 2208 帧、rfm-02 的 2230 帧；完整 YUV+PTS digest 均与原基准相同，包含各 22 次强制不完整窗口与 EOF，两个进程正常退出。此项只证明遮挡、顺序与前视结果一致，不替代实时吞吐验收。[质量 1](evidence/numa-quality-rfm01.json)、[质量 2](evidence/numa-quality-rfm02.json)
+
+候选配置固定在 [numa-profile.json](numa-profile.json)。继续使用原部署入口；随后仅给列出的三个测试 stream worker 应用 Docker `--cpuset-cpus 32-47,96-111 --cpuset-mems 2` 并重启，使新分配的 host 内存使用该节点。没有设置 CPU 独占或 GPU compute mode，不修改源推流器、MPS 服务或其他用户任务。Docker Compose 重建容器后需重新应用此机器专用配置，不能假定 HostConfig 修改会自动写回 Compose。正式双流 600 秒复核尚待执行。
+
+应用前的容器 ID、镜像、原 CPU/内存约束已保存在服务器诊断根目录的 `numa-profile-before-20261104.json`（0600）。原配置的两个 cpuset 值都是空字符串；回退配置可在 my-server 执行：
+
+```bash
+docker update --cpuset-cpus '' --cpuset-mems '' vision-shield-test-stream-worker-1 vision-shield-test-stream-worker-2 vision-shield-test-stream-worker-3
+docker restart --timeout 20 vision-shield-test-stream-worker-1 vision-shield-test-stream-worker-2 vision-shield-test-stream-worker-3
+```
+
+本轮其他尝试均未保留：完全相同局部输入的缓存探针没有命中重复；两槽改四槽在首段 400 帧为 16.006→16.003 s，在多车 800 帧为 40.954→41.301 s，无实际优势；TorchScript 优化执行的算子中位数仅改善约 6%～9%，且部分输出数值变化。CPU 结果校验候选观测到 800 帧 49.783 s、原版 47.941 s，AAC 为 247/250 个，但追加原文件校验发现候选从所选包 758 起有 14 个 VCL 哈希不一致，这对性能比较无效，不能把差值归因于代码，也不宣称完整性通过。相关代码和专用测试已撤销，运行版本未混入这些改动。[未保留候选](evidence/rejected-20261104.json) 四槽候选的全量单元测试曾为 1 failed、987 passed、96 skipped，失败仍是已有 Windows RTSP 接收器退出时限测试；未修改门槛，定向重测 1 passed。该候选未部署。
+
+还确认了原素材的时间轴问题：完整读取两段原文件的所有包，视频存在连续多个 PTS 只前进 1 个 `1/16000` tick 的范围，换算为 RTP 正是交替约 5～6 个 90 kHz tick；AAC 也有成串单采样 tick 间隔。文件时间戳本身如此，不是本轮解码或输出新产生的压缩。所有原文件与推流命令保持不变，尚未通过重写这些时间戳处理播放异常。[原文件完整时钟分布与异常位置](evidence/source-file-complete-clocks.json)
+
+为补充原生 RTSP 播放观测，准备了 [VLC 采集器](capture-vlc.py)：使用官方 3.0.24 便携版、原音频路径、固定 1 倍速、300 ms 网络缓存，沿统一截止点采集。已进行一次 40 秒原生媒体兼容预览，两轨均解码，Direct3D11 输出和音频播放计数推进。但 VLC 的 displayed 计数也包含旧画面重绘，不能用它制造新画面 FPS；统计还按周期更新，不能据此计算 200 ms 级逐帧间隔。独立 RTP 和浏览器新画面回调仍分别保留。[VLC 计数实现](https://github.com/videolan/vlc/blob/3.0.24/src/video_output/video_output.c#L1099)

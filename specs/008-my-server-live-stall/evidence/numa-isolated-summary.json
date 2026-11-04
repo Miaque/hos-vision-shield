@@ -1,0 +1,68 @@
+{
+  "base_commit": "debc02de745a9df82b427c754fe6128cb126461d",
+  "gpu_uuid": "GPU-ec9780c6-4e06-f44a-8491-e30f0ab74da9",
+  "gpu_numa_node": 2,
+  "cpuset_cpus": "32-47,96-111",
+  "cpuset_mems": "2",
+  "results": [
+    {
+      "round": 1,
+      "mode": "control",
+      "frames": 800,
+      "aac": 250,
+      "rtp_seconds": 46.19361749943346,
+      "source_video_packet_range_zero_based": [
+        1000,
+        1799
+      ]
+    },
+    {
+      "round": 1,
+      "mode": "numa2",
+      "frames": 800,
+      "aac": 250,
+      "rtp_seconds": 42.758638337720186,
+      "source_video_packet_range_zero_based": [
+        1000,
+        1799
+      ]
+    },
+    {
+      "round": 2,
+      "mode": "control",
+      "frames": 800,
+      "aac": 250,
+      "rtp_seconds": 50.533972311764956,
+      "source_video_packet_range_zero_based": [
+        1000,
+        1799
+      ]
+    },
+    {
+      "round": 2,
+      "mode": "numa2",
+      "frames": 800,
+      "aac": 250,
+      "rtp_seconds": 40.333889881148934,
+      "source_video_packet_range_zero_based": [
+        1000,
+        1799
+      ]
+    },
+    {
+      "memory_binding_comparison": [
+        {
+          "mode": "cpu2",
+          "rtp_seconds": 46.06621683295816
+        },
+        {
+          "mode": "numa2",
+          "rtp_seconds": 41.12826986098662
+        }
+      ]
+    }
+  ],
+  "ordered_input_vcl_equal": true,
+  "ordered_aac_payloads_equal": true,
+  "note": "Auxiliary third RTSP stream with deployed preflight; two existing tasks kept running. Not formal dual-stream acceptance."
+}
