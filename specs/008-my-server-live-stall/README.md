@@ -328,3 +328,26 @@ Windows 全量与定向重跑均重现已有 `test_real_rtsp_reader_is_bounded_a
 完整质量对照明确把第一路 detail 绑定到 `ca2bb46` 原始 `_plate_forward`，第二路使用新路径；rfm-01 的 2208 帧、rfm-02 的 2230 帧，最终 YUV 与 PTS 均逐项一致，digest 与此前原基准相同。每段包含 22 次强制不完整前视窗口及 EOF；未把两份新路径互比当成原版对照。GPU 对照进程正常退出。[质量 1](evidence/detailgraph-quality-rfm01.json)、[质量 2](evidence/detailgraph-quality-rfm02.json)、[候选源码与测试起止](evidence/detailgraph-validation.json)
 
 在接收器退出修复后，本地全量单元测试 997 passed、96 skipped；此前含退出问题的失败日志保留，未跳过或放宽该测试。候选此时尚未完成正式双流 600 秒 RTP、内容积压、播放器、资源和同步复核，不以算子微基准或文件质量处理时长宣布吞吐通过。
+
+## HyperLPR 候选完整双流结果与撤回（2026-11-04，UTC+8）
+
+固定 `26522cd8a99732cba33972894807c16910dae1ef`、标签 `cand-20261104-myserver-detailgraph-01`，音频开启、mosaic、5 Mbps、DEBUG=false、共享 GPU 4 与原 NUMA 配置。原部署入口构建完成后，Compose 重建 MPS/共享 PID 命名空间的旧 worker 时发生停止竞态，重试又遇到遗留容器命名冲突。保存失败日志后，只移除了逐项核对为本项目 stream-worker、无运行 PID 的三个残留容器，以相同 Compose 文件完成原入口的 `up --no-build` 阶段，再先停止自有 worker、应用 cpuset、启动。上述部署恢复均在正式采集前；后续更新须先停止自有 stream worker，再重建 MPS，避免此竞态。源容器 ID、启动时间始终未变。API 与三个 worker 各 48 个安装模块匹配该提交，原生 flush 模块 SHA256 不变。[运行指纹](evidence/detailgraph-installed-source.json)
+
+统一起点 **16:49:25.599227**，原截止 **16:59:25.599227**；停止信号 **16:59:25.602902**，四个采集器全部退出 **16:59:25.606346**，实际单调时钟时长 **600.007120 s**。没有重新计时或延长窗口。[完整采集与资源](evidence/detailgraph-round-600.json)
+
+| 接收流 | 画面 / 600 秒 FPS | P99 / max 间隔（ms） | >200 / 500 / 1000 ms | 1 秒 / 5 秒 FPS 中位数 | 5 秒最低 FPS |
+|---|---|---|---|---|---|
+| rfm-01 原始 | 14423 / 24.04 | 171.01 / 3028.83 | 48 / 39 / 18 | 25 / 24.8 | 9.8 |
+| rfm-01 脱敏 | 14267 / 23.78 | 177.15 / 2240.64 | 137 / 20 / 6 | 23 / 22.2 | 9.8 |
+| rfm-02 原始 | 14886 / 24.81 | 170.95 / 896.38 | 28 / 21 / 0 | 25 / 24.8 | 21.0 |
+| rfm-02 脱敏 | 12912 / 21.52 | 139.79 / 4190.45 | 47 / 6 / 1 | 21 / 21 | 3.0 |
+
+rfm-02 接收器恢复后的同 AU 延迟约 **1.86→44.11 s**，增长 **7.39 s/min**；恢复前一个连接约 50.46→78.50 s，亦持续积压。循环偏移只在连接开始选定，此后保持不变；起始绝对延迟存在重复素材的循环锚定假设，连接内增长不能通过重新选最近循环清零。原流该段持续供帧，不能把输出恢复空窗直接归为外部全局停顿。与上轮 22.14 FPS、5 秒最低 12 FPS 相比，本轮未证明有效改善，**25 FPS、持续性和流畅性仍未通过**。[内容时间线](evidence/detailgraph-content-lag.json)
+
+输出连接内视频和 AAC RTP 时间戳均递增，RTCP 映射残差另存完整采集汇总；这些仍不代表源到输出完整保留、AAC 样本无重叠或 A-V 已通过。GPU 120 次采样利用率中位数 59%、P95 69%、max 73%，两个活动 worker CPU 中位数约 266%/251%。本轮浏览器未有效播放，MediaMTX CPU 约 7.62%，客户端负载与上一轮不同，不能把轮间差值全部归因于代码。
+
+FFplay 沿原截止观测约 599.72/599.73 s，连接 2/5 次；绝对 A-V 中位数/P95/max 为 **0.017/0.356/1.735 s**、**0.325/0.484/3.881 s**，视频队列为空约 33.1%/62.1%。本地时钟偏移约 -0.605 s、请求往返约 67.7 ms，原日志及校准均保留。VLC 在 **16:59:25.599729** 停止采样、**16:59:26.333930** 释放资源；视频 lost 664/226，音频 lost buffer 29/9，第二路播放器重连一次。其 displayed 含旧画面重绘，不能作为新画面 FPS。[FFplay 1](evidence/player-detailgraph-rfm01.json)、[FFplay 2](evidence/player-detailgraph-rfm02.json)、[VLC](evidence/vlc-detailgraph-summary.json)、[原始播放器文件清单](evidence/detailgraph-player-manifest.json)
+
+浏览器初始化报 `Hls is not defined`，没有有效呈现回调。之后 Computer Use 因无法可靠确认 Windows 浏览器 URL 而停止，本轮未继续界面操作；没有以该失败窗口伪造浏览器 FPS，亦未重置采集截止。临时代理和 SSH 隧道已关闭。[浏览器未完成项](evidence/browser-detailgraph-unavailable.json)
+
+按撤销无效改动的约定，回退单张 HyperLPR 图重放及其专用测试，保留已验证的诊断接收器停止修复。原视频、全部候选证据、不可变标签与上述质量对照保留。回退后定向 26 passed；不叠加 ROI、像素图、布局或缓存原型。恢复候选标签为 `cand-20261104-myserver-observer-stop-01`，部署后仍需核对实际指纹；本轮约五次素材循环，**不作长期稳定性通过结论**。

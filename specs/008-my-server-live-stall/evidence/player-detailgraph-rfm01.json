@@ -1,0 +1,25 @@
+{
+  "start_unix": 1793782165.9037185,
+  "last_status_unix": 1793782765.5808053,
+  "exit_unix": 1793782765.627888,
+  "observed_monotonic_seconds": 599.7180000000008,
+  "connections": 2,
+  "status_samples": 16519,
+  "clocks": {
+    "A-V": 16519
+  },
+  "absolute_av_seconds": {
+    "p50": 0.017,
+    "p95": 0.356,
+    "p99": 0.459,
+    "max": 1.735,
+    "min": 0.0,
+    "count": 16519
+  },
+  "empty_video_queue_fraction": 0.33071009140989166,
+  "dropped_max": 0,
+  "clock_offset_seconds": -0.6048884391784668,
+  "clock_roundtrip_seconds": 0.06770133972167969,
+  "raw_sha256": "aba99c513d9a78dedc548edd45d185fd7d72e1be5aaf568df82cbb734df028fd",
+  "limit": "FFplay status clocks and queue evidence; not proof of distinct frames rendered"
+}

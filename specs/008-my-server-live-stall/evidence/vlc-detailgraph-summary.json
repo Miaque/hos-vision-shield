@@ -1,0 +1,61 @@
+{
+  "start_unix": 1793782166.4667852,
+  "stop_rows": [
+    {
+      "unix": 1793782765.5997293,
+      "monotonic": 29505.062,
+      "kind": "sampling_stopped"
+    },
+    {
+      "unix": 1793782766.33393,
+      "monotonic": 29505.796,
+      "kind": "released"
+    }
+  ],
+  "epoch_stats": {
+    "(0, 1)": {
+      "i_read_bytes": 0,
+      "i_demux_read_bytes": 177476356,
+      "i_demux_corrupted": 0,
+      "i_demux_discontinuity": 6,
+      "i_decoded_video": 27540,
+      "i_decoded_audio": 8923,
+      "i_displayed_pictures": 13760,
+      "i_lost_pictures": 664,
+      "i_played_abuffers": 4432,
+      "i_lost_abuffers": 29,
+      "i_sent_packets": 0,
+      "i_sent_bytes": 0
+    },
+    "(1, 1)": {
+      "i_read_bytes": 0,
+      "i_demux_read_bytes": 71429076,
+      "i_demux_corrupted": 0,
+      "i_demux_discontinuity": 6,
+      "i_decoded_video": 10824,
+      "i_decoded_audio": 3602,
+      "i_displayed_pictures": 5789,
+      "i_lost_pictures": 102,
+      "i_played_abuffers": 1792,
+      "i_lost_abuffers": 8,
+      "i_sent_packets": 0,
+      "i_sent_bytes": 0
+    },
+    "(1, 2)": {
+      "i_read_bytes": 0,
+      "i_demux_read_bytes": 85273697,
+      "i_demux_corrupted": 0,
+      "i_demux_discontinuity": 5,
+      "i_decoded_video": 13412,
+      "i_decoded_audio": 4373,
+      "i_displayed_pictures": 7080,
+      "i_lost_pictures": 124,
+      "i_played_abuffers": 2185,
+      "i_lost_abuffers": 1,
+      "i_sent_packets": 0,
+      "i_sent_bytes": 0
+    }
+  },
+  "raw_sha256": "b0a87d16489fbd7b078399a2cda613f0b4bb13a4e16d181c1afdb35ac1fdceb0",
+  "limit": "Displayed includes redraws; decoded counts may be inflated by protocol/player accounting. Neither is unique rendered-frame FPS."
+}
