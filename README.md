@@ -65,6 +65,8 @@ GPU 模式下，主模型与补充模型在调用线程顺序执行，随后按�
 
 ## 服务器 Docker Compose
 
+从零准备新 GPU 服务器，见[新 GPU 服务器部署指南](deploy/GPU-SERVER-DEPLOYMENT.md)，包含驱动与容器运行时安装、离线模型、Redis、MPS/NUMA、正式/测试环境、媒体验收及回滚步骤。
+
 目标为 Ubuntu 24.04 x86_64，沿用服务器现有 Docker 和 `docker-compose v2.29.2`；不在 Windows 本机安装 Docker。默认 CPU，GPU 模式指定一张卡供文件与流 worker 共用。GPU 失败不换卡或回退 CPU；GPU Compose 使用上述 `quality_yolo`，CPU 保留 `quality`。GPU Compose 的文件池启动2个、流池启动3个worker副本，每个副本同时处理1个任务，分别提供2个文件和3个实时流执行槽位；副本共用所选显卡，并发吞吐须另行实测。
 
 按 [服务器部署验收指南](specs/002-compose-cpu-gpu/quickstart.md)准备离线模型目录、媒体目录权限和 `.env.compose`，然后在服务器仓库根目录选择一种方式：
